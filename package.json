@@ -1,0 +1,21 @@
+{
+  "name": "ng-back",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "tsc",
+    "start": "nodemon"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@types/ws": "^4.0.1",
+    "graphql-yoga": "^1.5.2"
+  },
+  "devDependencies": {
+    "ts-node": "^5.0.1"
+  }
+}
