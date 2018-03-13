@@ -1,5 +1,5 @@
 import { attach, Database, DatabaseCallback, ISOLATION_READ_COMMITED_READ_ONLY,
-  Options, Transaction } from '../../lib/node-firebird';
+  Options, Transaction } from 'node-firebird';
 import opt from './connection_options';
 
 let db: Database;

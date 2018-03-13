@@ -13,7 +13,8 @@
   "license": "ISC",
   "dependencies": {
     "@types/ws": "^4.0.1",
-    "graphql-yoga": "^1.5.2"
+    "graphql-yoga": "^1.5.2",
+    "node-firebird": "git://github.com/gsbelarus/node-firebird.git"
   },
   "devDependencies": {
     "ts-node": "^5.0.1"
