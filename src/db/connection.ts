@@ -15,9 +15,6 @@ export function connect(alias = '') {
     }
     db = connectedDB;
     db.transaction(ISOLATION_READ_COMMITED_READ_ONLY, (trErr, tr) => {
-      if (trErr) {
-        throw new Error(trErr);
-      }
       readTransaction = tr;
     });
   });
@@ -38,4 +35,11 @@ export function getDB() {
     throw new Error('db is not connected');
   }
   return db;
+}
+
+export function getReadTransaction() {
+  if (!readTransaction) {
+    throw new Error('read transaction is not active');
+  }
+  return readTransaction;
 }

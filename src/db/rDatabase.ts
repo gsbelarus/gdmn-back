@@ -1,4 +1,5 @@
 export class RDatabase {
+  private fields: Field[] = [];
   private relations: Relation[] = [];
 }
 
