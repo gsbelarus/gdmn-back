@@ -1,0 +1,3 @@
+[submodule "lib/node-firebird"]
+	path = lib/node-firebird
+	url = https://github.com/gsbelarus/node-firebird.git
