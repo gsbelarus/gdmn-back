@@ -14,7 +14,11 @@
         "node_modules/*"
       ]
     },
-    "lib": ["esnext"]
+    "lib": ["esnext"],
+    "typeRoots": [
+      "./node_modules/@types",
+      "lib/node-firebird/*"
+    ]
   },
   "include": [
     "src/**/*"
