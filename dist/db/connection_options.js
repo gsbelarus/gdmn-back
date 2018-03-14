@@ -8,7 +8,7 @@ const databases = [
         options: {
             host: '127.0.0.1',
             port: 3050,
-            database: 'c:\temp\test.fdb',
+            database: 'c:\\temp\\test.fdb',
             user: 'SYSDBA',
             password: 'masterkey',
             lowercase_keys: false,

@@ -9,21 +9,31 @@ export function connect(alias = '') {
   if (db) {
     throw new Error('db is already connected');
   }
-  attach(opt(), (err, connectedDB) => {
-    if (err) {
-      throw new Error(err);
-    }
-    db = connectedDB;
-    db.transaction(ISOLATION_READ_COMMITED_READ_ONLY, (trErr, tr) => {
-      readTransaction = tr;
+
+  return new Promise( (resolve, reject) => {
+    attach(opt(alias), (err, connectedDB) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(connectedDB);
+      }
     });
-  });
+  })
+  .then( connectedDB => { db = connectedDB as Database; } )
+  .then( () => new Promise( resolve => {
+    db.transaction(ISOLATION_READ_COMMITED_READ_ONLY, (trOptions, tr) => {
+      resolve(tr);
+    });
+  }))
+  .then( tr => { readTransaction = tr as Transaction; } )
+  .catch( err => { throw new Error(err); } );
 }
 
 export function disconnect() {
   if (!db) {
     throw new Error('db is not connected');
   }
+
   if (readTransaction) {
     readTransaction.commit();
   }
@@ -38,8 +48,9 @@ export function getDB() {
 }
 
 export function getReadTransaction() {
-  if (!readTransaction) {
-    throw new Error('read transaction is not active');
+  if (!db) {
+    throw new Error('db is not connected');
   }
+
   return readTransaction;
 }

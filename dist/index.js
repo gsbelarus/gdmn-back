@@ -3,6 +3,9 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const graphql_yoga_1 = require("graphql-yoga");
 const connection_1 = require("./db/connection");
 connection_1.connect();
+connection_1.getReadTransaction().query('SELECT rdb$field_name FROM rdb$fields', [], (err, result) => {
+    console.log(JSON.stringify(result));
+});
 const typeDefs = `
   type Query {
     hello(name: String): String!

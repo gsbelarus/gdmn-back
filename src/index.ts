@@ -1,13 +1,14 @@
 import { GraphQLServer } from 'graphql-yoga';
-import { connect, getReadTransaction } from './db/connection';
+import { connect, getReadTransaction, syncConnect } from './db/connection';
 
-connect();
-
-getReadTransaction().query('SELECT rdb$field_name FROM rdb$fields', [],
-  (err, result) => {
-    console.log(JSON.stringify(result));
-  }
-);
+connect()
+  .then( () => {
+    getReadTransaction().query('SELECT * FROM rdb$database', [],
+      (err, result) => {
+        console.log(JSON.stringify(result));
+      }
+    );
+  });
 
 const typeDefs = `
   type Query {
