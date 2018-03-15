@@ -34,10 +34,17 @@ export function disconnect() {
     throw new Error('db is not connected');
   }
 
-  if (readTransaction) {
-    readTransaction.commit();
-  }
-  db.detach();
+  return new Promise( resolve => {
+    if (readTransaction) {
+      readTransaction.commit( () => resolve() );
+    } else {
+      resolve();
+    }
+  })
+  .then( () => {
+    return new Promise( resolve => db.detach( () => resolve() ) );
+  })
+  .catch( err => { throw new Error(err); } );
 }
 
 export function getDB() {
