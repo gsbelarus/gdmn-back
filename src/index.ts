@@ -1,5 +1,5 @@
 import {GraphQLServer} from "graphql-yoga";
-import Initializer from "./db/Initializer";
+import {FirebirdDBStructure} from "gdmn-db";
 // import { connect, disconnect, getReadTransaction } from './db/connection';
 //
 // (async () => {
@@ -12,17 +12,13 @@ import Initializer from "./db/Initializer";
 //   );
 // })();
 
-Initializer.init({
+FirebirdDBStructure.readStructure({
     host: "brutto",
     port: 3053,
     user: "SYSDBA",
     password: "masterkey",
-    database: "k:\\bases\\broiler\\GDBASE_2017_10_02.FDB",
-})
-    .then(() => {
-        console.log(Initializer.dbStructure);
-    })
-    .catch(console.error);
+    database: "k:\\bases\\broiler\\GDBASE_2017_10_02.FDB"
+}).then(console.log).catch(console.error);
 
 const typeDefs = `
   type Query {

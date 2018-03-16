@@ -1,10 +1,7 @@
 "use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-}
 Object.defineProperty(exports, "__esModule", { value: true });
 const graphql_yoga_1 = require("graphql-yoga");
-const Initializer_1 = __importDefault(require("./db/Initializer"));
+const gdmn_db_1 = require("gdmn-db");
 // import { connect, disconnect, getReadTransaction } from './db/connection';
 //
 // (async () => {
@@ -16,17 +13,13 @@ const Initializer_1 = __importDefault(require("./db/Initializer"));
 //     }
 //   );
 // })();
-Initializer_1.default.init({
+gdmn_db_1.FirebirdDBStructure.readStructure({
     host: "brutto",
     port: 3053,
     user: "SYSDBA",
     password: "masterkey",
-    database: "k:\\bases\\broiler\\GDBASE_2017_10_02.FDB",
-})
-    .then(() => {
-    console.log(Initializer_1.default.dbStructure);
-})
-    .catch(console.error);
+    database: "k:\\bases\\broiler\\GDBASE_2017_10_02.FDB"
+}).then(console.log).catch(console.error);
 const typeDefs = `
   type Query {
     hello(name: String): String!
