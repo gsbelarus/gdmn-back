@@ -1,3 +1,9 @@
+lib
+*.js.map
+
+# IntelliJ IDEA
+.idea
+
 # Logs
 logs
 *.log

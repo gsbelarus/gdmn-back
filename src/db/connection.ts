@@ -1,6 +1,6 @@
 import { attach, Database, DatabaseCallback, ISOLATION_READ_COMMITED_READ_ONLY,
   Options, Transaction } from 'node-firebird';
-import opt from './connection_options';
+import opt from './connection_options.sample';
 
 let db: Database;
 let readTransaction: Transaction;
