@@ -1,10 +1,10 @@
-import {FirebirdDatabase, DBOptions, DBStructure} from "gdmn-db";
+import {DBStructure, FirebirdDatabase, FirebirdOptions} from "gdmn-db";
 
 export default class Initializer {
 
     public static dbStructure: DBStructure = new DBStructure();
 
-    static async init(options: DBOptions) {
+    static async init(options: FirebirdOptions) {
         try {
             await FirebirdDatabase.executeTransaction(new FirebirdDatabase(), options, async transaction => {
                 const fields = await transaction.query(`
