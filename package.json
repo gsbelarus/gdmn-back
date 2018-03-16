@@ -13,6 +13,7 @@
   "license": "ISC",
   "dependencies": {
     "@types/ws": "^4.0.1",
+    "gdmn-db": "git://github.com/gsbelarus/gdmn-db.git",
     "graphql-yoga": "^1.5.2",
     "node-firebird": "git://github.com/gsbelarus/node-firebird.git"
   },

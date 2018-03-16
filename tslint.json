@@ -10,7 +10,8 @@
       "object-literal-sort-keys": false,
       "trailing-comma": [false],
       "max-classes-per-file": [false],
-      "arrow-parens": [false]
+      "arrow-parens": [false],
+      "one-line": [true, "check-catch", "check-finally", "check-else"]
     },
     "rulesDirectory": []
 }
