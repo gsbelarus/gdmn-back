@@ -1,5 +1,5 @@
 import {GraphQLServer} from "graphql-yoga";
-import {FirebirdDBStructure} from "gdmn-db";
+import {FirebirdConnectionPool, FirebirdDatabase, FirebirdDBStructure, FirebirdTransaction} from "gdmn-db";
 // import { connect, disconnect, getReadTransaction } from './db/connection';
 //
 // (async () => {
@@ -12,13 +12,22 @@ import {FirebirdDBStructure} from "gdmn-db";
 //   );
 // })();
 
-FirebirdDBStructure.readStructure({
-    host: "brutto",
-    port: 3053,
-    user: "SYSDBA",
-    password: "masterkey",
-    database: "k:\\bases\\broiler\\GDBASE_2017_10_02.FDB"
-}).then(console.log).catch(console.error);
+init().catch(console.warn);
+
+async function init() {
+    const connectionPool = new FirebirdConnectionPool();
+    await connectionPool.create({
+        host: "brutto",
+        port: 3053,
+        user: "SYSDBA",
+        password: "masterkey",
+        database: "k:\\bases\\broiler\\GDBASE_2017_10_02.FDB"
+    }, 100);
+    const dbStructure = await FirebirdDatabase.executeTransactionPool(connectionPool,
+        (transaction: FirebirdTransaction) => FirebirdDBStructure.readStructure(transaction));
+
+    console.log(dbStructure);
+}
 
 const typeDefs = `
   type Query {

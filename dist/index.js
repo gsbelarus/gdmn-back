@@ -13,13 +13,19 @@ const gdmn_db_1 = require("gdmn-db");
 //     }
 //   );
 // })();
-gdmn_db_1.FirebirdDBStructure.readStructure({
-    host: "brutto",
-    port: 3053,
-    user: "SYSDBA",
-    password: "masterkey",
-    database: "k:\\bases\\broiler\\GDBASE_2017_10_02.FDB"
-}).then(console.log).catch(console.error);
+const connectionPool = new gdmn_db_1.FirebirdConnectionPool();
+init().catch(console.warn);
+async function init() {
+    await connectionPool.create({
+        host: "brutto",
+        port: 3053,
+        user: "SYSDBA",
+        password: "masterkey",
+        database: "k:\\bases\\broiler\\GDBASE_2017_10_02.FDB"
+    }, 100);
+    const dbStructure = await gdmn_db_1.FirebirdDatabase.executeTransactionPool(connectionPool, (transaction) => gdmn_db_1.FirebirdDBStructure.readStructure(transaction));
+    console.log(dbStructure);
+}
 const typeDefs = `
   type Query {
     hello(name: String): String!
