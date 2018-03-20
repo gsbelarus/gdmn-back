@@ -13,9 +13,9 @@ const gdmn_db_1 = require("gdmn-db");
 //     }
 //   );
 // })();
-const connectionPool = new gdmn_db_1.FirebirdConnectionPool();
 init().catch(console.warn);
 async function init() {
+    const connectionPool = new gdmn_db_1.FirebirdConnectionPool();
     await connectionPool.create({
         host: "brutto",
         port: 3053,
