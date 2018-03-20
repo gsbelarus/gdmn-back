@@ -1,5 +1,5 @@
 lib
-*.js.map
+dist
 
 # IntelliJ IDEA
 .idea
