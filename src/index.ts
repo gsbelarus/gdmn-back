@@ -1,29 +1,16 @@
 import {GraphQLServer} from "graphql-yoga";
 import {ADatabase} from "gdmn-db";
-import databases from "./db/databases";
-// import { connect, disconnect, getReadTransaction } from './db/connection';
-//
-// (async () => {
-//   await connect();
-//
-//   getReadTransaction().query('SELECT name FROM gd_contact', [],
-//     (err, result) => {
-//       console.log(JSON.stringify(result));
-//     }
-//   );
-// })();
+import databases, {IDBAlias} from "./db/databases";
 
-init().catch(console.warn);
-
-async function init() {
-    const {poolInstance, max, options} = databases.broiler;
-
+async function init({poolInstance, max, options}: IDBAlias<any>) {
     await poolInstance.create(options, max);
     const dbStructure = await ADatabase.executeTransactionPool(poolInstance,
         transaction => transaction.readDBStructure());
 
     console.log(dbStructure);
 }
+
+init(databases.broiler).catch(console.warn);
 
 const typeDefs = `
   type Query {
