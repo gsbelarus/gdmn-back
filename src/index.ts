@@ -1,26 +1,26 @@
-import {GraphQLServer} from "graphql-yoga";
-import {ADatabase} from "gdmn-db";
-import databases, {IDBAlias} from "./db/databases";
-import {ERModel} from "gdmn-orm";
+import { GraphQLServer } from 'graphql-yoga';
+import { ADatabase } from 'gdmn-db';
+import databases, { IDBAlias } from './db/databases';
+import { ERModel } from 'gdmn-orm';
 
-async function init({poolInstance, max, options}: IDBAlias<any>) {
-    await poolInstance.create(options, max);
-    const dbStructure = await ADatabase.executeTransactionPool(poolInstance,
-        async transaction => {
+const erModel = new ERModel();
 
-            const resultSet = await transaction.executeSQL("SELECT * FROM GD_DOCUMENT");
-            await resultSet.to(1);
-            while (await resultSet.previous()) {
-                console.log(resultSet.getObject());
-            }
-
-            return await transaction.readDBStructure();
-        });
-
-    console.log(dbStructure);
+async function init({ poolInstance, max, options }: IDBAlias<any>) {
+  await poolInstance.create(options, max);
+  const dbStructure = await ADatabase.executeTransactionPool(poolInstance,
+    async transaction => {
+      const resultSet = await transaction.executeSQL('SELECT * FROM GD_DOCUMENT');
+      await resultSet.to(1);
+      while (await resultSet.previous()) {
+        console.log(resultSet.getObject());
+      }
+      return await transaction.readDBStructure();
+    }
+  );
 }
 
-init(databases.broiler).catch(console.warn);
+init(databases.broiler)
+.catch(console.warn);
 
 const typeDefs = `
   type Query {
@@ -29,13 +29,13 @@ const typeDefs = `
 `;
 
 const resolvers = {
-    Query: {
-        hello: (_: any, args: any) => `Hello ${args.name || "World"}`,
-    },
+  Query: {
+    hello: (_: any, args: any) => `Hello ${args.name || 'World'}`,
+  },
 };
 
 const server = new GraphQLServer({typeDefs, resolvers});
 
-server.express.get("/hello", (req, res) => res.send("Hello World!"));
+server.express.get('/hello', (req, res) => res.send('Hello World!'));
 
-server.start(() => console.log("Server is running on localhost:4000")).catch(console.error);
+server.start(() => console.log('Server is running on localhost:4000')).catch(console.error);
