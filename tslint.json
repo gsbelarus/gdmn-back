@@ -6,7 +6,8 @@
     "jsRules": {},
     "rules": {
       "no-console": false,
-      "quotemark": [true, "single"],
+      "quotemark": [false],
+      "ordered-imports": false,
       "object-literal-sort-keys": false,
       "trailing-comma": [false],
       "max-classes-per-file": [false],
