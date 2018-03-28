@@ -1,6 +1,7 @@
 import {GraphQLServer} from "graphql-yoga";
 import {ADatabase} from "gdmn-db";
 import databases, {IDBAlias} from "./db/databases";
+import {ERModel} from "gdmn-orm";
 
 async function init({poolInstance, max, options}: IDBAlias<any>) {
     await poolInstance.create(options, max);
