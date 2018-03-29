@@ -11,8 +11,9 @@ async function init({poolInstance, max, options}: IDBAlias<any>) {
             const resultSet = await transaction.executeSQL("SELECT * FROM GD_DOCUMENT");
             await resultSet.to(1);
             while (await resultSet.previous()) {
-                console.log(resultSet.getObject());
+                console.log(resultSet.getArray());
             }
+            await resultSet.close();
 
             return await transaction.readDBStructure();
         });
