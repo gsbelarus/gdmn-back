@@ -1,7 +1,7 @@
 import { GraphQLServer } from 'graphql-yoga';
 import { ADatabase } from 'gdmn-db';
 import databases, { IDBAlias } from './db/databases';
-import { ERModel } from 'gdmn-orm';
+import { ERModel, erExport } from 'gdmn-orm';
 
 const erModel = new ERModel();
 
@@ -19,9 +19,12 @@ async function init({ poolInstance, max, options }: IDBAlias<any>) {
       return await transaction.readDBStructure();
     }
   );
+  return dbStructure;
 }
 
 init(databases.broiler)
+.then( dbs => erExport(dbs, erModel) )
+.then( erm => console.log(erm) )
 .catch(console.warn);
 
 const typeDefs = `
