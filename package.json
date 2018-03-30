@@ -17,7 +17,7 @@
     "graphql-yoga": "^1.7.0"
   },
   "devDependencies": {
-    "@types/ws": "^4.0.1",
+    "@types/ws": "^4.0.2",
     "ts-node": "^5.0.1"
   }
 }
