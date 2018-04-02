@@ -1,25 +1,26 @@
-import { GraphQLServer } from 'graphql-yoga';
-import { ADatabase } from 'gdmn-db';
-import databases, { IDBAlias } from './db/databases';
-import { ERModel, erExport } from 'gdmn-orm';
+import {GraphQLServer} from "graphql-yoga";
+import {AConnectionPool, ADatabase, ATransaction} from "gdmn-db";
+import databases, {IDBAlias} from "./db/databases";
+import {erExport, ERModel} from "gdmn-orm";
 
 const erModel = new ERModel();
 
-async function init({ poolInstance, max, options }: IDBAlias<any>) {
-  await poolInstance.create(options, max);
-  const dbStructure = await ADatabase.executeTransactionPool(poolInstance,
-    async transaction => {
-      const resultSet = await transaction.executeSQL('SELECT * FROM GD_DOCUMENT');
-      await resultSet.to(1);
-      while (await resultSet.previous()) {
-        console.log(resultSet.getArray());
-      }
-      await resultSet.close();
+async function init({ poolInstance, options, dbOptions }: IDBAlias<any, any>) {
+  await poolInstance.create(dbOptions, options);
 
-      return await transaction.readDBStructure();
-    }
-  );
-  return dbStructure;
+  return await AConnectionPool.executeDatabase(poolInstance,
+    database => ADatabase.executeTransaction(database, async transaction => {
+      //example
+      await ATransaction.executeResultSet(transaction, "SELECT * FROM GD_DOCUMENT", [],
+        async resultSet => {
+          await resultSet.to(1);
+          while (await resultSet.previous()) {
+            console.log(resultSet.getArray());
+          }
+        });
+
+        return await transaction.readDBStructure();
+    }));
 }
 
 init(databases.broiler)
@@ -35,12 +36,12 @@ const typeDefs = `
 
 const resolvers = {
   Query: {
-    hello: (_: any, args: any) => `Hello ${args.name || 'World'}`,
+    hello: (_: any, args: any) => `Hello ${args.name || "World"}`,
   },
 };
 
 const server = new GraphQLServer({typeDefs, resolvers});
 
-server.express.get('/hello', (req, res) => res.send('Hello World!'));
+server.express.get("/hello", (req, res) => res.send("Hello World!"));
 
-server.start(() => console.log('Server is running on localhost:4000')).catch(console.error);
+server.start(() => console.log("Server is running on localhost:4000")).catch(console.error);
