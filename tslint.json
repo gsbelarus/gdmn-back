@@ -12,7 +12,9 @@
       "trailing-comma": [false],
       "max-classes-per-file": [false],
       "arrow-parens": [false],
-      "one-line": [true, "check-catch", "check-finally", "check-else"]
+      "one-line": [true, "check-catch", "check-finally", "check-else"],
+      "align": false,
+      "check-space": false
     },
     "rulesDirectory": []
 }
