@@ -5,13 +5,13 @@ import {erExport, ERModel} from "gdmn-orm";
 
 const erModel = new ERModel();
 
-async function init({ poolInstance, options, dbOptions }: IDBAlias<any>) {
+async function init({ poolInstance, options, dbOptions }: IDBAlias<any, any>) {
   await poolInstance.create(dbOptions, options);
 
   return await AConnectionPool.executeDatabase(poolInstance,
     database => ADatabase.executeTransaction(database, async transaction => {
-      //example
-      await ATransaction.executeResultSet(transaction, "SELECT * FROM GD_DOCUMENT", null,
+      // example
+      await ATransaction.executeResultSet(transaction, "SELECT * FROM GD_DOCUMENT", [],
         async resultSet => {
           await resultSet.to(1);
           while (await resultSet.previous()) {
@@ -43,5 +43,6 @@ const resolvers = {
 const server = new GraphQLServer({typeDefs, resolvers});
 
 server.express.get("/hello", (req, res) => res.send("Hello World!"));
+server.express.get("/er", (req, res) => res.send(erModel) );
 
 server.start(() => console.log("Server is running on localhost:4000")).catch(console.error);
