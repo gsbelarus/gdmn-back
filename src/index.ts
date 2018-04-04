@@ -11,7 +11,7 @@ async function init({ poolInstance, options, dbOptions }: IDBAlias<any>) {
   return await AConnectionPool.executeDatabase(poolInstance,
     database => ADatabase.executeTransaction(database, async transaction => {
       //example
-      await ATransaction.executeResultSet(transaction, "SELECT * FROM GD_DOCUMENT", [],
+      await ATransaction.executeResultSet(transaction, "SELECT * FROM GD_DOCUMENT", null,
         async resultSet => {
           await resultSet.to(1);
           while (await resultSet.previous()) {
