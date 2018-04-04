@@ -1,16 +1,16 @@
-import {DefaultConnectionPoolOptions, Factory, FirebirdOptions, TConnectionPool} from "gdmn-db";
+import {DefaultConnectionPoolOptions, Factory, TConnectionPool, TDBOptions} from "gdmn-db";
 
-export type TDB = { [alias: string]: IDBAlias<any, any> };
+export type TDB = { [alias: string]: IDBAlias<any> };
 
-export interface IDBAlias<Options, DBOptions> {
+export interface IDBAlias<Options> {
     alias: string;
-    dbOptions: DBOptions;
+    dbOptions: TDBOptions;
     options: Options,
-    poolInstance: TConnectionPool<Options, DBOptions>;
+    poolInstance: TConnectionPool<Options>;
 }
 
 const databases: TDB = {
-    broiler: <IDBAlias<DefaultConnectionPoolOptions, FirebirdOptions>>{
+    broiler: <IDBAlias<DefaultConnectionPoolOptions>>{
         alias: "broiler",
         poolInstance: Factory.FBModule.newDefaultConnectionPool(),
         options: {
@@ -21,7 +21,7 @@ const databases: TDB = {
             port: 3053,
             username: "SYSDBA",
             password: "masterkey",
-            dbPath: "k:\\bases\\broiler\\GDBASE_2017_10_02.FDB"
+            path: "k:\\bases\\broiler\\GDBASE_2017_10_02.FDB"
         }
     }
 };

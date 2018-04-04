@@ -5,7 +5,7 @@ import {erExport, ERModel} from "gdmn-orm";
 
 const erModel = new ERModel();
 
-async function init({ poolInstance, options, dbOptions }: IDBAlias<any, any>) {
+async function init({ poolInstance, options, dbOptions }: IDBAlias<any>) {
   await poolInstance.create(dbOptions, options);
 
   return await AConnectionPool.executeDatabase(poolInstance,
