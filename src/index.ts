@@ -1,11 +1,11 @@
-import {AConnectionPool, ADatabase, ATransaction} from "gdmn-db";
+import {AConnectionPool, ADatabase, ATransaction, DBStructure} from "gdmn-db";
 import {erExport, ERModel} from "gdmn-orm";
 import {GraphQLServer} from "graphql-yoga";
 import databases, {IDBAlias} from "./db/databases";
 
 const erModel = new ERModel();
 
-async function init({poolInstance, options, dbOptions}: IDBAlias<any>) {
+async function init({poolInstance, options, dbOptions}: IDBAlias<any>): Promise<DBStructure> {
   await poolInstance.create(dbOptions, options);
 
   return await AConnectionPool.executeDatabase(poolInstance,
