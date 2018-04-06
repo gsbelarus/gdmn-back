@@ -5,18 +5,12 @@
     "sourceMap": true,
     "esModuleInterop": true,
     "strict": true,
-    "strictNullChecks": true,
-    "noImplicitAny": true,
     "outDir": "./dist",
-    "baseUrl": ".",
-    "paths": {
-      "*": [
-        "node_modules/*"
-      ]
-    },
-    "lib": ["esnext"]
-  },
-  "include": [
-    "src/**/*"
-  ]
+    "typeRoots": [
+      "node_modules/@types",
+      "./typings"
+    ],
+    "lib": ["esnext"],
+    "skipLibCheck": true
+  }
 }
