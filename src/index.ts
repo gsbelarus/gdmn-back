@@ -9,7 +9,7 @@ async function init({poolInstance, options, dbOptions}: IDBAlias<any>): Promise<
   await poolInstance.create(dbOptions, options);
 
   return await AConnectionPool.executeDatabase(poolInstance,
-    (database) => ADatabase.executeTransaction(database, async (transaction) => {
+    (database) => ADatabase.executeTransaction(database, null, async (transaction) => {
       // example
       await ATransaction.executeResultSet(transaction, "SELECT * FROM GD_DOCUMENT", null,
         async (resultSet) => {

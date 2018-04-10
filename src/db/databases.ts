@@ -14,7 +14,7 @@ export interface IDBAlias<Options> {
 const databases: IDB = {
   broiler: {
     alias: "broiler",
-    poolInstance: Factory.FBModule.newDefaultConnectionPool(),
+    poolInstance: Factory.FBDriver.newDefaultConnectionPool(),
     options: {
       max: 3
     },
