@@ -17,7 +17,7 @@ const broiler: IDB<IDefaultConnectionPoolOptions> = {
 };
 
 export interface IDBs {
-  [alias: string]: IDB<any>;
+  [alias: string]: IDB;
 }
 
 const databases: IDBs = {

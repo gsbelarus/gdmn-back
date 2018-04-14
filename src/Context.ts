@@ -1,7 +1,7 @@
 import {DBStructure, IDBOptions, TConnectionPool} from "gdmn-db";
 import {ERModel} from "gdmn-orm";
 
-export interface IDB<PoolOptions> {
+export interface IDB<PoolOptions = any> {
   alias: string;
   dbOptions: IDBOptions;
   poolOptions: PoolOptions;
@@ -9,7 +9,7 @@ export interface IDB<PoolOptions> {
 }
 
 interface ISources {
-  db: IDB<any>;
+  db: IDB;
   dbStructure: DBStructure;
   erModel: ERModel;
 }

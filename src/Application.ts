@@ -6,8 +6,8 @@ export class Application extends Context {
 
   private _isDestroyed: boolean = false;
 
-  public static async create(db: IDB<any>): Promise<Application> {
-    const {poolInstance, poolOptions, dbOptions}: IDB<any> = db;
+  public static async create(db: IDB): Promise<Application> {
+    const {poolInstance, poolOptions, dbOptions}: IDB = db;
     await poolInstance.create(dbOptions, poolOptions);
 
     const dbStructure = await AConnectionPool.executeDatabase(poolInstance,
