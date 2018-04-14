@@ -4,7 +4,7 @@ import {Context, IDB} from "./Context";
 
 export class Application extends Context {
 
-  private _isDestroy: boolean = false;
+  private _isDestroyed: boolean = false;
 
   public static async create(db: IDB<any>): Promise<Application> {
     const {poolInstance, poolOptions, dbOptions}: IDB<any> = db;
@@ -23,10 +23,10 @@ export class Application extends Context {
 
   public static async destroy(app: Application): Promise<boolean> {
     await app.db.poolInstance.destroy();
-    return app._isDestroy = true;
+    return app._isDestroyed = true;
   }
 
   public isDestroyed(): boolean {
-    return this._isDestroy;
+    return this._isDestroyed;
   }
 }
