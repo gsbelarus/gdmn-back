@@ -1,15 +1,15 @@
-import {DBStructure, IDBOptions, TConnectionPool} from "gdmn-db";
+import {AConnectionPool, DBStructure, IConnectionOptions} from "gdmn-db";
 import {ERModel} from "gdmn-orm";
 
-export interface IDB<PoolOptions = any> {
+export interface IDBDetail<PoolOptions = any, ConnectionOptions extends IConnectionOptions = IConnectionOptions> {
   alias: string;
-  dbOptions: IDBOptions;
+  connectionOptions: ConnectionOptions;
   poolOptions: PoolOptions;
-  poolInstance: TConnectionPool<PoolOptions>;
+  poolInstance: AConnectionPool<PoolOptions>;
 }
 
 interface ISources {
-  db: IDB;
+  dbDetail: IDBDetail;
   dbStructure: DBStructure;
   erModel: ERModel;
 }
@@ -26,8 +26,8 @@ export abstract class Context {
     return this;
   }
 
-  get db(): IDB<any> {
-    return this._sources.db;
+  get dbDetail(): IDBDetail {
+    return this._sources.dbDetail;
   }
 
   get dbStructure(): DBStructure {

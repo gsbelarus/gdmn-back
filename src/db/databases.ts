@@ -1,13 +1,13 @@
 import {Factory, IDefaultConnectionPoolOptions} from "gdmn-db";
-import {IDB} from "../Context";
+import {IDBDetail} from "../Context";
 
-const broiler: IDB<IDefaultConnectionPoolOptions> = {
+const broiler: IDBDetail<IDefaultConnectionPoolOptions> = {
   alias: "broiler",
   poolInstance: Factory.FBDriver.newDefaultConnectionPool(),
   poolOptions: {
     max: 3
   },
-  dbOptions: {
+  connectionOptions: {
     host: "brutto",
     port: 3053,
     username: "SYSDBA",
@@ -17,7 +17,7 @@ const broiler: IDB<IDefaultConnectionPoolOptions> = {
 };
 
 export interface IDBs {
-  [alias: string]: IDB;
+  [alias: string]: IDBDetail;
 }
 
 const databases: IDBs = {
