@@ -16,7 +16,7 @@ export class Application extends Context {
       }));
 
     const erModel = erExport(dbStructure, new ERModel());
-    console.log(erModel);
+    console.log('erModel: loaded ' + Object.entries(erModel.entities).length + ' entities');
 
     return new Application({dbDetail: db, dbStructure, erModel});
   }
