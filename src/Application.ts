@@ -1,5 +1,7 @@
+import fs from "fs";
 import {AConnection, AConnectionPool} from "gdmn-db";
 import {erExport, ERModel} from "gdmn-orm";
+import util from "util";
 import {Context, IDBDetail} from "./Context";
 import {ERGraphQLSchema} from "./graphql/ERGraphQLSchema";
 
@@ -34,6 +36,11 @@ export class Application extends Context {
     console.timeEnd("time");
 
     console.timeEnd("total time");
+
+    if (fs.existsSync("c:/temp/test")) {
+      fs.writeFileSync("c:/temp/test/ermodel.json", util.inspect(result.erModel, {showHidden: true, depth: 22}));
+    }
+
     return new Application({...result, dbDetail, erGraphQLSchema});
   }
 
