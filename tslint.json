@@ -22,7 +22,6 @@
       "call-signature",
       "parameter",
       "property-declaration",
-      "object-destructuring",
       "array-destructuring"
     ]
   }

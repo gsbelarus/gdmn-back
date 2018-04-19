@@ -17,7 +17,7 @@ export class Application extends Context {
         console.log("DBStructure loaded...");
         console.timeEnd("time");
         console.time("time");
-        const erModel = erExport(dbStructure, transaction, new ERModel());
+        const erModel = await erExport(dbStructure, transaction, new ERModel());
         console.log("erModel: loaded " + Object.entries(erModel.entities).length + " entities");
         console.timeEnd("time");
         return {
@@ -26,7 +26,7 @@ export class Application extends Context {
         };
       }));
 
-    return new Application({...result, dbDetail: db});
+    return new Application({ ...result, dbDetail: db });
   }
 
   public static async destroy(app: Application): Promise<boolean> {
