@@ -1,5 +1,6 @@
 import {AConnectionPool, DBStructure, IConnectionOptions} from "gdmn-db";
 import {ERModel} from "gdmn-orm";
+import {ERGraphQLSchema} from "./graphql/ERGraphQLSchema";
 
 export interface IDBDetail<PoolOptions = any, ConnectionOptions extends IConnectionOptions = IConnectionOptions> {
   alias: string;
@@ -12,6 +13,7 @@ interface ISources {
   dbDetail: IDBDetail;
   dbStructure: DBStructure;
   erModel: ERModel;
+  erGraphQLSchema: ERGraphQLSchema;
 }
 
 export abstract class Context {
@@ -36,5 +38,9 @@ export abstract class Context {
 
   get erModel(): ERModel {
     return this._sources.erModel;
+  }
+
+  get erGraphQLSchema(): ERGraphQLSchema {
+    return this._sources.erGraphQLSchema;
   }
 }

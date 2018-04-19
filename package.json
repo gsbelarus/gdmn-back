@@ -16,10 +16,10 @@
   "dependencies": {
     "gdmn-db": "git://github.com/gsbelarus/gdmn-db.git",
     "gdmn-orm": "git://github.com/gsbelarus/gdmn-orm.git",
-    "graphql-yoga": "^1.8.4"
+    "graphql-yoga": "^1.8.5"
   },
   "devDependencies": {
-    "ts-node": "^5.0.1",
+    "ts-node": "^6.0.0",
     "tslint": "^5.9.1",
     "typescript": "^2.8.1",
     "nodemon": "^1.17.3"

@@ -47,3 +47,9 @@ server.express.get("/er", async (req, res) => {
 });
 
 server.start(() => console.log("Server is running on localhost:4000")).catch(console.error);
+
+creatingApp
+  .then((application) => {
+    return new GraphQLServer({schema: application.erGraphQLSchema}).start({port: 4001});
+  })
+  .catch(console.error);
