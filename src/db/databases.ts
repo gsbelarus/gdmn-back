@@ -3,6 +3,7 @@ import {IDBDetail} from "../Context";
 
 const broiler: IDBDetail<IDefaultConnectionPoolOptions> = {
   alias: "broiler",
+  driver: Factory.FBDriver,
   poolInstance: Factory.FBDriver.newDefaultConnectionPool(),
   poolOptions: {
     max: 3

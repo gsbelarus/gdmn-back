@@ -8,14 +8,14 @@ export class Application extends Context {
   private _isDestroyed: boolean = false;
 
   public static async create(dbDetail: IDBDetail): Promise<Application> {
-    const {poolInstance, poolOptions, connectionOptions}: IDBDetail = dbDetail;
+    const {driver, poolInstance, poolOptions, connectionOptions}: IDBDetail = dbDetail;
     await poolInstance.create(connectionOptions, poolOptions);
 
     console.time("total time");
     const result = await AConnectionPool.executeConnection(poolInstance,
       (connection) => AConnection.executeTransaction(connection, async (transaction) => {
         console.time("time");
-        const dbStructure = await transaction.readDBStructure();
+        const dbStructure = await driver.readDBStructure(transaction);
         console.log("DBStructure loaded...");
         console.timeEnd("time");
         console.time("time");

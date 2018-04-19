@@ -1,9 +1,10 @@
-import {AConnectionPool, DBStructure, IConnectionOptions} from "gdmn-db";
+import {AConnectionPool, ADriver, DBStructure, IConnectionOptions} from "gdmn-db";
 import {ERModel} from "gdmn-orm";
 import {ERGraphQLSchema} from "./graphql/ERGraphQLSchema";
 
 export interface IDBDetail<PoolOptions = any, ConnectionOptions extends IConnectionOptions = IConnectionOptions> {
   alias: string;
+  driver: ADriver;
   connectionOptions: ConnectionOptions;
   poolOptions: PoolOptions;
   poolInstance: AConnectionPool<PoolOptions>;
