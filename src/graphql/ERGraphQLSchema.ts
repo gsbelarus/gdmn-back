@@ -98,8 +98,11 @@ export class ERGraphQLSchema extends GraphQLSchema {
       return duplicate;
     }
 
+    const lName = entity.lName[context.locale];
+
     const type = new GraphQLObjectType({
       name: ERGraphQLSchema._escapeName(context, entity.name),
+      description: lName && lName.name,
       fields: () => ERGraphQLSchema._createEntityAttributes(context, entity)
     });
     context.types.push(type);
@@ -109,7 +112,7 @@ export class ERGraphQLSchema extends GraphQLSchema {
 
   private static _createEntityAttributes(context: IContext, entity: Entity): GraphQLFieldConfigMap<any, any> {
     const fields = ERGraphQLSchema._createScalarAttributes(context, entity, entity.attributes);
-    const linkFields = ERGraphQLSchema._createLinkAttributes(context, entity);
+    const linkFields = ERGraphQLSchema._createLinkAttributes(context, entity, entity.attributes);
 
     return {
       ...fields,
@@ -136,8 +139,10 @@ export class ERGraphQLSchema extends GraphQLSchema {
     }, {} as GraphQLFieldConfigMap<any, any>);
   }
 
-  private static _createLinkAttributes(context: IContext, entity: Entity): GraphQLFieldConfigMap<any, any> {
-    return Object.entries(entity.attributes).reduce((fields, [attributeName, attribute]) => {
+  private static _createLinkAttributes(context: IContext,
+                                       entity: Entity,
+                                       attributes: Attributes): GraphQLFieldConfigMap<any, any> {
+    return Object.entries(attributes).reduce((fields, [attributeName, attribute]) => {
 
       if (attribute instanceof EntityAttribute) {
         const type = ERGraphQLSchema._createLinkType(context, entity, attribute);
