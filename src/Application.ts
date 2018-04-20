@@ -15,30 +15,34 @@ export class Application extends Context {
 
     console.time("Total load time");
     const result = await AConnectionPool.executeConnection(poolInstance,
-      (connection) => AConnection.executeTransaction(connection, async (transaction) => {
-        console.time("DBStructure load time");
-        const dbStructure = await driver.readDBStructure(transaction);
-        console.log(`DBStructure: ${Object.entries(dbStructure.relations).length} relations loaded...`);
-        console.timeEnd("DBStructure load time");
-        console.time("erModel load time");
-        const erModel = await erExport(dbStructure, transaction, new ERModel());
-        console.log(`erModel: loaded ${Object.entries(erModel.entities).length} entities`);
-        console.timeEnd("erModel load time");
-        return {
-          dbStructure,
-          erModel
-        };
-      }));
+      (connection) => AConnection.executeTransaction(connection,
+        async (transaction) => {
+          console.time("DBStructure load time");
+          const dbStructure = await driver.readDBStructure(transaction);
+          console.log(`DBStructure: ${Object.entries(dbStructure.relations).length} relations loaded...`);
+          console.timeEnd("DBStructure load time");
+          console.time("erModel load time");
+          const erModel = await erExport(dbStructure, transaction, new ERModel());
+          console.log(`erModel: loaded ${Object.entries(erModel.entities).length} entities`);
+          console.timeEnd("erModel load time");
+          return {
+            dbStructure,
+            erModel
+          };
+        }));
 
     console.time("ERGraphQLSchema load time");
     const erGraphQLSchema = new ERGraphQLSchema(result.erModel, "ru");
-    console.log("ERGraphQLSchema loaded...");
+    console.log("ERGraphQLSchema (ru) loaded...");
     console.timeEnd("ERGraphQLSchema load time");
 
     console.timeEnd("Total load time");
 
     if (fs.existsSync("c:/temp/test")) {
-      fs.writeFileSync("c:/temp/test/ermodel.json", util.inspect(result.erModel, {showHidden: true, depth: 22}));
+      fs.writeFileSync("c:/temp/test/ermodel.json", util.inspect(result.erModel, {
+        showHidden: true,
+        depth: 22
+      }));
       console.log("ERModel has been written to c:/temp/test/ermodel.json");
     }
 
