@@ -31,20 +31,20 @@ export class Application extends Context {
           };
         }));
 
+    if (fs.existsSync("c:/temp/test")) {
+      fs.writeFileSync("c:/temp/test/ermodel.json", util.inspect(result.erModel, {
+        showHidden: true,
+        depth: 8
+      }));
+      console.log("ERModel has been written to c:/temp/test/ermodel.json");
+    }
+
     console.time("ERGraphQLSchema load time");
     const erGraphQLSchema = new ERGraphQLSchema(result.erModel, "ru");
     console.log("ERGraphQLSchema (ru) loaded...");
     console.timeEnd("ERGraphQLSchema load time");
 
     console.timeEnd("Total load time");
-
-    if (fs.existsSync("c:/temp/test")) {
-      fs.writeFileSync("c:/temp/test/ermodel.json", util.inspect(result.erModel, {
-        showHidden: true,
-        depth: 22
-      }));
-      console.log("ERModel has been written to c:/temp/test/ermodel.json");
-    }
 
     return new Application({...result, dbDetail, erGraphQLSchema});
   }
