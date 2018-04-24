@@ -41,6 +41,7 @@ export interface IContext {
   locale: TLocale;
   erModel: ERModel;
   types: GraphQLObjectType[];
+  enums: GraphQLEnumType[];
 }
 
 export type TLocale = "ru" | "en" | "by";
@@ -53,7 +54,8 @@ export class ERGraphQLSchema extends GraphQLSchema {
     const context: IContext = {
       locale,
       erModel,
-      types: []
+      types: [],
+      enums: []
     };
 
     super({
@@ -67,7 +69,9 @@ export class ERGraphQLSchema extends GraphQLSchema {
   }
 
   private static _escapeName(context: IContext, name: string): string {  // TODO tmp
-    return name.replace(/\$/g, "__");
+    return name
+      .replace(/\$/g, "_dollar_")
+      .replace(/\./g, "_dot_");
   }
 
   private static _createQueryTypeFields(context: IContext): GraphQLFieldConfigMap<any, any> {
@@ -165,18 +169,7 @@ export class ERGraphQLSchema extends GraphQLSchema {
       // case TimeIntervalAttribute:  // TODO TimeIntervalAttribute
       //   break;
       case EnumAttribute:
-        const enumAttribute = attribute as EnumAttribute;
-        return new GraphQLEnumType({
-          name: ERGraphQLSchema._escapeName(context, enumAttribute.name),
-          values: enumAttribute.values.reduce((values, enumAttr, index) => {
-            const valueLName = enumAttr.lName && enumAttr.lName[context.locale];
-            values[`VALUE_${index + 1}`] = {
-              value: enumAttr.value,
-              description: valueLName && valueLName.name
-            };
-            return values;
-          }, {} as GraphQLEnumValueConfigMap)
-        });
+        return ERGraphQLSchema._createEnumType(context, attribute as EnumAttribute);
       case DateAttribute:
         return GraphQLDate;
       case TimeAttribute:
@@ -197,6 +190,30 @@ export class ERGraphQLSchema extends GraphQLSchema {
       default:
         return GraphQLString;
     }
+  }
+
+  private static _createEnumType(context: IContext, attribute: EnumAttribute): GraphQLEnumType {
+    const duplicate = context.enums.find((item) => (
+      item.name === ERGraphQLSchema._escapeName(context, attribute.name)
+    ));
+    if (duplicate) {
+      return duplicate;
+    }
+
+    const enumType = new GraphQLEnumType({
+      name: ERGraphQLSchema._escapeName(context, attribute.name),
+      values: attribute.values.reduce((values, enumAttr, index) => {
+        const valueLName = enumAttr.lName && enumAttr.lName[context.locale];
+        values[`VALUE_${index + 1}`] = {
+          value: enumAttr.value,
+          description: valueLName && valueLName.name
+        };
+        return values;
+      }, {} as GraphQLEnumValueConfigMap)
+    });
+    context.enums.push(enumType);
+
+    return enumType;
   }
 
   private static _createLinkType(
