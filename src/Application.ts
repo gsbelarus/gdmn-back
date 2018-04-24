@@ -13,6 +13,7 @@ export class Application extends Context {
     const {driver, poolInstance, poolOptions, connectionOptions}: IDBDetail = dbDetail;
     await poolInstance.create(connectionOptions, poolOptions);
 
+    console.log(JSON.stringify(connectionOptions));
     console.time("Total load time");
     const result = await AConnectionPool.executeConnection(poolInstance,
       (connection) => AConnection.executeTransaction(connection,
