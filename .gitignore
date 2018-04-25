@@ -66,5 +66,6 @@ typings/
 # dotenv environment variables file
 .env
 
-connection_options.ts
+src/db/databases.ts
+test/db/test.fdb
 
