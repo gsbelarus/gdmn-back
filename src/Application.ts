@@ -35,7 +35,7 @@ export class Application extends Context {
     if (fs.existsSync("c:/temp/test")) {
       fs.writeFileSync("c:/temp/test/ermodel.json", util.inspect(result.erModel, {
         showHidden: true,
-        depth: 8
+        depth: 7
       }));
       console.log("ERModel has been written to c:/temp/test/ermodel.json");
     }
