@@ -2,7 +2,7 @@ import {GraphQLServer} from "graphql-yoga";
 import {Application} from "./Application";
 import databases from "./db/databases";
 
-const creatingApp = Application.create(databases.broiler);
+const creatingApp = Application.create(databases.test);
 
 const typeDefs = `
   type Query {
