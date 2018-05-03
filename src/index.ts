@@ -52,4 +52,5 @@ creatingApp
   .then((application) => {
     return new GraphQLServer({schema: application.erGraphQLSchema}).start({port: 4001});
   })
+  .then(() => console.log("Server is running on localhost:4001"))
   .catch(console.error);
