@@ -14,9 +14,10 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "gdmn-db": "git://github.com/gsbelarus/gdmn-db.git",
-    "gdmn-orm": "git://github.com/gsbelarus/gdmn-orm.git",
-    "graphql-yoga": "^1.8.5"
+    "gdmn-db": "git://github.com/gsbelarus/gdmn-db.git#1953411e35f0a1435261754ee8e678a43dfd84be",
+    "gdmn-orm": "git://github.com/gsbelarus/gdmn-orm.git#2e05fe7fd905f7edbc78c7f5daad46af5f74ad89",
+    "graphql-yoga": "^1.8.5",
+    "nesthydrationjs": "^1.0.3"
   },
   "devDependencies": {
     "ts-node": "^6.0.2",
