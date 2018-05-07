@@ -2,6 +2,7 @@ import fs from "fs";
 import {AConnection, AConnectionPool} from "gdmn-db";
 import {erExport, ERModel} from "gdmn-orm";
 import {Context, IDBDetail} from "./Context";
+import {ERGraphQLResolver} from "./graphql/ERGraphQLResolver";
 import {ERGraphQLSchema} from "./graphql/ERGraphQLSchema";
 
 export class Application extends Context {
@@ -9,12 +10,14 @@ export class Application extends Context {
   private _isDestroyed: boolean = false;
 
   public static async create(dbDetail: IDBDetail): Promise<Application> {
-    const {driver, poolInstance, poolOptions, connectionOptions}: IDBDetail = dbDetail;
-    await poolInstance.create(connectionOptions, poolOptions);
+    const {driver, poolOptions, connectionOptions}: IDBDetail = dbDetail;
+
+    const connectionPool = driver.newDefaultConnectionPool();
+    await connectionPool.create(connectionOptions, poolOptions);
 
     console.log(JSON.stringify(connectionOptions));
     console.time("Total load time");
-    const result = await AConnectionPool.executeConnection(poolInstance,
+    const result = await AConnectionPool.executeConnection(connectionPool,
       (connection) => AConnection.executeTransaction(connection,
         async (transaction) => {
           console.time("DBStructure load time");
@@ -32,22 +35,22 @@ export class Application extends Context {
         }));
 
     if (fs.existsSync("c:/temp/test")) {
-      fs.writeFileSync("c:/temp/test/ermodel.json", result.erModel.inspect().reduce( (p, s) => `${p}${s}\n`, ""));
+      fs.writeFileSync("c:/temp/test/ermodel.json", result.erModel.inspect().reduce((p, s) => `${p}${s}\n`, ""));
       console.log("ERModel has been written to c:/temp/test/ermodel.json");
     }
 
     console.time("ERGraphQLSchema load time");
-    const erGraphQLSchema = new ERGraphQLSchema(result.erModel, "ru");
+    const erGraphQLSchema = new ERGraphQLSchema(result.erModel, "ru", new ERGraphQLResolver());
     console.log("ERGraphQLSchema (ru) loaded...");
     console.timeEnd("ERGraphQLSchema load time");
 
     console.timeEnd("Total load time");
 
-    return new Application({...result, dbDetail, erGraphQLSchema});
+    return new Application({...result, dbDetail, connectionPool, erGraphQLSchema});
   }
 
   public static async destroy(app: Application): Promise<boolean> {
-    await app.dbDetail.poolInstance.destroy();
+    await app.connectionPool.destroy();
     return app._isDestroyed = true;
   }
 

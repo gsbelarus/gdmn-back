@@ -1,6 +1,7 @@
 import {GraphQLServer} from "graphql-yoga";
 import {Application} from "./Application";
 import databases from "./db/databases";
+import {User} from "./User";
 
 const creatingApp = Application.create(databases.test);
 
@@ -46,11 +47,14 @@ server.express.get("/er", async (req, res) => {
   res.send(JSON.stringify(application.erModel.serialize()));
 });
 
-server.start(() => console.log("Server is running on localhost:4000")).catch(console.error);
+server.start(() => console.log("Server is running on http://localhost:4000")).catch(console.error);
 
 creatingApp
   .then((application) => {
-    return new GraphQLServer({schema: application.erGraphQLSchema}).start({port: 4001});
+    return new GraphQLServer({
+      schema: application.erGraphQLSchema,
+      context: (params) => User.login(application.context, {username: "user", password: "password"})
+    }).start({port: 4001});
   })
-  .then(() => console.log("Server is running on localhost:4001"))
+  .then(() => console.log("Server is running on http://localhost:4001"))
   .catch(console.error);

@@ -1,28 +1,32 @@
-import {AConnectionPool, ADriver, DBStructure, IConnectionOptions} from "gdmn-db";
+import {AConnectionPool, ADriver, DBStructure, IConnectionOptions, IDefaultConnectionPoolOptions} from "gdmn-db";
 import {ERModel} from "gdmn-orm";
 import {ERGraphQLSchema} from "./graphql/ERGraphQLSchema";
 
-export interface IDBDetail<PoolOptions = any, ConnectionOptions extends IConnectionOptions = IConnectionOptions> {
+export interface IDBDetail<ConnectionOptions extends IConnectionOptions = IConnectionOptions> {
   alias: string;
   driver: ADriver;
   connectionOptions: ConnectionOptions;
-  poolOptions: PoolOptions;
-  poolInstance: AConnectionPool<PoolOptions>;
+  poolOptions: IDefaultConnectionPoolOptions;
 }
 
-interface ISources {
+export interface ISources {
   dbDetail: IDBDetail;
   dbStructure: DBStructure;
+  connectionPool: AConnectionPool<IDefaultConnectionPoolOptions>;
   erModel: ERModel;
   erGraphQLSchema: ERGraphQLSchema;
 }
 
 export abstract class Context {
 
-  private _sources: ISources;
+  private readonly _sources: ISources;
 
   protected constructor(sources: ISources) {
     this._sources = sources;
+  }
+
+  get sources(): ISources {
+    return this._sources;
   }
 
   get context(): Context {
@@ -35,6 +39,10 @@ export abstract class Context {
 
   get dbStructure(): DBStructure {
     return this._sources.dbStructure;
+  }
+
+  get connectionPool(): AConnectionPool<IDefaultConnectionPoolOptions> {
+    return this._sources.connectionPool;
   }
 
   get erModel(): ERModel {
