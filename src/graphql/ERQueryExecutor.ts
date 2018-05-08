@@ -1,11 +1,7 @@
 import {AccessMode, AConnection, AConnectionPool, ATransaction, Isolation} from "gdmn-db";
-import NestHydrationJS from "nesthydrationjs";
+import NestHydrationJS, {IDefinition} from "nesthydrationjs";
 import {Context} from "../Context";
 import {IQuery} from "./ERQueryAnalyzer";
-
-interface IDefinition {
-  [key: string]: any;
-}
 
 export class ERQueryExecutor {
 
