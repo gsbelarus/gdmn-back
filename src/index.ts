@@ -58,3 +58,5 @@ creatingApp
   })
   .then(() => console.log("Server is running on http://localhost:4001"))
   .catch(console.error);
+
+process.on("SIGINT", process.exit);
