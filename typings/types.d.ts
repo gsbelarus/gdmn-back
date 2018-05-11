@@ -1,3 +1,4 @@
+import {Attribute, Entity} from "gdmn-orm";
 import {
   FieldDefinitionNode,
   GraphQLFieldConfigArgumentMap,
@@ -11,6 +12,7 @@ import {
   Thunk
 } from "graphql";
 import {ObjectTypeExtensionNode} from "graphql/language/ast";
+import Maybe from "graphql/tsutils/Maybe";
 
 /* tslint:disable */
 declare module "graphql" {
@@ -19,10 +21,10 @@ declare module "graphql" {
 
   export class GraphQLObjectType {
     name: string;
-    description: string | void;
-    astNode: ObjectTypeDefinitionNode | void;
-    extensionASTNodes: ReadonlyArray<ObjectTypeExtensionNode> | void;
-    isTypeOf: GraphQLIsTypeOfFn<any, any> | void;
+    description: Maybe<string>;
+    astNode: Maybe<ObjectTypeDefinitionNode>;
+    extensionASTNodes: Maybe<ReadonlyArray<ObjectTypeExtensionNode>>;
+    isTypeOf: Maybe<GraphQLIsTypeOfFn<any, any>>;
 
     constructor(config: GraphQLObjectTypeConfig<any, any>);
 
@@ -39,12 +41,12 @@ declare module "graphql" {
 
   export interface GraphQLObjectTypeConfig<TSource, TContext> {
     name: string;
-    interfaces?: Thunk<GraphQLInterfaceType[] | void>;
+    interfaces?: Thunk<Maybe<GraphQLInterfaceType[]>>;
     fields: Thunk<GraphQLFieldConfigMap<TSource, TContext>>;
-    isTypeOf?: GraphQLIsTypeOfFn<TSource, TContext> | void;
-    description?: string | void;
-    astNode?: ObjectTypeDefinitionNode | void;
-    extensionASTNodes?: ReadonlyArray<ObjectTypeExtensionNode> | void;
+    isTypeOf?: Maybe<GraphQLIsTypeOfFn<TSource, TContext>>;
+    description?: Maybe<string>;
+    astNode?: Maybe<ObjectTypeDefinitionNode>;
+    extensionASTNodes?: Maybe<ReadonlyArray<ObjectTypeExtensionNode>>;
 
     entity?: Entity;
   }
@@ -58,9 +60,9 @@ declare module "graphql" {
     args?: GraphQLFieldConfigArgumentMap;
     resolve?: GraphQLFieldResolver<TSource, TContext, TArgs>;
     subscribe?: GraphQLFieldResolver<TSource, TContext, TArgs>;
-    deprecationReason?: string | void;
-    description?: string | void;
-    astNode?: FieldDefinitionNode | void;
+    deprecationReason?: Maybe<string>;
+    description?: Maybe<string>;
+    astNode?: Maybe<FieldDefinitionNode>;
 
     attribute?: Attribute;
   }

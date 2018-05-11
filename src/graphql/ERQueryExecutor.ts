@@ -1,5 +1,5 @@
-import {AccessMode, AConnection, AConnectionPool, ATransaction, Isolation} from "gdmn-db";
-import NestHydrationJS, {IDefinition} from "nesthydrationjs";
+import {AccessMode, AConnection, AConnectionPool} from "gdmn-db";
+import {default as NestHydrationJS, IDefinition} from "nesthydrationjs";
 import {Context} from "../Context";
 import {IQuery} from "./ERQueryAnalyzer";
 
@@ -16,48 +16,51 @@ export class ERQueryExecutor {
   }
 
   public async execute(query: IQuery): Promise<any> {
-    this.makeSelect(query);
-    this.makeDefinitions(query);
+    this._clearVariables();
 
-    return AConnectionPool.executeConnection(this._context.connectionPool,
-      (connection) => AConnection.executeTransaction(connection, {
-        accessMode: AccessMode.READ_ONLY,
-        isolation: Isolation.READ_COMMITED
-      }, (transaction) => ATransaction.executeQueryResultSet(transaction, this._sql, this._params,
-        async (resultSet) => {
-          const result = [];
-          while (await resultSet.next()) {
-            // query.fields.reduce((object, field) => {
-            //   let value: any | undefined;
-            //   switch (field.attribute.constructor) {
-            //     case StringAttribute:
-            //       value = resultSet.getString();
-            //   }
-            //   return object;
-            // }, {});
-            result.push({
-              ID: resultSet.getNumber(0),
-              NAME: resultSet.getString(1)
-            });
-          }
-          console.log(resultSet.position);
-          return NestHydrationJS().nest(result, [this._definition]);
-        })));
+    this._makeSelect(query);
+    this._makeDefinitions(query);
+
+    return AConnectionPool.executeConnection({
+      connectionPool: this._context.connectionPool,
+      callback: (connection) => AConnection.executeTransaction({
+        connection, options: {
+          accessMode: AccessMode.READ_ONLY
+        },
+        callback: (transaction) => {
+          return AConnection.executeQueryResultSet({
+            connection,
+            transaction,
+            sql: this._sql,
+            params: this._params,
+            callback: async (resultSet) => {
+              const result = [];
+              while (await resultSet.next()) {
+                const row: { [key: string]: any } = {};
+                for (let i = 0; i < resultSet.metadata.columnCount; i++) {
+                  // TODO binary blob support
+                  row[resultSet.metadata.getColumnLabel(i)] = await resultSet.getAny(i);
+                }
+                result.push(row);
+              }
+              return NestHydrationJS().nest(result, [this._definition]);
+            }
+          });
+        }
+      })
+    });
   }
 
-  private makeSelect(query: IQuery): void {
-    this._sql = "";
-    this._params = {};
+  private _makeSelect(query: IQuery): void {
+    this._sql += `SELECT \n${this._makeFields(query).join(",\n")}`;
+    this._sql += `\nFROM ${this._makeFrom(query)}`;
 
-    this._sql += `SELECT \n${this.makeFields(query).join(",\n")}`;
-    this._sql += `\nFROM ${this.makeFrom(query)}`;
-
-    const sqlJoin = this.makeJoin(query).join(",\n");
+    const sqlJoin = this._makeJoin(query).join(",\n");
     if (sqlJoin) {
       this._sql += `\n${sqlJoin}`;
     }
 
-    const sqlWhere = this.makeWhere(query);
+    const sqlWhere = this._makeWhere(query);
     if (sqlWhere) {
       this._sql += `\nWHERE ${sqlWhere}`;
     }
@@ -68,7 +71,7 @@ export class ERQueryExecutor {
     console.log("===================");
   }
 
-  private makeDefinitions(query: IQuery): void {
+  private _makeDefinitions(query: IQuery): void {
     const primaryAttribute = query.entity.pk[0];
     if (!query.fields.some((item) => item.attribute === primaryAttribute)) {
       this._definition[primaryAttribute.name] = {column: primaryAttribute.name};
@@ -80,7 +83,7 @@ export class ERQueryExecutor {
     }, this._definition);
   }
 
-  private makeFields(query: IQuery, alias: string = ""): string[] {
+  private _makeFields(query: IQuery, alias: string = ""): string[] {
     const template = (fieldName: string, fieldAlias: string) => (
       `  ${alias && `${alias}.`}${fieldName} AS ${fieldAlias}`
     );
@@ -94,29 +97,35 @@ export class ERQueryExecutor {
     return fields;
   }
 
-  private makeFrom(query: IQuery, alias: string = ""): string {
+  private _makeFrom(query: IQuery, alias: string = ""): string {
     const mainRelation = query.entity.adapter.relation[0];
 
     return `${mainRelation.relationName} ${alias}`;
   }
 
-  private makeJoin(query: IQuery, alias: string = ""): string[] {
+  private _makeJoin(query: IQuery, alias: string = ""): string[] {
     return [];
   }
 
-  private makeWhere(query: IQuery, alias: string = ""): string {
+  private _makeWhere(query: IQuery, alias: string = ""): string {
     const mainRel = query.entity.adapter.relation[0];
 
     if (mainRel.selector) {
-      return `${alias && `${alias}.`}${mainRel.selector.field} = :${this.addToParams(mainRel.selector.value)}`;
+      return `${alias && `${alias}.`}${mainRel.selector.field} = :${this._addToParams(mainRel.selector.value)}`;
     }
     return "";
   }
 
-  private addToParams(value: any): string {
+  private _addToParams(value: any): string {
     const length = Object.keys(this._params).length;
     const placeholder = `param_${length}`;
     this._params[placeholder] = value;
     return placeholder;
+  }
+
+  private _clearVariables(): void {
+    this._sql = "";
+    this._params = {};
+    this._definition = {};
   }
 }

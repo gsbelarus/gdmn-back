@@ -17,22 +17,26 @@ export class Application extends Context {
 
     console.log(JSON.stringify(connectionOptions));
     console.time("Total load time");
-    const result = await AConnectionPool.executeConnection(connectionPool,
-      (connection) => AConnection.executeTransaction(connection,
-        async (transaction) => {
+    const result = await AConnectionPool.executeConnection({
+      connectionPool,
+      callback: (connection) => AConnection.executeTransaction({
+        connection,
+        callback: async (transaction) => {
           console.time("DBStructure load time");
-          const dbStructure = await driver.readDBStructure(transaction);
+          const dbStructure = await driver.readDBStructure(connection, transaction);
           console.log(`DBStructure: ${Object.entries(dbStructure.relations).length} relations loaded...`);
           console.timeEnd("DBStructure load time");
           console.time("erModel load time");
-          const erModel = await erExport(dbStructure, transaction, new ERModel());
+          const erModel = await erExport(dbStructure, connection, transaction, new ERModel());
           console.log(`erModel: loaded ${Object.entries(erModel.entities).length} entities`);
           console.timeEnd("erModel load time");
           return {
             dbStructure,
             erModel
           };
-        }));
+        }
+      })
+    });
 
     if (fs.existsSync("c:/temp/test")) {
       fs.writeFileSync("c:/temp/test/ermodel.json", result.erModel.inspect().reduce((p, s) => `${p}${s}\n`, ""));
