@@ -1,4 +1,14 @@
-import {AConnectionPool, ADriver, DBStructure, IConnectionOptions, IDefaultConnectionPoolOptions} from "gdmn-db";
+import {
+  AConnection,
+  AConnectionPool,
+  ADriver,
+  ATransaction,
+  DBStructure,
+  IConnectionOptions,
+  IDefaultConnectionPoolOptions,
+  ITransactionOptions
+} from "gdmn-db";
+import {TExecutor} from "gdmn-db/dist/definitions/types";
 import {ERModel} from "gdmn-orm";
 import {ERGraphQLSchema} from "./graphql/ERGraphQLSchema";
 
@@ -51,5 +61,21 @@ export abstract class Context {
 
   get erGraphQLSchema(): ERGraphQLSchema {
     return this._sources.erGraphQLSchema;
+  }
+
+  public async executeConnection<R>(callback: TExecutor<AConnection, R>): Promise<R> {
+    return await AConnectionPool.executeConnection({
+      connectionPool: this.connectionPool,
+      callback
+    });
+  }
+
+  public async executeTransaction<R>(callback: TExecutor<{ connection: AConnection, transaction: ATransaction }, R>,
+                                     options?: ITransactionOptions): Promise<R> {
+    return await this.executeConnection((connection) => AConnection.executeTransaction({
+      connection,
+      options,
+      callback: (transaction) => callback({connection, transaction})
+    }));
   }
 }

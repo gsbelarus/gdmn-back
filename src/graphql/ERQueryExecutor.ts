@@ -1,4 +1,4 @@
-import {AccessMode, AConnection, AConnectionPool} from "gdmn-db";
+import {AccessMode, AConnection} from "gdmn-db";
 import {default as NestHydrationJS, IDefinition} from "nesthydrationjs";
 import {Context} from "../Context";
 import {IQuery} from "./ERQueryAnalyzer";
@@ -21,34 +21,29 @@ export class ERQueryExecutor {
     this._makeSelect(query);
     this._makeDefinitions(query);
 
-    return AConnectionPool.executeConnection({
-      connectionPool: this._context.connectionPool,
-      callback: (connection) => AConnection.executeTransaction({
-        connection, options: {
-          accessMode: AccessMode.READ_ONLY
-        },
-        callback: (transaction) => {
-          return AConnection.executeQueryResultSet({
-            connection,
-            transaction,
-            sql: this._sql,
-            params: this._params,
-            callback: async (resultSet) => {
-              const result = [];
-              while (await resultSet.next()) {
-                const row: { [key: string]: any } = {};
-                for (let i = 0; i < resultSet.metadata.columnCount; i++) {
-                  // TODO binary blob support
-                  row[resultSet.metadata.getColumnLabel(i)] = await resultSet.getAny(i);
-                }
-                result.push(row);
+    return await this._context.executeTransaction(({connection, transaction}) => {
+        return AConnection.executeQueryResultSet({
+          connection,
+          transaction,
+          sql: this._sql,
+          params: this._params,
+          callback: async (resultSet) => {
+            const result = [];
+            while (await resultSet.next()) {
+              const row: { [key: string]: any } = {};
+              for (let i = 0; i < resultSet.metadata.columnCount; i++) {
+                // TODO binary blob support
+                row[resultSet.metadata.getColumnLabel(i)] = await resultSet.getAny(i);
               }
-              return NestHydrationJS().nest(result, [this._definition]);
+              result.push(row);
             }
-          });
-        }
-      })
-    });
+            return NestHydrationJS().nest(result, [this._definition]);
+          }
+        });
+      },
+      {
+        accessMode: AccessMode.READ_ONLY
+      });
   }
 
   private _makeSelect(query: IQuery): void {

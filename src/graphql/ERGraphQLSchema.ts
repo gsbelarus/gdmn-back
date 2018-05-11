@@ -95,8 +95,8 @@ export class ERGraphQLSchema extends GraphQLSchema {
 
           fields[ERGraphQLSchema._escapeName(context, entityName)] = {
             type: new GraphQLList(entityType),
-            resolve: context.resolver.queryResolver,
-            description: lName && lName.name
+            description: lName && lName.name,
+            resolve: context.resolver.queryResolver
           };
         }
         return fields;

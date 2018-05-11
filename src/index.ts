@@ -1,62 +1,51 @@
 import {GraphQLServer} from "graphql-yoga";
+import {Server as HttpServer} from "http";
+import {Server as HttpsServer} from "https";
 import {Application} from "./Application";
 import databases from "./db/databases";
 import {User} from "./User";
 
-const creatingApp = Application.create(databases.test);
+interface IServer {
+  application: Application;
+  server: HttpServer | HttpsServer;
+}
 
-const typeDefs = `
-  type Query {
-    hello(name: String): String!
+async function create(): Promise<IServer> {
+  const application = await Application.create(databases.test);
+
+  const graphQLServer = new GraphQLServer({
+    schema: application.erGraphQLSchema,
+    context: (params) => User.login(application.context, {username: "user", password: "password"})
+  });
+
+  graphQLServer.express.get("/er", async (req, res) => {
+    console.log("GET /er");
+    res.send(JSON.stringify(application.erModel.serialize()));
+  });
+
+  const server = await graphQLServer.start({port: 4000});
+  console.log(`Server is running on http://localhost:${server.address().port}`);
+
+  return {application, server};
+}
+
+const creating = create();
+creating.catch(console.error);
+
+process.on("SIGINT", exit);
+process.on("SIGTERM", exit);
+
+async function exit(): Promise<void> {
+  try {
+    const {application, server} = await creating;
+
+    await server.close();
+    await Application.destroy(application);
+
+    console.log("Application destroyed");
+  } catch (error) {
+    console.error(error);
+  } finally {
+    process.exit();
   }
-`;
-
-const resolvers = {
-  Query: {
-    hello: (_: any, args: any) => `Hello ${args.name || "World"}`,
-  },
-};
-
-const server = new GraphQLServer({typeDefs, resolvers});
-
-// Add headers
-server.express.use((req, res, next) => {
-
-  // Website you wish to allow to connect
-  res.setHeader("Access-Control-Allow-Origin", `http://localhost:3000`);
-
-  // Request methods you wish to allow
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, PATCH, DELETE");
-
-  // Request headers you wish to allow
-  res.setHeader("Access-Control-Allow-Headers", "X-Requested-With,content-type");
-
-  // Set to true if you need the website to include cookies in the requests sent
-  // to the API (e.g. in case you use sessions)
-  res.setHeader("Access-Control-Allow-Credentials", "true");
-
-  // Pass to next layer of middleware
-  next();
-});
-
-server.express.get("/hello", (req, res) => res.send("Hello World!"));
-
-server.express.get("/er", async (req, res) => {
-  console.log("GET /er");
-  const application = await creatingApp;
-  res.send(JSON.stringify(application.erModel.serialize()));
-});
-
-server.start(() => console.log("Server is running on http://localhost:4000")).catch(console.error);
-
-creatingApp
-  .then((application) => {
-    return new GraphQLServer({
-      schema: application.erGraphQLSchema,
-      context: (params) => User.login(application.context, {username: "user", password: "password"})
-    }).start({port: 4001});
-  })
-  .then(() => console.log("Server is running on http://localhost:4001"))
-  .catch(console.error);
-
-process.on("SIGINT", process.exit);
+}
