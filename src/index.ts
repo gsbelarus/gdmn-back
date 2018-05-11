@@ -11,6 +11,8 @@ interface IServer {
 }
 
 async function create(): Promise<IServer> {
+  const env = process.env.NODE_ENV || "development";
+
   const application = await Application.create(databases.test);
 
   const graphQLServer = new GraphQLServer({
@@ -23,7 +25,10 @@ async function create(): Promise<IServer> {
     res.send(JSON.stringify(application.erModel.serialize()));
   });
 
-  const server = await graphQLServer.start({port: 4000});
+  const server = await graphQLServer.start({
+    tracing: env === "development",
+    port: 4000
+  });
   console.log(`Server is running on http://localhost:${server.address().port}`);
 
   return {application, server};
