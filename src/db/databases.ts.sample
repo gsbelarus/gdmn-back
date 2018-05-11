@@ -6,13 +6,12 @@
 
 */
 
-import {Factory, IDefaultConnectionPoolOptions} from "gdmn-db";
+import {Factory} from "gdmn-db";
 import {IDBDetail} from "../Context";
 
-const dbData: IDBDetail<IDefaultConnectionPoolOptions> = {
+const test: IDBDetail = {
   alias: "some alias",
   driver: Factory.FBDriver,
-  poolInstance: Factory.FBDriver.newDefaultConnectionPool(),
   poolOptions: {
     max: 3
   },
@@ -30,7 +29,7 @@ export interface IDBs {
 }
 
 const databases: IDBs = {
-  dbData
+  test
 };
 
 export default databases;

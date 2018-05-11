@@ -19,7 +19,9 @@ import {
 import {
   GraphQLBoolean,
   GraphQLEnumType,
+  GraphQLEnumValueConfigMap,
   GraphQLFieldConfigMap,
+  GraphQLFieldResolver,
   GraphQLFloat,
   GraphQLInt,
   GraphQLList,
@@ -30,35 +32,45 @@ import {
   GraphQLString,
   GraphQLUnionType
 } from "graphql";
-import {GraphQLEnumValueConfigMap} from "graphql/type/definition";
+import {User} from "../User";
 import {GraphQLDate} from "./types/GraphQLDate";
 import {GraphQLDateTime} from "./types/GraphQLDateTime";
 import {GraphQLNumeric} from "./types/GraphQLNumeric";
 import {GraphQLSeqInt} from "./types/GraphQLSeqInt";
 import {GraphQLTime} from "./types/GraphQLTime";
 
-export interface IContext {
+export interface IERGraphQLResolver {
+  queryResolver: GraphQLFieldResolver<any, User, IArgs>;
+}
+
+interface IContext {
   locale: TLocale;
   erModel: ERModel;
+  resolver: IERGraphQLResolver;
   types: GraphQLObjectType[];
 }
 
 export type TLocale = "ru" | "en" | "by";
 
+export interface IArgs {
+  [argName: string]: any;
+}
+
 export class ERGraphQLSchema extends GraphQLSchema {
 
   private _context: IContext;
 
-  constructor(erModel: ERModel, locale: TLocale) {
+  constructor(erModel: ERModel, locale: TLocale, resolver: IERGraphQLResolver) {
     const context: IContext = {
       locale,
       erModel,
+      resolver,
       types: []
     };
 
     super({
       query: new GraphQLObjectType({
-        name: "Objects",
+        name: "Entities",
         fields: () => ERGraphQLSchema._createQueryTypeFields(context)
       })
     });
@@ -82,8 +94,9 @@ export class ERGraphQLSchema extends GraphQLSchema {
           const lName = entity.lName[context.locale];
 
           fields[ERGraphQLSchema._escapeName(context, entityName)] = {
-            type: entityType,
-            description: lName && lName.name
+            type: new GraphQLList(entityType),
+            description: lName && lName.name,
+            resolve: context.resolver.queryResolver
           };
         }
         return fields;
@@ -105,7 +118,8 @@ export class ERGraphQLSchema extends GraphQLSchema {
     const type = new GraphQLObjectType({
       name: ERGraphQLSchema._escapeName(context, entity.name),
       description: lName && lName.name,
-      fields: () => ERGraphQLSchema._createEntityAttributes(context, entity)
+      fields: () => ERGraphQLSchema._createEntityAttributes(context, entity),
+      entity
     });
     context.types.push(type);
 
@@ -133,7 +147,8 @@ export class ERGraphQLSchema extends GraphQLSchema {
 
         fields[ERGraphQLSchema._escapeName(context, attributeName)] = {
           type: attribute.required ? new GraphQLNonNull(keyType) : keyType,
-          description: lName && lName.name
+          description: lName && lName.name,
+          attribute
         };
       }
 
@@ -153,7 +168,8 @@ export class ERGraphQLSchema extends GraphQLSchema {
 
           fields[ERGraphQLSchema._escapeName(context, attributeName)] = {
             type,
-            description: lName && lName.name
+            description: lName && lName.name,
+            attribute
           };
         }
       }
@@ -167,6 +183,8 @@ export class ERGraphQLSchema extends GraphQLSchema {
                                    attribute: ScalarAttribute): GraphQLScalarType | GraphQLEnumType {
     switch (attribute.constructor) {
       // case TimeIntervalAttribute:  // TODO TimeIntervalAttribute
+      //   break;
+      // case BLOBAttribute:  // TODO BLOBAttribute
       //   break;
       case EnumAttribute:
         return ERGraphQLSchema._createEnumType(context, entity, attribute as EnumAttribute);
@@ -255,7 +273,8 @@ export class ERGraphQLSchema extends GraphQLSchema {
           ...this._createScalarAttributes(context, entity, attribute.attributes),
           [ERGraphQLSchema._escapeName(context, attribute.name)]: { // TODO possible conflict names ???
             type: entityType,
-            description: lName && lName.name
+            description: lName && lName.name,
+            attribute
           }
         };
       }
