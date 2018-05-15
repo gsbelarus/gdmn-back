@@ -17,7 +17,7 @@
     "gdmn-db": "git://github.com/gsbelarus/gdmn-db.git",
     "gdmn-orm": "git://github.com/gsbelarus/gdmn-orm.git",
     "graphql-yoga": "^1.13.1",
-    "nesthydrationjs": "^1.0.3"
+    "nesthydrationjs": "^1.0.5"
   },
   "devDependencies": {
     "ts-node": "^6.0.3",

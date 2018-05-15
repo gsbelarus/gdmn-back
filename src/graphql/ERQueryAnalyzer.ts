@@ -2,15 +2,15 @@ import {Attribute, Entity} from "gdmn-orm";
 import {
   FieldNode,
   FragmentDefinitionNode,
-  FragmentSpreadNode,
   GraphQLNullableType,
   GraphQLObjectType,
   GraphQLObjectTypeConfig,
   GraphQLResolveInfo,
   GraphQLType,
-  InlineFragmentNode,
+  isCompositeType,
   isListType,
   isObjectType,
+  isUnionType,
   isWrappingType,
   SelectionNode
 } from "graphql";
@@ -33,6 +33,7 @@ interface ISkipRelayConnectionResult {
 
 export interface IQueryField {
   attribute: Attribute;
+  isArray: boolean;
   selectionValue: string;
   query?: IQuery;
 }
@@ -111,13 +112,11 @@ export default class ERQueryAnalyzer {
     const deepSelections: any[] = selections.map((selection) => {
       switch (selection.kind) {
         case "FragmentSpread":
-          const fragmentSpread = selection as FragmentSpreadNode;
-          const fragmentName = fragmentSpread.name.value;
+          const fragmentName = selection.name.value;
           const fragment = fragments[fragmentName];
           return ERQueryAnalyzer.spreadFragments(fragment.selectionSet.selections, fragments, typeName);
         case "InlineFragment":
-          const inlineFragment = selection as InlineFragmentNode;
-          if (inlineFragment.typeCondition && inlineFragment.typeCondition.name.value === typeName) {
+          if (selection.typeCondition && selection.typeCondition.name.value === typeName) {
             return ERQueryAnalyzer.spreadFragments(selection.selectionSet.selections, fragments, typeName);
           }
           return [];
@@ -147,23 +146,35 @@ export default class ERQueryAnalyzer {
       fieldNode = skippedRelay.fieldNode;
     }
 
-    const config: GraphQLObjectTypeConfig<any, any> = (parentType as any)._typeConfig;
-    if (config && config.entity) {
-      const entity: Entity = config.entity;
-      const query: IQuery = {
-        args,
-        entity,
-        fields: []
-      };
+    if (fieldNode.selectionSet && isCompositeType(parentType)) {
+      let selections = fieldNode.selectionSet.selections;
+      if (isUnionType(parentType)) {
+        const unionType = parentType.getTypes();
+        for (parentType of unionType) {
+          selections = ERQueryAnalyzer
+            .spreadFragments(fieldNode.selectionSet.selections, context.fragments, parentType.name);
+          if (selections.length) {  // FIXME
+            break;
+          }
+        }
+      }
 
-      if (fieldNode.selectionSet) {
-        query.fields = fieldNode.selectionSet.selections.reduce((fields, selection) => {
+      const config: GraphQLObjectTypeConfig<any, any> = (parentType as any)._typeConfig;
+      if (config && config.entity) {
+        const entity: Entity = config.entity;
+        const query: IQuery = {
+          args,
+          entity,
+          fields: []
+        };
+        query.fields = selections.reduce((fields, selection) => {
           if (selection.kind === "Field" && isObjectType(parentType)) {
             const field = parentType.getFields()[selection.name.value];
             const attribute: Attribute = (field as any).attribute;
             if (attribute) {
               fields.push({
                 attribute,
+                isArray: false, // TODO support
                 selectionValue: selection.name.value,
                 query: ERQueryAnalyzer.analyze(selection, parentType, context)
               });
@@ -171,8 +182,9 @@ export default class ERQueryAnalyzer {
           }
           return fields;
         }, [] as IQueryField[]);
+
+        return query;
       }
-      return query;
     }
   }
 }
