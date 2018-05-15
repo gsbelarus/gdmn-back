@@ -1,6 +1,7 @@
 import fs from "fs";
 import {AConnection, AConnectionPool} from "gdmn-db";
-import {erExport, ERModel} from "gdmn-orm";
+import {ERModel} from "gdmn-orm";
+import {erExport} from "gdmn-er-bridge";
 import {Context, IDBDetail} from "./Context";
 import {ERGraphQLResolver} from "./graphql/ERGraphQLResolver";
 import {ERGraphQLSchema} from "./graphql/ERGraphQLSchema";

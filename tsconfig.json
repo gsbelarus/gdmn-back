@@ -1,7 +1,8 @@
 {
   "compilerOptions": {
     "module": "commonjs",
-    "target": "es2017",
+    "target": "esnext",
+    "lib": ["esnext"],
     "sourceMap": true,
     "esModuleInterop": true,
     "strict": true,
@@ -10,7 +11,6 @@
       "node_modules/@types",
       "./typings"
     ],
-    "lib": ["esnext"],
     "skipLibCheck": true
   }
 }

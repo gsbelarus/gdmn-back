@@ -4,9 +4,6 @@ dist
 # VS Code
 .vscode
 
-# IntelliJ IDEA
-.idea
-
 # Logs
 logs
 *.log
