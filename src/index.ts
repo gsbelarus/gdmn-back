@@ -20,6 +20,12 @@ async function create(): Promise<IServer> {
     context: (params) => User.login(application.context, {username: "user", password: "password"})
   });
 
+  graphQLServer.express.use((req, res, next) => {
+    res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
+    next();
+  });
+
   graphQLServer.express.get("/er", async (req, res) => {
     console.log("GET /er");
     res.send(JSON.stringify(application.erModel.serialize()));
