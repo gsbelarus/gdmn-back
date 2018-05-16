@@ -1,5 +1,5 @@
 import {GraphQLResolveInfo} from "graphql/type/definition";
-import {User} from "../User";
+import {User} from "../context/User";
 import {IArgs, IERGraphQLResolver} from "./ERGraphQLSchema";
 import ERQueryAnalyzer from "./ERQueryAnalyzer";
 import {ERQueryExecutor} from "./ERQueryExecutor";

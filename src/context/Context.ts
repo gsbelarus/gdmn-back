@@ -10,7 +10,8 @@ import {
 } from "gdmn-db";
 import {TExecutor} from "gdmn-db/dist/definitions/types";
 import {ERModel} from "gdmn-orm";
-import {ERGraphQLSchema} from "./graphql/ERGraphQLSchema";
+import {ERGraphQLSchema} from "../graphql/ERGraphQLSchema";
+import {User} from "./User";
 
 export interface IDBDetail<ConnectionOptions extends IConnectionOptions = IConnectionOptions> {
   alias: string;
@@ -25,18 +26,15 @@ export interface ISources {
   connectionPool: AConnectionPool<IDefaultConnectionPoolOptions>;
   erModel: ERModel;
   erGraphQLSchema: ERGraphQLSchema;
+  users?: User[];
 }
 
 export abstract class Context {
 
-  private readonly _sources: ISources;
+  private readonly _sources?: ISources;
 
-  protected constructor(sources: ISources) {
+  protected constructor(sources?: ISources) {
     this._sources = sources;
-  }
-
-  get sources(): ISources {
-    return this._sources;
   }
 
   get context(): Context {
@@ -44,23 +42,48 @@ export abstract class Context {
   }
 
   get dbDetail(): IDBDetail {
-    return this._sources.dbDetail;
+    if (this._sources) {
+      return this._sources.dbDetail;
+    }
+    throw new Error("No context");
   }
 
   get dbStructure(): DBStructure {
-    return this._sources.dbStructure;
+    if (this._sources) {
+      return this._sources.dbStructure;
+    }
+    throw new Error("No context");
   }
 
   get connectionPool(): AConnectionPool<IDefaultConnectionPoolOptions> {
-    return this._sources.connectionPool;
+    if (this._sources) {
+      return this._sources.connectionPool;
+    }
+    throw new Error("No context");
   }
 
   get erModel(): ERModel {
-    return this._sources.erModel;
+    if (this._sources) {
+      return this._sources.erModel;
+    }
+    throw new Error("No context");
   }
 
   get erGraphQLSchema(): ERGraphQLSchema {
-    return this._sources.erGraphQLSchema;
+    if (this._sources) {
+      return this._sources.erGraphQLSchema;
+    }
+    throw new Error("No context");
+  }
+
+  get users(): User[] {
+    if (this._sources) {
+      if (!this._sources.users) {
+        this._sources.users = [];
+      }
+      return this._sources.users;
+    }
+    throw new Error("No context");
   }
 
   public async executeConnection<R>(callback: TExecutor<AConnection, R>): Promise<R> {

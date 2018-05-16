@@ -1,10 +1,10 @@
 import fs from "fs";
 import {AConnection, AConnectionPool} from "gdmn-db";
-import {ERModel} from "gdmn-orm";
 import {erExport} from "gdmn-er-bridge";
+import {ERModel} from "gdmn-orm";
+import {ERGraphQLResolver} from "../graphql/ERGraphQLResolver";
+import {ERGraphQLSchema} from "../graphql/ERGraphQLSchema";
 import {Context, IDBDetail} from "./Context";
-import {ERGraphQLResolver} from "./graphql/ERGraphQLResolver";
-import {ERGraphQLSchema} from "./graphql/ERGraphQLSchema";
 
 export class Application extends Context {
 

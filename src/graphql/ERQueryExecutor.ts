@@ -1,7 +1,7 @@
 import {AccessMode, AConnection} from "gdmn-db";
 import {Attribute} from "gdmn-orm";
 import {default as NestHydrationJS} from "nesthydrationjs";
-import {Context} from "../Context";
+import {Context} from "../context/Context";
 import {IQuery, IQueryField} from "./ERQueryAnalyzer";
 
 export class ERQueryExecutor {
@@ -194,7 +194,7 @@ export class ERQueryExecutor {
 
   private _addToParams(value: any): string {
     const length = Object.keys(this._params).length;
-    const placeholder = `param_${length}`;
+    const placeholder = `P$${length + 1}`;
     this._params[placeholder] = value;
     return placeholder;
   }

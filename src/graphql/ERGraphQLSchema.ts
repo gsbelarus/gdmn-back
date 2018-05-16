@@ -32,9 +32,10 @@ import {
   GraphQLString,
   GraphQLUnionType
 } from "graphql";
-import {User} from "../User";
+import {User} from "../context/User";
 import {GraphQLDate} from "./types/GraphQLDate";
 import {GraphQLDateTime} from "./types/GraphQLDateTime";
+import GraphQLJSON from "./types/GraphQLJSON";
 import {GraphQLNumeric} from "./types/GraphQLNumeric";
 import {GraphQLSeqInt} from "./types/GraphQLSeqInt";
 import {GraphQLTime} from "./types/GraphQLTime";
@@ -70,8 +71,25 @@ export class ERGraphQLSchema extends GraphQLSchema {
 
     super({
       query: new GraphQLObjectType({
-        name: "Entities",
-        fields: () => ERGraphQLSchema._createQueryTypeFields(context)
+        name: "Query", // FIXME possible conflicts
+        fields: () => ({
+          entityModel: {
+            type: GraphQLJSON,
+            args: {name: {type: GraphQLString}},
+            resolve: (source, args) => context.erModel.entity(args.name).serialize()
+          },
+          entityModels: {
+            type: GraphQLJSON,
+            resolve: () => context.erModel.serialize()
+          },
+          entityData: {
+            type: new GraphQLObjectType({
+              name: "EntityData", // FIXME possible conflicts
+              fields: () => ERGraphQLSchema._createDataTypeFields(context)
+            }),
+            resolve: (source) => ({entityData: source})
+          }
+        })
       })
     });
 
@@ -84,7 +102,7 @@ export class ERGraphQLSchema extends GraphQLSchema {
       .replace(/\./g, "_dot_");
   }
 
-  private static _createQueryTypeFields(context: IContext): GraphQLFieldConfigMap<any, any> {
+  private static _createDataTypeFields(context: IContext): GraphQLFieldConfigMap<any, any> {
     return Object.entries(context.erModel.entities)
       .filter(([entityName, entity]) => !entity.isAbstract)
       .reduce((fields, [entityName, entity]) => {

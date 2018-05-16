@@ -1,9 +1,9 @@
 import {GraphQLServer} from "graphql-yoga";
 import {Server as HttpServer} from "http";
 import {Server as HttpsServer} from "https";
-import {Application} from "./Application";
+import {Application} from "./context/Application";
+import {User} from "./context/User";
 import databases from "./db/databases";
-import {User} from "./User";
 
 interface IServer {
   application: Application;
