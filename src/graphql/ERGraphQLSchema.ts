@@ -95,6 +95,10 @@ export class ERGraphQLSchema extends GraphQLSchema {
 
           fields[ERGraphQLSchema._escapeName(context, entityName)] = {
             type: new GraphQLList(entityType),
+            args: {
+              first: {type: GraphQLInt},
+              skip: {type: GraphQLInt}
+            },
             description: lName && lName.name,
             resolve: context.resolver.queryResolver
           };
@@ -243,7 +247,16 @@ export class ERGraphQLSchema extends GraphQLSchema {
     if (entityTypes.length > 1) {
       const unionType = new GraphQLUnionType({
         name: ERGraphQLSchema._escapeName(context, `${entity.name}_UNION_${attribute.name}`),
-        types: entityTypes
+        types: entityTypes,
+        resolveType: (source, ctx, info) => { // FIXME
+          const selection = info.fieldNodes[0].selectionSet!.selections[0];
+          if (selection.kind === "InlineFragment"
+            && selection.typeCondition
+            && selection.typeCondition.kind === "NamedType") {
+            return selection.typeCondition.name.value;
+          }
+          return "";
+        }
       });
       if (attribute instanceof SetAttribute) {
         return ERGraphQLSchema._wrapSetAttributeType(context, entity, attribute, unionType);

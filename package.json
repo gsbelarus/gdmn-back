@@ -16,7 +16,7 @@
   "dependencies": {
     "gdmn-er-bridge": "git://github.com/gsbelarus/gdmn-er-bridge.git",
     "graphql-yoga": "^1.13.1",
-    "nesthydrationjs": "^1.0.3"
+    "nesthydrationjs": "^1.0.5"
   },
   "devDependencies": {
     "ts-node": "^6.0.3",
