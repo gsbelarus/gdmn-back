@@ -35,10 +35,10 @@ export class ERQueryExecutor {
                                alias: string,
                                fieldName: string): string {
     return `  LEFT JOIN ${joinRelationName} ${joinAlias} ON ` +
-      ERQueryExecutor._equalTemplate(joinAlias, joinFieldName, `${alias && `${alias}.`}${fieldName}`);
+      ERQueryExecutor._equalWithValueTemplate(joinAlias, joinFieldName, `${alias && `${alias}.`}${fieldName}`);
   }
 
-  private static _equalTemplate(fieldAlias: string, fieldName: string, value: string): string {
+  private static _equalWithValueTemplate(fieldAlias: string, fieldName: string, value: string): string {
     return `${fieldAlias && `${fieldAlias}.`}${fieldName} = ${value}`;
   }
 
@@ -74,7 +74,7 @@ export class ERQueryExecutor {
   }
 
   private _completeQuery(query: IQuery): void {
-    const primaryKey = this._getPrimaryKey(query);
+    const primaryKey = this._getPrimaryAttribute(query);
     if (!query.fields.some((field) => field.attribute === primaryKey)) {
       const primaryField: IQueryField = {
         attribute: primaryKey,
@@ -94,7 +94,7 @@ export class ERQueryExecutor {
   private _createAliases(query: IQuery): void {
     const aliasNumber = this._queryAliases.size + 1;
     const queryAlias = query.entity.adapter.relation.reduce((alias, rel, index) => {
-      alias[rel.relationName] = index === 0 ? `T$${aliasNumber}` : `T$${aliasNumber}_${Object.keys(alias).length + 1}`;
+      alias[rel.relationName] = index === 0 ? `E$${aliasNumber}` : `E$${aliasNumber}_${Object.keys(alias).length + 1}`;
       return alias;
     }, {} as IQueryAlias);
     this._queryAliases.set(query, queryAlias);
@@ -179,75 +179,110 @@ export class ERQueryExecutor {
         );
       });
 
-    const joinedFields = query.fields
-      .filter((field) => field.query)
-      .reduce((items, field) => {
+    const joinedFields = query.fields.reduce((items, field) => {
+      if (field.query) {
         return items.concat(this._makeFields(field.query!));
-      }, [] as string[]);
+      }
+      return items;
+    }, [] as string[]);
 
     return fields.concat(joinedFields);
   }
 
   private _makeFrom(query: IQuery): string {
     return query.entity.adapter.relation.reduce((from, rel, index) => {
-      if (index === 0) {
+      if (index === 0) {  // use FROM for main relation
         from.push(ERQueryExecutor._fromTemplate(this._getTableAlias(query), rel.relationName));
-      } else {
-        const relation = this._context.dbStructure.findRelation((item) => item.name === rel.relationName);
-        if (relation && relation.primaryKey) {
+      } else {  // use JOIN for other relations
+        if (this._isExistInQuery(query, rel.relationName)) {
           from.push(ERQueryExecutor._joinTemplate(
             rel.relationName,
             this._getTableAlias(query, rel.relationName),
-            relation.primaryKey.fields[0],
+            this._getPrimaryName(rel.relationName),
             this._getTableAlias(query),
-            this._getPrimaryKey(query).name
+            this._getPrimaryAttribute(query).name
           ));
         }
       }
       return from;
-    }, [] as any[]).join("\n");
+    }, [] as string[]).join("\n");
   }
 
   private _makeJoin(query: IQuery): string[] {
-    const alias = this._getTableAlias(query);
     return query.fields.reduce((joins, field) => {
       if (field.query) {
-        joins.push(
-          ERQueryExecutor._joinTemplate(
-            field.query.entity.adapter.relation[0].relationName,
-            this._getTableAlias(field.query),
-            this._getFieldName(this._getPrimaryKey(field.query)),
-            alias,
-            this._getFieldName(field.attribute)
-          )
-        );
-        joins.concat(this._makeJoin(field.query));
+        field.query.entity.adapter.relation.reduce((relJoins, rel, index) => {
+          if (field.query) {
+            if (index === 0) {
+              joins.push(
+                ERQueryExecutor._joinTemplate(
+                  rel.relationName,
+                  this._getTableAlias(field.query),
+                  this._getFieldName(this._getPrimaryAttribute(field.query)),
+                  this._getTableAlias(query),
+                  this._getFieldName(field.attribute)
+                )
+              );
+            } else {
+              if (this._isExistInQuery(field.query, rel.relationName)) {
+                relJoins.push(
+                  ERQueryExecutor._joinTemplate(
+                    rel.relationName,
+                    this._getTableAlias(field.query, rel.relationName),
+                    this._getPrimaryName(rel.relationName),
+                    this._getTableAlias(field.query),
+                    this._getPrimaryAttribute(query).name
+                  )
+                );
+              }
+            }
+          }
+          return relJoins;
+        }, joins);
+
+        return joins.concat(this._makeJoin(field.query));
       }
       return joins;
     }, [] as string[]);
   }
 
   private _makeWhereEquals(query: IQuery): string[] {
-    const alias = this._getTableAlias(query);
-    const mainRel = query.entity.adapter.relation[0];
+    const whereEquals = query.entity.adapter.relation.reduce((equals, rel) => {
+      if (rel.selector) {
+        if (this._isExistInQuery(query, rel.relationName)) {
+          equals.push(
+            ERQueryExecutor._equalWithValueTemplate(
+              this._getTableAlias(query, rel.relationName),
+              rel.selector.field,
+              this._addToParams(rel.selector.value)
+            )
+          );
+        }
+      }
+      return equals;
+    }, [] as string[]);
 
-    if (mainRel.selector) {
-      return [
-        ERQueryExecutor._equalTemplate(
-          alias,
-          mainRel.selector.field,
-          this._addToParams(mainRel.selector.value)
-        )
-      ];
-    }
-    return [];
+    return query.fields.reduce((equals, field) => {
+      if (field.query) {
+        return equals.concat(this._makeWhereEquals(field.query));
+      }
+      return equals;
+    }, whereEquals);
   }
 
-  private _getPrimaryKey(query: IQuery): Attribute {
+  private _getPrimaryAttribute(query: IQuery): Attribute {
     if (query.entity.pk[0]) {
       return query.entity.pk[0];
     }
     return query.entity.attributes[Object.keys(query.entity.attributes)[0]];
+  }
+
+  private _getPrimaryName(relationName: string): string {
+    const relation = this._context.dbStructure.findRelation((item) => item.name === relationName);
+    if (relation && relation.primaryKey) {
+      return relation.primaryKey.fields[0];
+    }
+    return "";
   }
 
   private _getTableAlias(query: IQuery, relationName?: string): string {
@@ -272,6 +307,20 @@ export class ERQueryExecutor {
       return (adapter as any).field;
     }
     return attribute.name;
+  }
+
+  private _isExistInQuery(query: IQuery, relationName: string): boolean {
+    if (query.entity.adapter.relation[0].relationName === relationName) {
+      return true;
+    }
+
+    return query.fields.some((field) => {
+      const adapter = field.attribute.adapter;
+      if (adapter) {
+        return (adapter as any).relation === relationName;
+      }
+      return field.attribute.name === relationName;
+    });
   }
 
   private _addToParams(value: any): string {
