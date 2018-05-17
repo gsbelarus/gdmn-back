@@ -1,7 +1,7 @@
 import fs from "fs";
 import {AConnection, AConnectionPool} from "gdmn-db";
 import {erExport} from "gdmn-er-bridge";
-import {ERModel} from "gdmn-orm";
+import {ERModel, loadERModel} from "gdmn-orm";
 import {ERGraphQLResolver} from "../graphql/ERGraphQLResolver";
 import {ERGraphQLSchema} from "../graphql/ERGraphQLSchema";
 import {Context, IDBDetail} from "./Context";
@@ -43,8 +43,14 @@ export class Application extends Context {
       fs.writeFileSync("c:/temp/test/ermodel.json", result.erModel.inspect().reduce((p, s) => `${p}${s}\n`, ""));
       console.log("ERModel has been written to c:/temp/test/ermodel.json");
 
+      const serialized = result.erModel.serialize();
+      const testModel = loadERModel(serialized);
+
       fs.writeFileSync("c:/temp/test/ermodel.serialized.json",
-        JSON.stringify(result.erModel.serialize(), undefined, 2)
+        JSON.stringify(serialized, undefined, 2)
+      );
+      fs.writeFileSync("c:/temp/test/ermodel.test.json",
+        JSON.stringify(testModel.serialize(), undefined, 2)
       );
       console.log("ERModel has been written to c:/temp/test/ermodel.json");
     }
