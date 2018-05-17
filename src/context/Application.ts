@@ -42,6 +42,11 @@ export class Application extends Context {
     if (fs.existsSync("c:/temp/test")) {
       fs.writeFileSync("c:/temp/test/ermodel.json", result.erModel.inspect().reduce((p, s) => `${p}${s}\n`, ""));
       console.log("ERModel has been written to c:/temp/test/ermodel.json");
+
+      fs.writeFileSync("c:/temp/test/ermodel.serialized.json",
+        JSON.stringify(result.erModel.serialize(), undefined, 2)
+      );
+      console.log("ERModel has been written to c:/temp/test/ermodel.json");
     }
 
     console.time("ERGraphQLSchema load time");
