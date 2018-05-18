@@ -50,13 +50,19 @@ async function exit(): Promise<void> {
   try {
     const {application, server} = await creating;
 
-    await server.close();
+    await new Promise((resolve) => server.close(resolve));
     await Application.destroy(application);
 
-    console.log("Application destroyed");
   } catch (error) {
-    console.error(error);
+    switch (error.message) {
+      case "connection shutdown":
+        // ignore
+        break;
+      default:
+        console.error(error);
+    }
   } finally {
+    console.log("Application destroyed");
     process.exit();
   }
 }

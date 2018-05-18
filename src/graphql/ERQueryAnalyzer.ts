@@ -34,7 +34,7 @@ interface ISkipRelayConnectionResult {
 export interface IQueryField {
   attribute: Attribute;
   isArray: boolean;
-  selectionValue: string;
+  selectionValue: string; // TODO remove after fix entities and attributes names
   query?: IQuery;
 }
 
@@ -65,11 +65,13 @@ export default class ERQueryAnalyzer {
     return [];
   }
 
-  private static skipWrappingTypes(type: GraphQLType): GraphQLType | GraphQLNullableType {
+  private static skipWrappingTypes(type: GraphQLType): { isArray: boolean, type: GraphQLType | GraphQLNullableType } {
     if (isWrappingType(type)) {
-      return ERQueryAnalyzer.skipWrappingTypes(type.ofType);
+      const isArray = isListType(type);
+      const skipped = ERQueryAnalyzer.skipWrappingTypes(type.ofType);
+      return {isArray: isArray || skipped.isArray, type: skipped.type};
     }
-    return type;
+    return {isArray: false, type};
   }
 
   private static skipRelayConnection(parentType: GraphQLType | GraphQLNullableType,
@@ -131,16 +133,14 @@ export default class ERQueryAnalyzer {
   private static analyze(fieldNode: FieldNode,
                          parentType: GraphQLType,
                          context: IContext): IQuery | undefined {
-    parentType = ERQueryAnalyzer.skipWrappingTypes(parentType);
-
     let args: IArgs = {};
 
     if (parentType instanceof GraphQLObjectType) {
       const field = parentType.getFields()[fieldNode.name.value];
       args = getArgumentValues(field, fieldNode, context.variableValues);
 
-      const fieldType = ERQueryAnalyzer.skipWrappingTypes(field.type);
-      const skippedRelay = ERQueryAnalyzer.skipRelayConnection(fieldType, fieldNode, context);
+      const {type} = ERQueryAnalyzer.skipWrappingTypes(field.type);
+      const skippedRelay = ERQueryAnalyzer.skipRelayConnection(type, fieldNode, context);
 
       parentType = skippedRelay.parentType;
       fieldNode = skippedRelay.fieldNode;
@@ -172,9 +172,10 @@ export default class ERQueryAnalyzer {
             const field = parentType.getFields()[selection.name.value];
             const attribute: Attribute = (field as any).attribute;
             if (attribute) {
+              const {isArray} = ERQueryAnalyzer.skipWrappingTypes(field.type);
               fields.push({
                 attribute,
-                isArray: false, // TODO support
+                isArray,
                 selectionValue: selection.name.value,
                 query: ERQueryAnalyzer.analyze(selection, parentType, context)
               });
