@@ -2,6 +2,7 @@ import {
   Attributes,
   BooleanAttribute,
   DateAttribute,
+  DetailAttribute,
   Entity,
   EntityAttribute,
   EnumAttribute,
@@ -184,10 +185,13 @@ export class ERGraphQLSchema extends GraphQLSchema {
     return Object.entries(attributes).reduce((fields, [attributeName, attribute]) => {
 
       if (attribute instanceof EntityAttribute) {
-        const type = ERGraphQLSchema._createLinkType(context, entity, attribute);
+        let type = ERGraphQLSchema._createLinkType(context, entity, attribute);
         if (type) {
           const lName = attribute.lName[context.locale];
 
+          if (attribute instanceof DetailAttribute) {
+            type = new GraphQLNonNull(new GraphQLList(type));
+          }
           fields[ERGraphQLSchema._escapeName(context, attributeName)] = {
             type,
             description: lName && lName.name,
