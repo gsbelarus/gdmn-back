@@ -1,5 +1,5 @@
 import {AccessMode, AConnection} from "gdmn-db";
-import {Attribute} from "gdmn-orm";
+import {Attribute, Attribute2FieldMap, DetailAttribute, DetailAttributeMap, Entity} from "gdmn-orm";
 import {default as NestHydrationJS} from "nesthydrationjs";
 import {Context} from "../context/Context";
 import {IQuery, IQueryField} from "./ERQueryAnalyzer";
@@ -74,12 +74,12 @@ export class ERQueryExecutor {
   }
 
   private _completeQuery(query: IQuery): void {
-    const primaryKey = this._getPrimaryAttribute(query);
-    if (!query.fields.some((field) => field.attribute === primaryKey)) {
+    const primaryAttr = this._getPrimaryAttribute(query);
+    if (!query.fields.some((field) => field.attribute === primaryAttr)) {
       const primaryField: IQueryField = {
-        attribute: primaryKey,
+        attribute: primaryAttr,
         isArray: false,
-        selectionValue: primaryKey.name
+        selectionValue: primaryAttr.name
       };
       query.fields.unshift(primaryField);
     }
@@ -112,14 +112,6 @@ export class ERQueryExecutor {
 
   private _getSelect(query: IQuery): string {
     let sql = `SELECT`;
-
-    if (query.args.first !== undefined) {
-      sql += ` FIRST ${query.args.first}`;
-    }
-
-    if (query.args.skip !== undefined) {
-      sql += ` SKIP ${query.args.skip}`;
-    }
 
     sql += `\n${this._makeFields(query).join(",\n")}`;
     sql += `\n${this._makeFrom(query)}`;
@@ -171,11 +163,11 @@ export class ERQueryExecutor {
     const fields = query.fields
       .filter((field) => !field.query)
       .map((field) => {
-        const adapter = field.attribute.adapter;
+        const attrAdapter = this._getAttrAdapter(query.entity, field.attribute);
         return ERQueryExecutor._fieldTemplate(
-          this._getTableAlias(query, adapter && (adapter as any).relation),
+          this._getTableAlias(query, attrAdapter.relationName),
           this._getFieldAlias(field),
-          this._getFieldName(field.attribute)
+          attrAdapter.fieldName
         );
       });
 
@@ -190,51 +182,74 @@ export class ERQueryExecutor {
   }
 
   private _makeFrom(query: IQuery): string {
-    return query.entity.adapter.relation.reduce((from, rel, index) => {
-      if (index === 0) {  // use FROM for main relation
-        from.push(ERQueryExecutor._fromTemplate(this._getTableAlias(query), rel.relationName));
-      } else {  // use JOIN for other relations
+    const primaryAttr = this._getPrimaryAttribute(query);
+    const primaryAttrAdapter = this._getAttrAdapter(query.entity, primaryAttr);
+
+    const mainRelation = query.entity.adapter.relation[0];
+    const from = ERQueryExecutor._fromTemplate(this._getTableAlias(query), mainRelation.relationName);
+    const join = query.entity.adapter.relation.reduce((joins, rel, index) => {
+      if (index) {
         if (this._isExistInQuery(query, rel.relationName)) {
-          from.push(ERQueryExecutor._joinTemplate(
+          joins.push(ERQueryExecutor._joinTemplate(
             rel.relationName,
             this._getTableAlias(query, rel.relationName),
             this._getPrimaryName(rel.relationName),
             this._getTableAlias(query),
-            this._getPrimaryAttribute(query).name
+            primaryAttrAdapter.fieldName
           ));
         }
       }
-      return from;
-    }, [] as string[]).join("\n");
+      return joins;
+    }, [] as string[]);
+
+    join.unshift(from);
+    return join.join("\n");
   }
 
   private _makeJoin(query: IQuery): string[] {
+    const primaryAttr = this._getPrimaryAttribute(query);
+    const primaryAttrAdapter = this._getAttrAdapter(query.entity, primaryAttr);
+
     return query.fields.reduce((joins, field) => {
       if (field.query) {
+        const attrAdapter = this._getAttrAdapter(query.entity, field.attribute);
+        const nestedPrimaryAttr = this._getPrimaryAttribute(field.query);
+        const nestedPrimaryAttrAdapter = this._getAttrAdapter(field.query.entity, nestedPrimaryAttr);
+
+        const mainRelation = field.query.entity.adapter.relation[0];
+        if (field.attribute instanceof DetailAttribute) {
+          joins.push(
+            ERQueryExecutor._joinTemplate(
+              mainRelation.relationName,
+              this._getTableAlias(field.query, mainRelation.relationName),
+              attrAdapter.fieldName,
+              this._getTableAlias(query, attrAdapter.relationName),
+              nestedPrimaryAttrAdapter.fieldName
+            )
+          );
+        } else {
+          joins.push(
+            ERQueryExecutor._joinTemplate(
+              mainRelation.relationName,
+              this._getTableAlias(field.query, mainRelation.relationName),
+              nestedPrimaryAttrAdapter.fieldName,
+              this._getTableAlias(query, attrAdapter.relationName),
+              attrAdapter.fieldName
+            )
+          );
+        }
         field.query.entity.adapter.relation.reduce((relJoins, rel, index) => {
-          if (field.query) {
-            if (index === 0) {
-              joins.push(
+          if (index && field.query) {
+            if (this._isExistInQuery(field.query, rel.relationName)) {
+              relJoins.push(
                 ERQueryExecutor._joinTemplate(
                   rel.relationName,
+                  this._getTableAlias(field.query, rel.relationName),
+                  this._getPrimaryName(rel.relationName),
                   this._getTableAlias(field.query),
-                  this._getFieldName(this._getPrimaryAttribute(field.query)),
-                  this._getTableAlias(query),
-                  this._getFieldName(field.attribute)
+                  primaryAttrAdapter.fieldName
                 )
               );
-            } else {
-              if (this._isExistInQuery(field.query, rel.relationName)) {
-                relJoins.push(
-                  ERQueryExecutor._joinTemplate(
-                    rel.relationName,
-                    this._getTableAlias(field.query, rel.relationName),
-                    this._getPrimaryName(rel.relationName),
-                    this._getTableAlias(field.query),
-                    this._getPrimaryAttribute(query).name
-                  )
-                );
-              }
             }
           }
           return relJoins;
@@ -301,25 +316,29 @@ export class ERQueryExecutor {
     return this._fieldAliases.get(field) || "";
   }
 
-  private _getFieldName(attribute: Attribute): string {
-    const adapter = attribute.adapter;
-    if (adapter) {
-      return (adapter as any).field;
+  private _getAttrAdapter(entity: Entity, attribute: Attribute): { relationName: string, fieldName: string } {
+    let relationName = entity.adapter.relation[0].relationName;
+    let fieldName = attribute.name;
+    if (attribute.adapter) {
+      if (attribute instanceof DetailAttribute) {
+        const detailAdapter = attribute.adapter as DetailAttributeMap;
+        relationName = detailAdapter.masterLinks[0].detailRelation;
+        fieldName = detailAdapter.masterLinks[0].link2masterField;
+
+      } else {
+        const attrAdapter = attribute.adapter as Attribute2FieldMap;
+        relationName = attrAdapter.relation;
+        fieldName = attrAdapter.field;
+      }
     }
-    return attribute.name;
+
+    return {relationName, fieldName};
   }
 
   private _isExistInQuery(query: IQuery, relationName: string): boolean {
-    if (query.entity.adapter.relation[0].relationName === relationName) {
-      return true;
-    }
-
     return query.fields.some((field) => {
-      const adapter = field.attribute.adapter;
-      if (adapter) {
-        return (adapter as any).relation === relationName;
-      }
-      return field.attribute.name === relationName;
+      const attrAdapter = this._getAttrAdapter(query.entity, field.attribute);
+      return attrAdapter.relationName === relationName;
     });
   }
 
