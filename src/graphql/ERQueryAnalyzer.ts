@@ -16,7 +16,6 @@ import {
 } from "graphql";
 import {getArgumentValues} from "graphql/execution/values";
 import {IArgs} from "./ERGraphQLSchema";
-import {IEntityQuery, IEntityQueryField} from "./sql/SQLBuilder";
 
 interface IContext {
   fragments: IFragments;
@@ -32,12 +31,16 @@ interface ISkipRelayConnectionResult {
   fieldNode: FieldNode;
 }
 
-export interface IQueryField extends IEntityQueryField {
+export interface IQueryField {
+  attribute: Attribute;
   isArray: boolean;
   selectionValue: string; // TODO remove after fix entities and attributes names
+  query?: IQuery;
 }
 
-export interface IQuery extends IEntityQuery {
+export interface IQuery {
+  args: IArgs;
+  entity: Entity;
   fields: IQueryField[];
 }
 
@@ -130,7 +133,7 @@ export default class ERQueryAnalyzer {
   private static analyze(fieldNode: FieldNode,
                          parentType: GraphQLType,
                          context: IContext): IQuery | undefined {
-    let args: any = {};
+    let args: IArgs = {};
 
     if (parentType instanceof GraphQLObjectType) {
       const field = parentType.getFields()[fieldNode.name.value];

@@ -1,55 +1,37 @@
 import {INamedParams} from "gdmn-db";
 import {Attribute, Attribute2FieldMap, DetailAttribute, DetailAttributeMap, Entity} from "gdmn-orm";
-import {Context} from "../../context/Context";
+import {Context} from "../context/Context";
+import {EntityQuery, IEntityQueryInspector} from "./models/EntityQuery";
+import {EntityQueryField} from "./models/EntityQueryField";
+import {IEntityQueryWhere} from "./models/EntityQueryOptions";
 import {SQLTemplates} from "./SQLTemplates";
 
 interface IEntityQueryAlias {
   [relationName: string]: string;
 }
 
-export interface ISQLBuilderArgs {
-  first?: number;
-  skip?: number;
-  where?: IWhereArgs;
-}
-
-export interface IWhereArgs {
-  not?: IWhereArgs;
-  or?: IWhereArgs;
-  and?: IWhereArgs;
-
-  isNull?: IEntityQueryField;
-  equals?: Map<IEntityQueryField, any>;
-  greater?: Map<IEntityQueryField, any>;
-  less?: Map<IEntityQueryField, any>;
-
-  [key: string]: any; // TODO
-}
-
-export interface IEntityQueryField {
-  attribute: Attribute;
-  query?: IEntityQuery;
-}
-
-export interface IEntityQuery {
-  args: ISQLBuilderArgs;
-  entity: Entity;
-  fields: IEntityQueryField[];
-}
-
 export class SQLBuilder {
 
   private readonly _context: Context;
-  private readonly _query: IEntityQuery;
+  private readonly _query: EntityQuery;
 
-  private _queryAliases = new Map<IEntityQuery, IEntityQueryAlias>();
-  private _fieldAliases = new Map<IEntityQueryField, string>();
+  private _queryAliases = new Map<EntityQuery, IEntityQueryAlias>();
+  private _fieldAliases = new Map<EntityQueryField, string>();
 
   private _params: any = {};
 
-  constructor(context: Context, query: IEntityQuery) {
+  constructor(context: Context, query: string);
+  constructor(context: Context, query: IEntityQueryInspector);
+  constructor(context: Context, query: EntityQuery);
+  constructor(context: Context, query: any) {
     this._context = context;
-    this._query = query;
+    if (query instanceof EntityQuery) {
+      this._query = query;
+    } else if (typeof query === "object") {
+      this._query = EntityQuery.deserialize(context.erModel, JSON.stringify(query));
+    } else {
+      this._query = EntityQuery.deserialize(context.erModel, query);
+    }
   }
 
   private static _arrayJoinWithBracket(array: string[], separator: string): string {
@@ -61,7 +43,33 @@ export class SQLBuilder {
     return "";
   }
 
-  public build(): { sql: string, params: INamedParams, fieldAliases: Map<IEntityQueryField, string> } {
+  private static _getAttrAdapter(entity: Entity, attribute: Attribute): { relationName: string, fieldName: string } {
+    let relationName = entity.adapter.relation[0].relationName;
+    let fieldName = attribute.name;
+    if (attribute.adapter) {
+      if (attribute instanceof DetailAttribute) {
+        const detailAdapter = attribute.adapter as DetailAttributeMap;
+        relationName = detailAdapter.masterLinks[0].detailRelation;
+        fieldName = detailAdapter.masterLinks[0].link2masterField;
+
+      } else {
+        const attrAdapter = attribute.adapter as Attribute2FieldMap;
+        relationName = attrAdapter.relation;
+        fieldName = attrAdapter.field;
+      }
+    }
+
+    return {relationName, fieldName};
+  }
+
+  private static _getPrimaryAttribute(query: EntityQuery): Attribute {
+    if (query.entity.pk[0]) {
+      return query.entity.pk[0];
+    }
+    return query.entity.attributes[Object.keys(query.entity.attributes)[0]];
+  }
+
+  public build(): { sql: string, params: INamedParams, fieldAliases: Map<EntityQueryField, string> } {
     this._clearVariables();
 
     this._completeQuery(this._query);
@@ -74,10 +82,10 @@ export class SQLBuilder {
     };
   }
 
-  private _completeQuery(query: IEntityQuery): void {
-    const primaryAttr = this._getPrimaryAttribute(query);
+  private _completeQuery(query: EntityQuery): void {
+    const primaryAttr = SQLBuilder._getPrimaryAttribute(query);
     if (!query.fields.some((field) => field.attribute === primaryAttr)) {
-      const primaryField: IEntityQueryField = {attribute: primaryAttr};
+      const primaryField = new EntityQueryField(primaryAttr);
       query.fields.unshift(primaryField);
     }
 
@@ -88,7 +96,7 @@ export class SQLBuilder {
     });
   }
 
-  private _createAliases(query: IEntityQuery): void {
+  private _createAliases(query: EntityQuery): void {
     const aliasNumber = this._queryAliases.size + 1;
     const queryAlias = query.entity.adapter.relation.reduce((alias, rel, index) => {
       alias[rel.relationName] = index === 0 ? `E$${aliasNumber}` : `E$${aliasNumber}_${Object.keys(alias).length + 1}`;
@@ -107,15 +115,15 @@ export class SQLBuilder {
     });
   }
 
-  private _getSelect(query: IEntityQuery): string {
+  private _getSelect(query: EntityQuery): string {
     let sql = `SELECT`;
 
-    if (query.args.first !== undefined) {
-      sql += ` FIRST ${this._addToParams(query.args.first)}`;
+    if (query.options && query.options.first !== undefined) {
+      sql += ` FIRST ${this._addToParams(query.options.first)}`;
     }
 
-    if (query.args.skip !== undefined) {
-      sql += ` SKIP ${this._addToParams(query.args.skip)}`;
+    if (query.options && query.options.skip !== undefined) {
+      sql += ` SKIP ${this._addToParams(query.options.skip)}`;
     }
 
     sql += `\n${this._makeFields(query).join(",\n")}`;
@@ -133,6 +141,7 @@ export class SQLBuilder {
       sql += `\nWHERE ${sqlWhere}`;
     }
 
+    // TODO remove logs in production
     console.log("===================");
     console.log("QUERY:");
     console.log(query);
@@ -144,11 +153,11 @@ export class SQLBuilder {
     return sql;
   }
 
-  private _makeFields(query: IEntityQuery): string[] {
+  private _makeFields(query: EntityQuery): string[] {
     const fields = query.fields
       .filter((field) => !field.query)
       .map((field) => {
-        const attrAdapter = this._getAttrAdapter(query.entity, field.attribute);
+        const attrAdapter = SQLBuilder._getAttrAdapter(query.entity, field.attribute);
         return SQLTemplates.field(
           this._getTableAlias(query, attrAdapter.relationName),
           this._getFieldAlias(field),
@@ -166,9 +175,9 @@ export class SQLBuilder {
     return fields.concat(joinedFields);
   }
 
-  private _makeFrom(query: IEntityQuery): string {
-    const primaryAttr = this._getPrimaryAttribute(query);
-    const primaryAttrAdapter = this._getAttrAdapter(query.entity, primaryAttr);
+  private _makeFrom(query: EntityQuery): string {
+    const primaryAttr = SQLBuilder._getPrimaryAttribute(query);
+    const primaryAttrAdapter = SQLBuilder._getAttrAdapter(query.entity, primaryAttr);
 
     const mainRelation = query.entity.adapter.relation[0];
     const from = SQLTemplates.from(this._getTableAlias(query), mainRelation.relationName);
@@ -191,18 +200,18 @@ export class SQLBuilder {
     return join.join("\n");
   }
 
-  private _makeJoin(query: IEntityQuery): string[] {
-    const primaryAttr = this._getPrimaryAttribute(query);
-    const primaryAttrAdapter = this._getAttrAdapter(query.entity, primaryAttr);
+  private _makeJoin(query: EntityQuery): string[] {
+    const primaryAttr = SQLBuilder._getPrimaryAttribute(query);
+    const primaryAttrAdapter = SQLBuilder._getAttrAdapter(query.entity, primaryAttr);
 
     return query.fields.reduce((joins, field) => {
       if (field.query) {
-        const attrAdapter = this._getAttrAdapter(query.entity, field.attribute);
-        const nestedPrimaryAttr = this._getPrimaryAttribute(field.query);
-        const nestedPrimaryAttrAdapter = this._getAttrAdapter(field.query.entity, nestedPrimaryAttr);
+        const attrAdapter = SQLBuilder._getAttrAdapter(query.entity, field.attribute);
+        const nestedPrimaryAttr = SQLBuilder._getPrimaryAttribute(field.query);
+        const nestedPrimaryAttrAdapter = SQLBuilder._getAttrAdapter(field.query.entity, nestedPrimaryAttr);
 
         const mainRelation = field.query.entity.adapter.relation[0];
-        if (field.attribute instanceof DetailAttribute) {   // TODO SetAttribute
+        if (field.attribute instanceof DetailAttribute) {   // TODO support for SetAttribute
           joins.push(
             SQLTemplates.join(
               mainRelation.relationName,
@@ -246,7 +255,7 @@ export class SQLBuilder {
     }, [] as string[]);
   }
 
-  private _makeWhereEntityConditions(query: IEntityQuery): string[] {
+  private _makeWhereEntityConditions(query: EntityQuery): string[] {
     const whereEquals = query.entity.adapter.relation.reduce((equals, rel) => {
       if (rel.selector) {
         if (this._isExistInQuery(query, rel.relationName)) {
@@ -270,12 +279,14 @@ export class SQLBuilder {
     }, whereEquals);
   }
 
-  private _makeWhereConditions(query: IEntityQuery): string[] {
+  private _makeWhereConditions(query: EntityQuery): string[] {
     const filters = [];
 
-    const filter = SQLBuilder._arrayJoinWithBracket(this._createSQLFilters(query, query.args.where), " AND ");
-    if (filter) {
-      filters.push(filter);
+    if (query.options) {
+      const filter = SQLBuilder._arrayJoinWithBracket(this._createSQLFilters(query, query.options.where), " AND ");
+      if (filter) {
+        filters.push(filter);
+      }
     }
 
     return query.fields.reduce((items, field) => {
@@ -287,7 +298,7 @@ export class SQLBuilder {
     }, filters);
   }
 
-  private _createSQLFilters(query: IEntityQuery, where?: IWhereArgs): string[] {
+  private _createSQLFilters(query: EntityQuery, where?: IEntityQueryWhere): string[] {
     if (!where) {
       return [];
     }
@@ -295,14 +306,14 @@ export class SQLBuilder {
 
     const filters = [];
     if (isNull) {
-      const attrAdapter = this._getAttrAdapter(query.entity, isNull.attribute);
+      const attrAdapter = SQLBuilder._getAttrAdapter(query.entity, isNull.attribute);
       const alias = this._getTableAlias(query, attrAdapter.relationName);
       filters.push(SQLTemplates.isNull(alias, attrAdapter.fieldName));
     }
     if (equals) {
       const equalsFilters = [];
       for (const [field, value] of equals.entries()) {
-        const attrAdapter = this._getAttrAdapter(query.entity, field.attribute);
+        const attrAdapter = SQLBuilder._getAttrAdapter(query.entity, field.attribute);
         const alias = this._getTableAlias(query, attrAdapter.relationName);
         equalsFilters.push(SQLTemplates.equals(alias, attrAdapter.fieldName, this._addToParams(value)));
       }
@@ -314,7 +325,7 @@ export class SQLBuilder {
     if (greater) {
       const greaterFilters = [];
       for (const [field, value] of greater.entries()) {
-        const attrAdapter = this._getAttrAdapter(query.entity, field.attribute);
+        const attrAdapter = SQLBuilder._getAttrAdapter(query.entity, field.attribute);
         const alias = this._getTableAlias(query, attrAdapter.relationName);
         greaterFilters.push(SQLTemplates.greater(alias, attrAdapter.fieldName, this._addToParams(value)));
       }
@@ -326,7 +337,7 @@ export class SQLBuilder {
     if (less) {
       const lessFilters = [];
       for (const [field, value] of less.entries()) {
-        const attrAdapter = this._getAttrAdapter(query.entity, field.attribute);
+        const attrAdapter = SQLBuilder._getAttrAdapter(query.entity, field.attribute);
         const alias = this._getTableAlias(query, attrAdapter.relationName);
         lessFilters.push(SQLTemplates.less(alias, attrAdapter.fieldName, this._addToParams(value)));
       }
@@ -352,13 +363,6 @@ export class SQLBuilder {
     return filters;
   }
 
-  private _getPrimaryAttribute(query: IEntityQuery): Attribute {
-    if (query.entity.pk[0]) {
-      return query.entity.pk[0];
-    }
-    return query.entity.attributes[Object.keys(query.entity.attributes)[0]];
-  }
-
   private _getPrimaryName(relationName: string): string {
     const relation = this._context.dbStructure.findRelation((item) => item.name === relationName);
     if (relation && relation.primaryKey) {
@@ -367,7 +371,7 @@ export class SQLBuilder {
     return "";
   }
 
-  private _getTableAlias(query: IEntityQuery, relationName?: string): string {
+  private _getTableAlias(query: EntityQuery, relationName?: string): string {
     const alias = this._queryAliases.get(query);
     if (alias) {
       if (relationName) {
@@ -379,32 +383,13 @@ export class SQLBuilder {
     return "";
   }
 
-  private _getFieldAlias(field: IEntityQueryField): string {
+  private _getFieldAlias(field: EntityQueryField): string {
     return this._fieldAliases.get(field) || "";
   }
 
-  private _getAttrAdapter(entity: Entity, attribute: Attribute): { relationName: string, fieldName: string } {
-    let relationName = entity.adapter.relation[0].relationName;
-    let fieldName = attribute.name;
-    if (attribute.adapter) {
-      if (attribute instanceof DetailAttribute) {
-        const detailAdapter = attribute.adapter as DetailAttributeMap;
-        relationName = detailAdapter.masterLinks[0].detailRelation;
-        fieldName = detailAdapter.masterLinks[0].link2masterField;
-
-      } else {
-        const attrAdapter = attribute.adapter as Attribute2FieldMap;
-        relationName = attrAdapter.relation;
-        fieldName = attrAdapter.field;
-      }
-    }
-
-    return {relationName, fieldName};
-  }
-
-  private _isExistInQuery(query: IEntityQuery, relationName: string): boolean {
+  private _isExistInQuery(query: EntityQuery, relationName: string): boolean {
     return query.fields.some((field) => {
-      const attrAdapter = this._getAttrAdapter(query.entity, field.attribute);
+      const attrAdapter = SQLBuilder._getAttrAdapter(query.entity, field.attribute);
       return attrAdapter.relationName === relationName;
     });
   }

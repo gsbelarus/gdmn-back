@@ -2,9 +2,11 @@ import {AccessMode, AConnection} from "gdmn-db";
 import {GraphQLResolveInfo} from "graphql/type/definition";
 import NestHydrationJS from "nesthydrationjs";
 import {User} from "../context/User";
+import {EntityQuery} from "../sql/models/EntityQuery";
+import {EntityQueryField} from "../sql/models/EntityQueryField";
+import {SQLBuilder} from "../sql/SQLBuilder";
 import {IArgs, IERGraphQLResolver} from "./ERGraphQLSchema";
 import ERQueryAnalyzer, {IQuery} from "./ERQueryAnalyzer";
-import {IEntityQueryField, SQLBuilder} from "./sql/SQLBuilder";
 
 export class ERGraphQLResolver implements IERGraphQLResolver {
 
@@ -12,8 +14,9 @@ export class ERGraphQLResolver implements IERGraphQLResolver {
     const queries = ERQueryAnalyzer.resolveInfo(info);
     if (queries.length) {
       const query = queries[0];
+      const entityQuery = this._convertToEntityQuery(query);
 
-      const {sql, params, fieldAliases} = new SQLBuilder(context, query).build();
+      const {sql, params, fieldAliases} = new SQLBuilder(context, entityQuery).build();
 
       return await context.executeTransaction(({connection, transaction}) => {
           return AConnection.executeQueryResultSet({
@@ -31,7 +34,8 @@ export class ERGraphQLResolver implements IERGraphQLResolver {
                 }
                 result.push(row);
               }
-              return NestHydrationJS().nest(result, [this._getDefinition(query, fieldAliases)]);
+              return NestHydrationJS().nest(result,
+                [this._getDefinition(query, entityQuery, fieldAliases)]);
             }
           });
         },
@@ -42,21 +46,34 @@ export class ERGraphQLResolver implements IERGraphQLResolver {
     return null;
   }
 
-  private _getDefinition(query: IQuery, fieldAliases: Map<IEntityQueryField, string>): any {
+  private _convertToEntityQuery(query: IQuery): EntityQuery {
+    const fields = query.fields.map((field) => (
+      new EntityQueryField(field.attribute, field.query && this._convertToEntityQuery(field.query))
+    ));
+    return new EntityQuery(query.entity, fields);
+  }
+
+  private _getDefinition(query: IQuery, entityQuery: EntityQuery, fieldAliases: Map<EntityQueryField, string>): any {
     const definition: any = {};
 
     query.fields.reduce((def, field) => {
       if (!field.query) {
-        def[field.selectionValue] = {column: fieldAliases.get(field) || ""};
+        const eQField = entityQuery.fields.find((entityField) => entityField.attribute === field.attribute);
+        if (eQField) {
+          def[field.selectionValue] = {column: fieldAliases.get(eQField) || ""};
+        }
       }
       return def;
     }, definition);
 
     query.fields.reduce((def, field) => {
       if (field.query) {
-        def[field.selectionValue] = field.isArray
-          ? [this._getDefinition(field.query as IQuery, fieldAliases)]
-          : this._getDefinition(field.query as IQuery, fieldAliases);
+        const eQField = entityQuery.fields.find((entityField) => entityField.attribute === field.attribute);
+        if (eQField && eQField.query) {
+          def[field.selectionValue] = field.isArray
+            ? [this._getDefinition(field.query, eQField.query, fieldAliases)]
+            : this._getDefinition(field.query, eQField.query, fieldAliases);
+        }
       }
       return def;
     }, definition);
