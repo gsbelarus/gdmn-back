@@ -8,26 +8,18 @@ export interface IEntityQueryFieldInspector {
 
 export class EntityQueryField {
 
-  private readonly _attribute: Attribute;
-  private readonly _query?: EntityQuery;
+  public attribute: Attribute;
+  public query?: EntityQuery;
 
   constructor(attribute: Attribute, query?: EntityQuery) {
-    this._attribute = attribute;
-    this._query = query;
-  }
-
-  get attribute(): Attribute {
-    return this._attribute;
-  }
-
-  get query(): EntityQuery | undefined {
-    return this._query;
+    this.attribute = attribute;
+    this.query = query;
   }
 
   public inspect(): IEntityQueryFieldInspector {
     return {
-      attribute: this._attribute.name,
-      query: this._query && this._query.inspect()
+      attribute: this.attribute.name,
+      query: this.query && this.query.inspect()
     };
   }
 }

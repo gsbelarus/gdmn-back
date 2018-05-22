@@ -14,7 +14,7 @@ export class ERGraphQLResolver implements IERGraphQLResolver {
     const queries = ERQueryAnalyzer.resolveInfo(info);
     if (queries.length) {
       const query = queries[0];
-      const entityQuery = this._convertToEntityQuery(query);
+      const entityQuery = this._completeQuery(this._convertToEntityQuery(query));
 
       const {sql, params, fieldAliases} = new SQLBuilder(context, entityQuery).build();
 
@@ -51,6 +51,21 @@ export class ERGraphQLResolver implements IERGraphQLResolver {
       new EntityQueryField(field.attribute, field.query && this._convertToEntityQuery(field.query))
     ));
     return new EntityQuery(query.entity, fields);
+  }
+
+  private _completeQuery(query: EntityQuery): EntityQuery {
+    const primaryAttr = query.entity.pk[0] && query.entity.attributes[Object.keys(query.entity.attributes)[0]];
+    if (!query.fields.some((field) => field.attribute === primaryAttr)) {
+      const primaryField = new EntityQueryField(primaryAttr);
+      query.fields.unshift(primaryField);
+    }
+
+    query.fields.forEach((field) => {
+      if (field.query) {
+        this._completeQuery(field.query);
+      }
+    });
+    return query;
   }
 
   private _getDefinition(query: IQuery, entityQuery: EntityQuery, fieldAliases: Map<EntityQueryField, string>): any {

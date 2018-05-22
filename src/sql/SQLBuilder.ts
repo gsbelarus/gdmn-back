@@ -71,8 +71,6 @@ export class SQLBuilder {
 
   public build(): { sql: string, params: INamedParams, fieldAliases: Map<EntityQueryField, string> } {
     this._clearVariables();
-
-    this._completeQuery(this._query);
     this._createAliases(this._query);
 
     return {
@@ -80,20 +78,6 @@ export class SQLBuilder {
       params: this._params,
       fieldAliases: this._fieldAliases
     };
-  }
-
-  private _completeQuery(query: EntityQuery): void {
-    const primaryAttr = SQLBuilder._getPrimaryAttribute(query);
-    if (!query.fields.some((field) => field.attribute === primaryAttr)) {
-      const primaryField = new EntityQueryField(primaryAttr);
-      query.fields.unshift(primaryField);
-    }
-
-    query.fields.forEach((field) => {
-      if (field.query) {
-        this._completeQuery(field.query);
-      }
-    });
   }
 
   private _createAliases(query: EntityQuery): void {
