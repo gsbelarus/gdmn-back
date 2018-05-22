@@ -1,21 +1,21 @@
-import {EntityQueryField, IEntityQueryFieldInspector} from "./EntityQueryField";
+import {Attribute, Entity} from "gdmn-orm";
 
 export interface IEntityQueryWhereInspector {
   not?: IEntityQueryWhereInspector;
   or?: IEntityQueryWhereInspector;
   and?: IEntityQueryWhereInspector;
 
-  isNull?: IEntityQueryFieldInspector;
-  equals?: Map<IEntityQueryFieldInspector, any>;
-  greater?: Map<IEntityQueryFieldInspector, any>;
-  less?: Map<IEntityQueryFieldInspector, any>;
+  isNull?: string;
+  equals?: { [fieldName: string]: any };
+  greater?: { [fieldName: string]: any };
+  less?: { [fieldName: string]: any };
 }
 
 export interface IEntityQueryOptionsInspector {
   first?: number;
   skip?: number;
   where?: IEntityQueryWhereInspector;
-  order?: Map<IEntityQueryFieldInspector, string>;
+  order?: { [fieldName: string]: string };
 }
 
 export interface IEntityQueryWhere {
@@ -23,10 +23,10 @@ export interface IEntityQueryWhere {
   or?: IEntityQueryWhere;
   and?: IEntityQueryWhere;
 
-  isNull?: EntityQueryField;
-  equals?: Map<EntityQueryField, any>;
-  greater?: Map<EntityQueryField, any>;
-  less?: Map<EntityQueryField, any>;
+  isNull?: Attribute;
+  equals?: Map<Attribute, any>;
+  greater?: Map<Attribute, any>;
+  less?: Map<Attribute, any>;
 }
 
 export enum EntityQueryOrder {
@@ -39,23 +39,59 @@ export class EntityQueryOptions {
   public first?: number;
   public skip?: number;
   public where?: IEntityQueryWhere;
-  public order?: Map<EntityQueryField, EntityQueryOrder>;
+  public order?: Map<Attribute, EntityQueryOrder>;
 
   constructor(first?: number,
               skip?: number,
               where?: IEntityQueryWhere,
-              order?: Map<EntityQueryField, EntityQueryOrder>) {
+              order?: Map<Attribute, EntityQueryOrder>) {
     this.first = first;
     this.skip = skip;
     this.where = where;
     this.order = order;
   }
 
-  private static _inspectMap(map?: Map<EntityQueryField, any>): Map<IEntityQueryFieldInspector, any> | undefined {
+  public static inspectorToObject(entity: Entity, inspector: IEntityQueryOptionsInspector): EntityQueryOptions {
+    return new EntityQueryOptions(
+      inspector.first,
+      inspector.skip,
+      EntityQueryOptions.inspectorWhereToObject(entity, inspector.where),
+      EntityQueryOptions._inspectorToObjectMap(entity, inspector.order)
+    );
+  }
+
+  private static inspectorWhereToObject(entity: Entity,
+                                        inspector?: IEntityQueryWhereInspector): IEntityQueryWhere | undefined {
+    if (inspector) {
+      return {
+        not: EntityQueryOptions.inspectorWhereToObject(entity, inspector.not),
+        or: EntityQueryOptions.inspectorWhereToObject(entity, inspector.or),
+        and: EntityQueryOptions.inspectorWhereToObject(entity, inspector.and),
+
+        isNull: inspector.isNull ? entity.attribute(inspector.isNull) : undefined,
+        equals: EntityQueryOptions._inspectorToObjectMap(entity, inspector.equals),
+        greater: EntityQueryOptions._inspectorToObjectMap(entity, inspector.greater),
+        less: EntityQueryOptions._inspectorToObjectMap(entity, inspector.less),
+      };
+    }
+  }
+
+  private static _inspectorToObjectMap(entity: Entity,
+                                       map?: { [fieldName: string]: any }): Map<Attribute, any> | undefined {
     if (map) {
-      const newMap = new Map<IEntityQueryFieldInspector, any>();
+      return Object.entries(map)
+        .reduce((newMap, [key, value]) => {
+          newMap.set(entity.attribute(key), value);
+          return newMap;
+        }, new Map<Attribute, any>());
+    }
+  }
+
+  private static _inspectMap(map?: Map<Attribute, any>): { [fieldName: string]: any } | undefined {
+    if (map) {
+      const newMap: { [fieldName: string]: any } = {};
       for (const [key, value] of map.entries()) {
-        newMap.set(key.inspect(), value);
+        newMap[key.name] = value;
       }
       return newMap;
     }
@@ -68,7 +104,7 @@ export class EntityQueryOptions {
         or: this._inspectWhere(where.or),
         and: this._inspectWhere(where.and),
 
-        isNull: where.isNull && where.isNull.inspect(),
+        isNull: where.isNull && where.isNull.name,
         equals: EntityQueryOptions._inspectMap(where.equals),
         greater: EntityQueryOptions._inspectMap(where.greater),
         less: EntityQueryOptions._inspectMap(where.less)

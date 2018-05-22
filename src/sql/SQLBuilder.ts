@@ -3,7 +3,7 @@ import {Attribute, Attribute2FieldMap, DetailAttribute, DetailAttributeMap, Enti
 import {Context} from "../context/Context";
 import {EntityQuery, IEntityQueryInspector} from "./models/EntityQuery";
 import {EntityQueryField} from "./models/EntityQueryField";
-import {EntityQueryOrder, IEntityQueryWhere} from "./models/EntityQueryOptions";
+import {IEntityQueryWhere} from "./models/EntityQueryOptions";
 import {SQLTemplates} from "./SQLTemplates";
 
 interface IEntityQueryAlias {
@@ -28,7 +28,7 @@ export class SQLBuilder {
     if (query instanceof EntityQuery) {
       this._query = query;
     } else if (typeof query === "object") {
-      this._query = EntityQuery.deserialize(context.erModel, JSON.stringify(query));
+      this._query = EntityQuery.inspectorToObject(context.erModel, query);
     } else {
       this._query = EntityQuery.deserialize(context.erModel, query);
     }
@@ -291,10 +291,9 @@ export class SQLBuilder {
     const orders = [];
     if (query.options && query.options.order) {
       for (const [key, value] of query.options.order.entries()) {
-        const attrAdapter = SQLBuilder._getAttrAdapter(query.entity, key.attribute);
+        const attrAdapter = SQLBuilder._getAttrAdapter(query.entity, key);
         const alias = this._getTableAlias(query, attrAdapter.relationName);
 
-        console.log(EntityQueryOrder);
         orders.push(SQLTemplates.order(alias, attrAdapter.fieldName, value.toUpperCase()));
       }
     }
@@ -314,14 +313,14 @@ export class SQLBuilder {
 
     const filters = [];
     if (isNull) {
-      const attrAdapter = SQLBuilder._getAttrAdapter(query.entity, isNull.attribute);
+      const attrAdapter = SQLBuilder._getAttrAdapter(query.entity, isNull);
       const alias = this._getTableAlias(query, attrAdapter.relationName);
       filters.push(SQLTemplates.isNull(alias, attrAdapter.fieldName));
     }
     if (equals) {
       const equalsFilters = [];
-      for (const [field, value] of equals.entries()) {
-        const attrAdapter = SQLBuilder._getAttrAdapter(query.entity, field.attribute);
+      for (const [attribute, value] of equals.entries()) {
+        const attrAdapter = SQLBuilder._getAttrAdapter(query.entity, attribute);
         const alias = this._getTableAlias(query, attrAdapter.relationName);
         equalsFilters.push(SQLTemplates.equals(alias, attrAdapter.fieldName, this._addToParams(value)));
       }
@@ -332,8 +331,8 @@ export class SQLBuilder {
     }
     if (greater) {
       const greaterFilters = [];
-      for (const [field, value] of greater.entries()) {
-        const attrAdapter = SQLBuilder._getAttrAdapter(query.entity, field.attribute);
+      for (const [attribute, value] of greater.entries()) {
+        const attrAdapter = SQLBuilder._getAttrAdapter(query.entity, attribute);
         const alias = this._getTableAlias(query, attrAdapter.relationName);
         greaterFilters.push(SQLTemplates.greater(alias, attrAdapter.fieldName, this._addToParams(value)));
       }
@@ -344,8 +343,8 @@ export class SQLBuilder {
     }
     if (less) {
       const lessFilters = [];
-      for (const [field, value] of less.entries()) {
-        const attrAdapter = SQLBuilder._getAttrAdapter(query.entity, field.attribute);
+      for (const [attribute, value] of less.entries()) {
+        const attrAdapter = SQLBuilder._getAttrAdapter(query.entity, attribute);
         const alias = this._getTableAlias(query, attrAdapter.relationName);
         lessFilters.push(SQLTemplates.less(alias, attrAdapter.fieldName, this._addToParams(value)));
       }
@@ -396,10 +395,39 @@ export class SQLBuilder {
   }
 
   private _isExistInQuery(query: EntityQuery, relationName: string): boolean {
-    return query.fields.some((field) => {
+    const existInFields = query.fields.some((field) => {
       const attrAdapter = SQLBuilder._getAttrAdapter(query.entity, field.attribute);
       return attrAdapter.relationName === relationName;
     });
+    if (existInFields) {
+      return true;
+    }
+
+    const where = query.options && query.options.where;
+    if (where) {
+      if ((where.isNull && SQLBuilder._getAttrAdapter(query.entity, where.isNull).relationName === relationName)
+        || this._checkInAttrMap(query.entity, relationName, where.equals)
+        || this._checkInAttrMap(query.entity, relationName, where.greater)
+        || this._checkInAttrMap(query.entity, relationName, where.less)) {
+        return true;
+      }
+    }
+
+    if (this._checkInAttrMap(query.entity, relationName, query.options && query.options.order)) {
+      return true;
+    }
+    return false;
+  }
+
+  private _checkInAttrMap(entity: Entity, relationName: string, map?: Map<Attribute, any>): boolean {
+    if (map) {
+      for (const key of map.keys()) {
+        if (SQLBuilder._getAttrAdapter(entity, key).relationName === relationName) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
   private _addToParams(value: any): string {

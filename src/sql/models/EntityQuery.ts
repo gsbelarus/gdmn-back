@@ -21,15 +21,17 @@ export class EntityQuery {
   }
 
   public static deserialize(erModel: ERModel, text: string): EntityQuery {
-    return EntityQuery._deserialize(erModel, JSON.parse(text));
+    return EntityQuery.inspectorToObject(erModel, JSON.parse(text));
   }
 
-  private static _deserialize(erModel: ERModel, inspector: IEntityQueryInspector): EntityQuery {
+  public static inspectorToObject(erModel: ERModel, inspector: IEntityQueryInspector): EntityQuery {
     const entity = erModel.entity(inspector.entity);
-    const fields = inspector.fields.map((field) => (
-      new EntityQueryField(entity.attribute(field.attribute), field.query && this._deserialize(erModel, field.query))
+    const fields = inspector.fields.map((inspectorField) => (
+      EntityQueryField.inspectorToObject(erModel, entity, inspectorField)
     ));
-    return new EntityQuery(entity, fields);
+    const options = inspector.options && EntityQueryOptions.inspectorToObject(entity, inspector.options);
+
+    return new EntityQuery(entity, fields, options);
   }
 
   public serialize(): string {
