@@ -3,7 +3,7 @@ import {Attribute, Attribute2FieldMap, DetailAttribute, DetailAttributeMap, Enti
 import {Context} from "../context/Context";
 import {EntityQuery, IEntityQueryInspector} from "./models/EntityQuery";
 import {EntityQueryField} from "./models/EntityQueryField";
-import {IEntityQueryWhere} from "./models/EntityQueryOptions";
+import {EntityQueryOrder, IEntityQueryWhere} from "./models/EntityQueryOptions";
 import {SQLTemplates} from "./SQLTemplates";
 
 interface IEntityQueryAlias {
@@ -123,6 +123,11 @@ export class SQLBuilder {
       .join("\n  AND ");
     if (sqlWhere) {
       sql += `\nWHERE ${sqlWhere}`;
+    }
+
+    const sqlOrder = this._makeOrder(query).join(", ");
+    if (sqlOrder) {
+      sql += `\nORDER BY ${sqlOrder}`;
     }
 
     // TODO remove logs in production
@@ -280,6 +285,25 @@ export class SQLBuilder {
       }
       return items;
     }, filters);
+  }
+
+  private _makeOrder(query: EntityQuery): string[] {
+    const orders = [];
+    if (query.options && query.options.order) {
+      for (const [key, value] of query.options.order.entries()) {
+        const attrAdapter = SQLBuilder._getAttrAdapter(query.entity, key.attribute);
+        const alias = this._getTableAlias(query, attrAdapter.relationName);
+
+        console.log(EntityQueryOrder);
+        orders.push(SQLTemplates.order(alias, attrAdapter.fieldName, value.toUpperCase()));
+      }
+    }
+    return query.fields.reduce((items, field) => {
+      if (field.query) {
+        return items.concat(this._makeOrder(field.query));
+      }
+      return items;
+    }, orders);
   }
 
   private _createSQLFilters(query: EntityQuery, where?: IEntityQueryWhere): string[] {

@@ -1,16 +1,5 @@
 import {EntityQueryField, IEntityQueryFieldInspector} from "./EntityQueryField";
 
-export interface IEntityQueryWhere {
-  not?: IEntityQueryWhere;
-  or?: IEntityQueryWhere;
-  and?: IEntityQueryWhere;
-
-  isNull?: EntityQueryField;
-  equals?: Map<EntityQueryField, any>;
-  greater?: Map<EntityQueryField, any>;
-  less?: Map<EntityQueryField, any>;
-}
-
 export interface IEntityQueryWhereInspector {
   not?: IEntityQueryWhereInspector;
   or?: IEntityQueryWhereInspector;
@@ -26,6 +15,23 @@ export interface IEntityQueryOptionsInspector {
   first?: number;
   skip?: number;
   where?: IEntityQueryWhereInspector;
+  order?: Map<IEntityQueryFieldInspector, string>;
+}
+
+export interface IEntityQueryWhere {
+  not?: IEntityQueryWhere;
+  or?: IEntityQueryWhere;
+  and?: IEntityQueryWhere;
+
+  isNull?: EntityQueryField;
+  equals?: Map<EntityQueryField, any>;
+  greater?: Map<EntityQueryField, any>;
+  less?: Map<EntityQueryField, any>;
+}
+
+export enum EntityQueryOrder {
+  ASC = "asc",
+  DESC = "desc"
 }
 
 export class EntityQueryOptions {
@@ -33,11 +39,16 @@ export class EntityQueryOptions {
   public first?: number;
   public skip?: number;
   public where?: IEntityQueryWhere;
+  public order?: Map<EntityQueryField, EntityQueryOrder>;
 
-  constructor(first?: number, skip?: number, where?: IEntityQueryWhere) {
+  constructor(first?: number,
+              skip?: number,
+              where?: IEntityQueryWhere,
+              order?: Map<EntityQueryField, EntityQueryOrder>) {
     this.first = first;
     this.skip = skip;
     this.where = where;
+    this.order = order;
   }
 
   private static _inspectMap(map?: Map<EntityQueryField, any>): Map<IEntityQueryFieldInspector, any> | undefined {
@@ -69,7 +80,8 @@ export class EntityQueryOptions {
     return {
       first: this.first,
       skip: this.skip,
-      where: EntityQueryOptions._inspectWhere(this.where)
+      where: EntityQueryOptions._inspectWhere(this.where),
+      order: EntityQueryOptions._inspectMap(this.order)
     };
   }
 }

@@ -17,6 +17,10 @@ export abstract class SQLTemplates {
       SQLTemplates.equals(joinAlias, joinFieldName, `${alias && `${alias}.`}${fieldName}`);
   }
 
+  public static order(alias: string, fieldName: string, sort: string): string {
+    return `${alias && `${alias}.`}${fieldName} ${sort}`;
+  }
+
   public static isNull(alias: string, fieldName: string): string {
     return `${alias && `${alias}.`}${fieldName} IS NULL`;
   }
