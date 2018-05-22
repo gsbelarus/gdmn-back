@@ -69,6 +69,17 @@ export class SQLBuilder {
     return query.entity.attributes[Object.keys(query.entity.attributes)[0]];
   }
 
+  private static _checkInAttrMap(entity: Entity, relationName: string, map?: Map<Attribute, any>): boolean {
+    if (map) {
+      for (const key of map.keys()) {
+        if (SQLBuilder._getAttrAdapter(entity, key).relationName === relationName) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
   public build(): { sql: string, params: INamedParams, fieldAliases: Map<EntityQueryField, string> } {
     this._clearVariables();
     this._createAliases(this._query);
@@ -406,28 +417,14 @@ export class SQLBuilder {
     const where = query.options && query.options.where;
     if (where) {
       if ((where.isNull && SQLBuilder._getAttrAdapter(query.entity, where.isNull).relationName === relationName)
-        || this._checkInAttrMap(query.entity, relationName, where.equals)
-        || this._checkInAttrMap(query.entity, relationName, where.greater)
-        || this._checkInAttrMap(query.entity, relationName, where.less)) {
+        || SQLBuilder._checkInAttrMap(query.entity, relationName, where.equals)
+        || SQLBuilder._checkInAttrMap(query.entity, relationName, where.greater)
+        || SQLBuilder._checkInAttrMap(query.entity, relationName, where.less)) {
         return true;
       }
     }
 
-    if (this._checkInAttrMap(query.entity, relationName, query.options && query.options.order)) {
-      return true;
-    }
-    return false;
-  }
-
-  private _checkInAttrMap(entity: Entity, relationName: string, map?: Map<Attribute, any>): boolean {
-    if (map) {
-      for (const key of map.keys()) {
-        if (SQLBuilder._getAttrAdapter(entity, key).relationName === relationName) {
-          return true;
-        }
-      }
-    }
-    return false;
+    return SQLBuilder._checkInAttrMap(query.entity, relationName, query.options && query.options.order);
   }
 
   private _addToParams(value: any): string {

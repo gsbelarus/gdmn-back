@@ -1,21 +1,25 @@
 import {
   Attributes,
-  BooleanAttribute,
-  DateAttribute,
-  DetailAttribute,
   Entity,
   EntityAttribute,
   EnumAttribute,
   ERModel,
-  FloatAttribute,
-  IntegerAttribute,
-  NumericAttribute,
+  isBooleanAttribute,
+  isDateAttribute,
+  isDetailAttribute,
+  isEntityAttribute,
+  isEnumAttribute,
+  isFloatAttribute,
+  isIntegerAttribute,
+  isNumericAttribute,
+  isScalarAttribute,
+  isSequenceAttribute,
+  isSetAttribute,
+  isStringAttribute,
+  isTimeAttribute,
+  isTimeStampAttribute,
   ScalarAttribute,
-  SequenceAttribute,
-  SetAttribute,
-  StringAttribute,
-  TimeAttribute,
-  TimeStampAttribute
+  SetAttribute
 } from "gdmn-orm";
 import {
   GraphQLBoolean,
@@ -160,7 +164,7 @@ export class ERGraphQLSchema extends GraphQLSchema {
                                          attributes: Attributes): GraphQLFieldConfigMap<any, any> {
     return Object.entries(attributes).reduce((fields, [attributeName, attribute]) => {
 
-      if (attribute instanceof ScalarAttribute) {
+      if (isScalarAttribute(attribute)) {
         const keyType = ERGraphQLSchema._createScalarType(context, entity, attribute);
         const lName = attribute.lName[context.locale];
 
@@ -180,12 +184,12 @@ export class ERGraphQLSchema extends GraphQLSchema {
                                        attributes: Attributes): GraphQLFieldConfigMap<any, any> {
     return Object.entries(attributes).reduce((fields, [attributeName, attribute]) => {
 
-      if (attribute instanceof EntityAttribute) {
+      if (isEntityAttribute(attribute)) {
         let type = ERGraphQLSchema._createLinkType(context, entity, attribute);
         if (type) {
           const lName = attribute.lName[context.locale];
 
-          if (attribute instanceof DetailAttribute) {
+          if (isDetailAttribute(attribute)) {
             type = new GraphQLNonNull(new GraphQLList(type));
           }
           fields[ERGraphQLSchema._escapeName(context, attributeName)] = {
@@ -203,32 +207,30 @@ export class ERGraphQLSchema extends GraphQLSchema {
   private static _createScalarType(context: IContext,
                                    entity: Entity,
                                    attribute: ScalarAttribute): GraphQLScalarType | GraphQLEnumType {
-    switch (attribute.constructor) {
-      // case TimeIntervalAttribute:  // TODO TimeIntervalAttribute
-      //   break;
-      // case BLOBAttribute:  // TODO BLOBAttribute
-      //   break;
-      case EnumAttribute:
-        return ERGraphQLSchema._createEnumType(context, entity, attribute as EnumAttribute);
-      case DateAttribute:
-        return GraphQLDate;
-      case TimeAttribute:
-        return GraphQLTime;
-      case TimeStampAttribute:
-        return GraphQLDateTime;
-      case SequenceAttribute:
-        return GraphQLSeqInt;
-      case IntegerAttribute:
-        return GraphQLInt;
-      case NumericAttribute:
-        return GraphQLNumeric;
-      case FloatAttribute:
-        return GraphQLFloat;
-      case BooleanAttribute:
-        return GraphQLBoolean;
-      case StringAttribute:
-      default:
-        return GraphQLString;
+    // TODO BLOBAttribute
+    // TODO TimeIntervalAttribute
+    if (isEnumAttribute(attribute)) {
+      return ERGraphQLSchema._createEnumType(context, entity, attribute);
+    } else if (isDateAttribute(attribute)) {
+      return GraphQLDate;
+    } else if (isTimeAttribute(attribute)) {
+      return GraphQLTime;
+    } else if (isTimeStampAttribute(attribute)) {
+      return GraphQLDateTime;
+    } else if (isSequenceAttribute(attribute)) {
+      return GraphQLSeqInt;
+    } else if (isIntegerAttribute(attribute)) {
+      return GraphQLInt;
+    } else if (isNumericAttribute(attribute)) {
+      return GraphQLNumeric;
+    } else if (isFloatAttribute(attribute)) {
+      return GraphQLFloat;
+    } else if (isBooleanAttribute(attribute)) {
+      return GraphQLBoolean;
+    } else if (isStringAttribute(attribute)) {
+      return GraphQLString;
+    } else {
+      return GraphQLString;
     }
   }
 
@@ -276,14 +278,14 @@ export class ERGraphQLSchema extends GraphQLSchema {
           return "";
         }
       });
-      if (attribute instanceof SetAttribute) {
+      if (isSetAttribute(attribute)) {
         return ERGraphQLSchema._wrapSetAttributeType(context, entity, attribute, unionType);
       }
       return unionType;
     }
 
     if (entityTypes.length === 1) {
-      if (attribute instanceof SetAttribute) {
+      if (isSetAttribute(attribute)) {
         return ERGraphQLSchema._wrapSetAttributeType(context, entity, attribute, entityTypes[0]);
       }
       return entityTypes[0];
