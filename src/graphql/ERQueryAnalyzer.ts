@@ -16,7 +16,7 @@ import {
 } from "graphql";
 import {getArgumentValues} from "graphql/execution/values";
 import {IArgs} from "./ERGraphQLSchema";
-import {IEntityQuery, IEntityQueryField} from "./SQLBuilder";
+import {IEntityQuery, IEntityQueryField} from "./sql/SQLBuilder";
 
 interface IContext {
   fragments: IFragments;

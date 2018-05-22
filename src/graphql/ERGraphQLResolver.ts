@@ -4,7 +4,7 @@ import NestHydrationJS from "nesthydrationjs";
 import {User} from "../context/User";
 import {IArgs, IERGraphQLResolver} from "./ERGraphQLSchema";
 import ERQueryAnalyzer, {IQuery} from "./ERQueryAnalyzer";
-import {IEntityQueryField, SQLBuilder} from "./SQLBuilder";
+import {IEntityQueryField, SQLBuilder} from "./sql/SQLBuilder";
 
 export class ERGraphQLResolver implements IERGraphQLResolver {
 
