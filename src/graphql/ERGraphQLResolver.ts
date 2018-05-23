@@ -4,7 +4,7 @@ import NestHydrationJS from "nesthydrationjs";
 import {User} from "../context/User";
 import {EntityQuery} from "../sql/models/EntityQuery";
 import {EntityQueryField} from "../sql/models/EntityQueryField";
-import {SQLBuilder} from "../sql/SQLBuilder";
+import {IEntityQueryFieldAlias, SQLBuilder} from "../sql/SQLBuilder";
 import {IArgs, IERGraphQLResolver} from "./ERGraphQLSchema";
 import ERQueryAnalyzer, {IQuery} from "./ERQueryAnalyzer";
 
@@ -68,14 +68,19 @@ export class ERGraphQLResolver implements IERGraphQLResolver {
     return query;
   }
 
-  private _getDefinition(query: IQuery, entityQuery: EntityQuery, fieldAliases: Map<EntityQueryField, string>): any {
+  private _getDefinition(query: IQuery,
+                         entityQuery: EntityQuery,
+                         fieldAliases: Map<EntityQueryField, IEntityQueryFieldAlias>): any {
     const definition: any = {};
 
     query.fields.reduce((def, field) => {
       if (!field.query) {
         const eQField = entityQuery.fields.find((entityField) => entityField.attribute === field.attribute);
         if (eQField) {
-          def[field.selectionValue] = {column: fieldAliases.get(eQField) || ""};
+          const fieldAlias = fieldAliases.get(eQField);
+          if (fieldAlias) {
+            def[field.selectionValue] = {column: fieldAlias[Object.keys(fieldAlias)[0]]}; // TODO setAttributes
+          }
         }
       }
       return def;

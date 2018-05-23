@@ -1,5 +1,14 @@
 import {INamedParams} from "gdmn-db";
-import {Attribute, Attribute2FieldMap, DetailAttribute, DetailAttributeMap, Entity} from "gdmn-orm";
+import {
+  Attribute,
+  Attribute2FieldMap,
+  DetailAttributeMap,
+  Entity,
+  isDetailAttribute,
+  isScalarAttribute,
+  isSetAttribute,
+  SetAttribute2CrossMap
+} from "gdmn-orm";
 import {Context} from "../context/Context";
 import {EntityQuery, IEntityQueryInspector} from "./models/EntityQuery";
 import {EntityQueryField} from "./models/EntityQueryField";
@@ -10,13 +19,17 @@ interface IEntityQueryAlias {
   [relationName: string]: string;
 }
 
+export interface IEntityQueryFieldAlias {
+  [attrName: string]: string;
+}
+
 export class SQLBuilder {
 
   private readonly _context: Context;
   private readonly _query: EntityQuery;
 
   private _queryAliases = new Map<EntityQuery, IEntityQueryAlias>();
-  private _fieldAliases = new Map<EntityQueryField, string>();
+  private _fieldAliases = new Map<EntityQueryField, IEntityQueryFieldAlias>();
 
   private _params: any = {};
 
@@ -47,12 +60,17 @@ export class SQLBuilder {
     let relationName = entity.adapter.relation[0].relationName;
     let fieldName = attribute.name;
     if (attribute.adapter) {
-      if (attribute instanceof DetailAttribute) {
+      if (isSetAttribute(attribute)) {
+        const setAdapter = attribute.adapter as SetAttribute2CrossMap;
+        relationName = setAdapter.crossRelation;
+        fieldName = setAdapter.presentationField || "";
+
+      } else if (isDetailAttribute(attribute)) {
         const detailAdapter = attribute.adapter as DetailAttributeMap;
         relationName = detailAdapter.masterLinks[0].detailRelation;
         fieldName = detailAdapter.masterLinks[0].link2masterField;
 
-      } else {
+      } else if (isScalarAttribute(attribute)) {
         const attrAdapter = attribute.adapter as Attribute2FieldMap;
         relationName = attrAdapter.relation;
         fieldName = attrAdapter.field;
@@ -62,11 +80,11 @@ export class SQLBuilder {
     return {relationName, fieldName};
   }
 
-  private static _getPrimaryAttribute(query: EntityQuery): Attribute {
-    if (query.entity.pk[0]) {
-      return query.entity.pk[0];
+  private static _getPrimaryAttribute(entity: Entity): Attribute {
+    if (entity.pk[0]) {
+      return entity.pk[0];
     }
-    return query.entity.attributes[Object.keys(query.entity.attributes)[0]];
+    return entity.attributes[Object.keys(entity.attributes)[0]];
   }
 
   private static _checkInAttrMap(entity: Entity, relationName: string, map?: Map<Attribute, any>): boolean {
@@ -80,7 +98,7 @@ export class SQLBuilder {
     return false;
   }
 
-  public build(): { sql: string, params: INamedParams, fieldAliases: Map<EntityQueryField, string> } {
+  public build(): { sql: string, params: INamedParams, fieldAliases: Map<EntityQueryField, IEntityQueryFieldAlias> } {
     this._clearVariables();
     this._createAliases(this._query);
 
@@ -101,10 +119,28 @@ export class SQLBuilder {
 
     query.fields
       .filter((field) => !field.query)
-      .reduce((aliases, field) => aliases.set(field, `F$${aliases.size + 1}`), this._fieldAliases);
+      .reduce((aliases, field) => (
+        aliases.set(field, {[field.attribute.name]: `F$${aliases.size + 1}`})
+      ), this._fieldAliases);
 
     query.fields.forEach((field) => {
       if (field.query) {
+        if (isSetAttribute(field.attribute)) {
+          if (field.setAttributes) {
+            const fieldAlias = field.setAttributes.reduce((alias, attr) => {
+              alias[attr.name] = `F$${this._fieldAliases.size + 1}_${Object.keys(alias).length + 1}`;
+              return alias;
+            }, {} as IEntityQueryFieldAlias);
+            this._fieldAliases.set(field, fieldAlias);
+          }
+          if (field.attribute.adapter) {
+            const setAdapter = SQLBuilder._getAttrAdapter(field.query.entity, field.attribute);
+            const alias = this._queryAliases.get(query);
+            if (alias) {
+              alias[setAdapter.relationName] = `E$${aliasNumber}_${Object.keys(alias).length + 1}$S`;
+            }
+          }
+        }
         this._createAliases(field.query);
       }
     });
@@ -167,6 +203,16 @@ export class SQLBuilder {
 
     const joinedFields = query.fields.reduce((items, field) => {
       if (field.query) {
+        if (field.setAttributes) {
+          field.setAttributes.map((attr) => {
+            const attrAdapter = SQLBuilder._getAttrAdapter(query.entity, attr);
+            return SQLTemplates.field(
+              this._getTableAlias(query, attrAdapter.relationName),
+              this._getFieldAlias(field, attr),
+              attrAdapter.fieldName
+            );
+          });
+        }
         return items.concat(this._makeFields(field.query!));
       }
       return items;
@@ -176,7 +222,7 @@ export class SQLBuilder {
   }
 
   private _makeFrom(query: EntityQuery): string {
-    const primaryAttr = SQLBuilder._getPrimaryAttribute(query);
+    const primaryAttr = SQLBuilder._getPrimaryAttribute(query.entity);
     const primaryAttrAdapter = SQLBuilder._getAttrAdapter(query.entity, primaryAttr);
 
     const mainRelation = query.entity.adapter.relation[0];
@@ -201,17 +247,36 @@ export class SQLBuilder {
   }
 
   private _makeJoin(query: EntityQuery): string[] {
-    const primaryAttr = SQLBuilder._getPrimaryAttribute(query);
+    const primaryAttr = SQLBuilder._getPrimaryAttribute(query.entity);
     const primaryAttrAdapter = SQLBuilder._getAttrAdapter(query.entity, primaryAttr);
 
     return query.fields.reduce((joins, field) => {
       if (field.query) {
         const attrAdapter = SQLBuilder._getAttrAdapter(query.entity, field.attribute);
-        const nestedPrimaryAttr = SQLBuilder._getPrimaryAttribute(field.query);
+        const nestedPrimaryAttr = SQLBuilder._getPrimaryAttribute(field.query.entity);
         const nestedPrimaryAttrAdapter = SQLBuilder._getAttrAdapter(field.query.entity, nestedPrimaryAttr);
 
         const mainRelation = field.query.entity.adapter.relation[0];
-        if (field.attribute instanceof DetailAttribute) {   // TODO support for SetAttribute
+        if (isSetAttribute(field.attribute)) {
+          joins.push(
+            SQLTemplates.join(
+              attrAdapter.relationName,
+              this._getTableAlias(query, attrAdapter.relationName),
+              this._getPrimaryName(attrAdapter.relationName),
+              this._getTableAlias(query),
+              primaryAttrAdapter.fieldName
+            )
+          );
+          joins.push(
+            SQLTemplates.join(
+              mainRelation.relationName,
+              this._getTableAlias(field.query, mainRelation.relationName),
+              nestedPrimaryAttrAdapter.fieldName,
+              this._getTableAlias(query, attrAdapter.relationName),
+              this._getPrimaryName(attrAdapter.relationName, 1)
+            )
+          );
+        } else if (isDetailAttribute(field.attribute)) {
           joins.push(
             SQLTemplates.join(
               mainRelation.relationName,
@@ -271,10 +336,10 @@ export class SQLBuilder {
       return equals;
     }, [] as string[]);
 
-    return query.fields.reduce((equals, field) => {
-      if (field.query) {
-        return equals.concat(this._makeWhereEntityConditions(field.query));
-      }
+    return query.fields.reduce((equals, field) => { // FIXME ???
+      // if (field.query) {
+      //   return equals.concat(this._makeWhereEntityConditions(field.query));
+      // }
       return equals;
     }, whereEquals);
   }
@@ -381,10 +446,10 @@ export class SQLBuilder {
     return filters;
   }
 
-  private _getPrimaryName(relationName: string): string {
+  private _getPrimaryName(relationName: string, index: number = 0): string {
     const relation = this._context.dbStructure.findRelation((item) => item.name === relationName);
     if (relation && relation.primaryKey) {
-      return relation.primaryKey.fields[0];
+      return relation.primaryKey.fields[relation.primaryKey.fields.length - 1 - index];
     }
     return "";
   }
@@ -401,8 +466,12 @@ export class SQLBuilder {
     return "";
   }
 
-  private _getFieldAlias(field: EntityQueryField): string {
-    return this._fieldAliases.get(field) || "";
+  private _getFieldAlias(field: EntityQueryField, attr?: Attribute): string {
+    const fieldAlias = this._fieldAliases.get(field);
+    if (fieldAlias) {
+      return fieldAlias[(attr && attr.name) || Object.keys(fieldAlias)[0]];
+    }
+    return "";
   }
 
   private _isExistInQuery(query: EntityQuery, relationName: string): boolean {

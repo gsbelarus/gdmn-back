@@ -310,7 +310,9 @@ export class ERGraphQLSchema extends GraphQLSchema {
             attribute
           }
         };
-      }
+      },
+      isSet: true,
+      entity
     }));
   }
 }

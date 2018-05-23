@@ -36,6 +36,7 @@ export interface IQueryField {
   isArray: boolean;
   selectionValue: string; // TODO remove after fix entities and attributes names
   query?: IQuery;
+  setAttributes?: Attribute[];
 }
 
 export interface IQuery {
@@ -167,23 +168,32 @@ export default class ERQueryAnalyzer {
           entity,
           fields: []
         };
-        query.fields = selections.reduce((fields, selection) => {
+        if (config.isSet) { // TODO setAttributes
+          const selection = selections[0];
           if (selection.kind === "Field" && isObjectType(parentType)) {
-            const field = parentType.getFields()[selection.name.value];
-            const attribute: Attribute = (field as any).attribute;
-            if (attribute) {
-              const {isArray} = ERQueryAnalyzer.skipWrappingTypes(field.type);
-              fields.push({
-                attribute,
-                isArray,
-                selectionValue: selection.name.value,
-                query: ERQueryAnalyzer.analyze(selection, parentType, context)
-              });
+            const setQuery = ERQueryAnalyzer.analyze(selection, parentType, context);
+            if (setQuery) {
+              query.fields = setQuery.fields;
             }
           }
-          return fields;
-        }, [] as IQueryField[]);
-
+        } else {
+          query.fields = selections.reduce((fields, selection) => {
+            if (selection.kind === "Field" && isObjectType(parentType)) {
+              const field = parentType.getFields()[selection.name.value];
+              const attribute: Attribute = (field as any).attribute;
+              if (attribute) {
+                const {isArray} = ERQueryAnalyzer.skipWrappingTypes(field.type);
+                fields.push({
+                  attribute,
+                  isArray,
+                  selectionValue: selection.name.value,
+                  query: ERQueryAnalyzer.analyze(selection, parentType, context)
+                });
+              }
+            }
+            return fields;
+          }, [] as IQueryField[]);
+        }
         return query;
       }
     }

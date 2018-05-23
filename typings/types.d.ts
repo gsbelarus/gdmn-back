@@ -48,6 +48,7 @@ declare module "graphql" {
     astNode?: Maybe<ObjectTypeDefinitionNode>;
     extensionASTNodes?: Maybe<ReadonlyArray<ObjectTypeExtensionNode>>;
 
+    isSet?: boolean;
     entity?: Entity;
   }
 
