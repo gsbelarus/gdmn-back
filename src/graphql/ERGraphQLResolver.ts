@@ -1,5 +1,5 @@
-import {AccessMode, AConnection} from "gdmn-db";
-import {GraphQLResolveInfo} from "graphql/type/definition";
+import {AConnection} from "gdmn-db";
+import {GraphQLResolveInfo, isListType} from "graphql/type/definition";
 import NestHydrationJS from "nesthydrationjs";
 import {User} from "../context/User";
 import {EntityQuery} from "../sql/models/EntityQuery";
@@ -18,30 +18,30 @@ export class ERGraphQLResolver implements IERGraphQLResolver {
 
       const {sql, params, fieldAliases} = new SQLBuilder(context, entityQuery).build();
 
-      return await context.executeTransaction(({connection, transaction}) => {
-          return AConnection.executeQueryResultSet({
-            connection,
-            transaction,
-            sql,
-            params,
-            callback: async (resultSet) => {
-              const result = [];
-              while (await resultSet.next()) {
-                const row: { [key: string]: any } = {};
-                for (let i = 0; i < resultSet.metadata.columnCount; i++) {
-                  // TODO binary blob support
-                  row[resultSet.metadata.getColumnLabel(i)] = await resultSet.getAny(i);
-                }
-                result.push(row);
-              }
-              return NestHydrationJS().nest(result,
-                [this._getDefinition(query, entityQuery, fieldAliases)]);
+      const data = await AConnection.executeQueryResultSet({
+        connection: context.connection,
+        transaction: context.readTransaction,
+        sql,
+        params,
+        callback: async (resultSet) => {
+          const result = [];
+          while (await resultSet.next()) {
+            const row: { [key: string]: any } = {};
+            for (let i = 0; i < resultSet.metadata.columnCount; i++) {
+              // TODO binary blob support
+              row[resultSet.metadata.getColumnLabel(i)] = await resultSet.getAny(i);
             }
-          });
-        },
-        {
-          accessMode: AccessMode.READ_ONLY
-        });
+            result.push(row);
+          }
+          return result;
+        }
+      });
+
+      let definition = this._getDefinition(query, entityQuery, fieldAliases);
+      if (isListType(info.returnType)) {
+        definition = [definition];
+      }
+      return NestHydrationJS().nest(data, definition);
     }
     return null;
   }

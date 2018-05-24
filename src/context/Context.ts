@@ -5,8 +5,7 @@ import {
   ATransaction,
   DBStructure,
   IConnectionOptions,
-  IDefaultConnectionPoolOptions,
-  ITransactionOptions
+  IDefaultConnectionPoolOptions
 } from "gdmn-db";
 import {TExecutor} from "gdmn-db/dist/definitions/types";
 import {ERModel} from "gdmn-orm";
@@ -24,6 +23,8 @@ export interface ISources {
   dbDetail: IDBDetail;
   dbStructure: DBStructure;
   connectionPool: AConnectionPool<IDefaultConnectionPoolOptions>;
+  connection: AConnection;
+  readTransaction: ATransaction;
   erModel: ERModel;
   erGraphQLSchema: ERGraphQLSchema;
   users?: User[];
@@ -62,6 +63,20 @@ export abstract class Context {
     throw new Error("No context");
   }
 
+  get connection(): AConnection {
+    if (this._sources) {
+      return this._sources.connection;
+    }
+    throw new Error("No context");
+  }
+
+  get readTransaction(): ATransaction {
+    if (this._sources) {
+      return this._sources.readTransaction;
+    }
+    throw new Error("No context");
+  }
+
   get erModel(): ERModel {
     if (this._sources) {
       return this._sources.erModel;
@@ -91,14 +106,5 @@ export abstract class Context {
       connectionPool: this.connectionPool,
       callback
     });
-  }
-
-  public async executeTransaction<R>(callback: TExecutor<{ connection: AConnection, transaction: ATransaction }, R>,
-                                     options?: ITransactionOptions): Promise<R> {
-    return await this.executeConnection((connection) => AConnection.executeTransaction({
-      connection,
-      options,
-      callback: (transaction) => callback({connection, transaction})
-    }));
   }
 }
