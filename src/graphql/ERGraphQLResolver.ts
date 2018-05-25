@@ -2,6 +2,7 @@ import {AConnection} from "gdmn-db";
 import {GraphQLResolveInfo, isListType} from "graphql/type/definition";
 import NestHydrationJS from "nesthydrationjs";
 import {User} from "../context/User";
+import {EntityLink} from "../sql/models/EntityLink";
 import {EntityQuery} from "../sql/models/EntityQuery";
 import {EntityQueryField} from "../sql/models/EntityQueryField";
 import {IEntityQueryFieldAlias, SQLBuilder} from "../sql/SQLBuilder";
@@ -14,7 +15,8 @@ export class ERGraphQLResolver implements IERGraphQLResolver {
     const queries = ERQueryAnalyzer.resolveInfo(info);
     if (queries.length) {
       const query = queries[0];
-      const entityQuery = this._completeQuery(this._convertToEntityQuery(query));
+      const entityLink = this._convertToEntityLink(query);
+      const entityQuery = new EntityQuery(this._completeLink(entityLink));
 
       const {sql, params, fieldAliases} = new SQLBuilder(context, entityQuery).build();
 
@@ -37,7 +39,7 @@ export class ERGraphQLResolver implements IERGraphQLResolver {
         }
       });
 
-      let definition = this._getDefinition(query, entityQuery, fieldAliases);
+      let definition = this._getDefinition(query, entityLink, fieldAliases);
       if (isListType(info.returnType)) {
         definition = [definition];
       }
@@ -46,30 +48,31 @@ export class ERGraphQLResolver implements IERGraphQLResolver {
     return null;
   }
 
-  private _convertToEntityQuery(query: IQuery): EntityQuery {
+  private _convertToEntityLink(query: IQuery, count: number = 0): EntityLink {
+    count++;
     const fields = query.fields.map((field) => (
-      new EntityQueryField(field.attribute, field.query && this._convertToEntityQuery(field.query))
+      new EntityQueryField(field.attribute, field.query && this._convertToEntityLink(field.query, count))
     ));
-    return new EntityQuery(query.entity, fields);
+    return new EntityLink(query.entity, `A$${count}`, fields);
   }
 
-  private _completeQuery(query: EntityQuery): EntityQuery {
-    const primaryAttr = query.entity.pk[0] && query.entity.attributes[Object.keys(query.entity.attributes)[0]];
-    if (!query.fields.some((field) => field.attribute === primaryAttr)) {
+  private _completeLink(link: EntityLink): EntityLink {
+    const primaryAttr = link.entity.pk[0] && link.entity.attributes[Object.keys(link.entity.attributes)[0]];
+    if (!link.fields.some((field) => field.attribute === primaryAttr)) {
       const primaryField = new EntityQueryField(primaryAttr);
-      query.fields.unshift(primaryField);
+      link.fields.unshift(primaryField);
     }
 
-    query.fields.forEach((field) => {
-      if (field.query) {
-        this._completeQuery(field.query);
+    link.fields.forEach((field) => {
+      if (field.link) {
+        this._completeLink(field.link);
       }
     });
-    return query;
+    return link;
   }
 
   private _getDefinition(query: IQuery,
-                         entityQuery: EntityQuery,
+                         entityQuery: EntityLink,
                          fieldAliases: Map<EntityQueryField, IEntityQueryFieldAlias>): any {
     const definition: any = {};
 
@@ -89,10 +92,10 @@ export class ERGraphQLResolver implements IERGraphQLResolver {
     query.fields.reduce((def, field) => {
       if (field.query) {
         const eQField = entityQuery.fields.find((entityField) => entityField.attribute === field.attribute);
-        if (eQField && eQField.query) {
+        if (eQField && eQField.link) {
           def[field.selectionValue] = field.isArray
-            ? [this._getDefinition(field.query, eQField.query, fieldAliases)]
-            : this._getDefinition(field.query, eQField.query, fieldAliases);
+            ? [this._getDefinition(field.query, eQField.link, fieldAliases)]
+            : this._getDefinition(field.query, eQField.link, fieldAliases);
         }
       }
       return def;

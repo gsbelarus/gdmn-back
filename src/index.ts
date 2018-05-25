@@ -7,8 +7,9 @@ import {Server as HttpsServer} from "https";
 import {Application} from "./context/Application";
 import {User} from "./context/User";
 import databases from "./db/databases";
-import {EntityQuery} from "./sql/models/EntityQuery";
 import {EntityQueryField} from "./sql/models/EntityQueryField";
+import {EntityLink} from "./sql/models/EntityLink";
+import {EntityQuery} from "./sql/models/EntityQuery";
 import {SQLBuilder} from "./sql/SQLBuilder";
 
 interface IServer {
@@ -41,9 +42,9 @@ async function create(): Promise<IServer> {
     console.log("GET /data");
     try {
       const context = application.context;
-      const bodyQuery = EntityQuery.inspectorToObject(context.erModel, req.body.query);
+      const bodyQuery = EntityQuery.inspectorToObject(context.erModel, req.body);
       const {sql, params, fieldAliases} = new SQLBuilder(context, bodyQuery).build();
-      console.log(fieldAliases);
+
       const data = await AConnection.executeQueryResultSet({
         connection: context.connection,
         transaction: context.readTransaction,
@@ -63,30 +64,30 @@ async function create(): Promise<IServer> {
         }
       });
 
-      function deepFindEntity(query: EntityQuery, field: EntityQueryField): Entity {
-        const find = query.fields
-          .filter((qField) => !qField.query)
+      function deepFindEntity(link: EntityLink, field: EntityQueryField): Entity {
+        const find = link.fields
+          .filter((qField) => !qField.link)
           .some((qField) => qField === field);
 
         if (find) {
-          return query.entity;
+          return link.entity;
         }
 
-        for (const qField of query.fields) {
-          if (qField.query) {
-            const entity = deepFindEntity(qField.query, field);
+        for (const qField of link.fields) {
+          if (qField.link) {
+            const entity = deepFindEntity(qField.link, field);
             if (entity) {
               return entity;
             }
           }
         }
-        return query.entity;
+        return link.entity;
       }
 
       const aliases = [];
       for (const [key, value] of fieldAliases) {
         aliases.push({
-          entity: deepFindEntity(bodyQuery, key).name,
+          entity: deepFindEntity(bodyQuery.link, key).name,
           attribute: key.attribute.name,
           values: value
         });
