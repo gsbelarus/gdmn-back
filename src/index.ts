@@ -1,15 +1,14 @@
 import bodyParser from "body-parser";
 import {AConnection} from "gdmn-db";
-import {Entity} from "gdmn-orm";
 import {GraphQLServer} from "graphql-yoga";
 import {Server as HttpServer} from "http";
 import {Server as HttpsServer} from "https";
 import {Application} from "./context/Application";
 import {User} from "./context/User";
 import databases from "./db/databases";
-import {EntityQueryField} from "./sql/models/EntityQueryField";
 import {EntityLink} from "./sql/models/EntityLink";
 import {EntityQuery} from "./sql/models/EntityQuery";
+import {EntityQueryField} from "./sql/models/EntityQueryField";
 import {SQLBuilder} from "./sql/SQLBuilder";
 
 interface IServer {
@@ -38,7 +37,7 @@ async function create(): Promise<IServer> {
     res.send(JSON.stringify(application.erModel.serialize()));
   });
 
-  graphQLServer.express.post("/data", async (req, res, next) => {  // TODO tmp
+  graphQLServer.express.post("/data", async (req, res, next) => {  // TODO replace with GraphQL?
     console.log("GET /data");
     try {
       const context = application.context;
@@ -64,30 +63,30 @@ async function create(): Promise<IServer> {
         }
       });
 
-      function deepFindEntity(link: EntityLink, field: EntityQueryField): Entity {
+      function deepFindLink(link: EntityLink, field: EntityQueryField): EntityLink {
         const find = link.fields
           .filter((qField) => !qField.link)
           .some((qField) => qField === field);
 
         if (find) {
-          return link.entity;
+          return link;
         }
 
         for (const qField of link.fields) {
           if (qField.link) {
-            const entity = deepFindEntity(qField.link, field);
-            if (entity) {
-              return entity;
+            const findLink = deepFindLink(qField.link, field);
+            if (findLink) {
+              return findLink;
             }
           }
         }
-        return link.entity;
+        return link;
       }
 
       const aliases = [];
       for (const [key, value] of fieldAliases) {
         aliases.push({
-          entity: deepFindEntity(bodyQuery.link, key).name,
+          alias: deepFindLink(bodyQuery.link, key).alias,
           attribute: key.attribute.name,
           values: value
         });

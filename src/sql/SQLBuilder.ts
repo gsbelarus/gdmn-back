@@ -13,7 +13,7 @@ import {Context} from "../context/Context";
 import {EntityLink} from "./models/EntityLink";
 import {EntityQuery, IEntityQueryInspector} from "./models/EntityQuery";
 import {EntityQueryField} from "./models/EntityQueryField";
-import {IEntityQueryWhere} from "./models/EntityQueryOptions";
+import {IEntityLinkAlias, IEntityQueryWhere} from "./models/EntityQueryOptions";
 import {SQLTemplates} from "./SQLTemplates";
 
 interface IEntityQueryAlias {
@@ -88,13 +88,18 @@ export class SQLBuilder {
     return entity.attributes[Object.keys(entity.attributes)[0]];
   }
 
-  private static _checkInAttrMap(entity: Entity, relationName: string, map?: Map<Attribute, any>): boolean {
+  private static _checkInAttrMap(entity: Entity,
+                                 relationName: string,
+                                 map?: IEntityLinkAlias<Map<Attribute, any>>): boolean {
     if (map) {
-      for (const key of map.keys()) {
-        if (SQLBuilder._getAttrAdapter(entity, key).relationName === relationName) {
-          return true;
+      return Object.values(map).some((value) => {
+        for (const key of value.keys()) {
+          if (SQLBuilder._getAttrAdapter(entity, key).relationName === relationName) {
+            return true;
+          }
         }
-      }
+        return false;
+      });
     }
     return false;
   }
@@ -500,16 +505,19 @@ export class SQLBuilder {
 
     const where = this._query.options && this._query.options.where;
     if (where) {
-      // if ((where.isNull && SQLBuilder._getAttrAdapter(link.entity, where.isNull).relationName === relationName)
-      //   || SQLBuilder._checkInAttrMap(link.entity, relationName, where.equals)
-      //   || SQLBuilder._checkInAttrMap(link.entity, relationName, where.greater)
-      //   || SQLBuilder._checkInAttrMap(link.entity, relationName, where.less)) {
-      //   return true;
-      // }
+      if (where.isNull && Object.values(where.isNull).some((condition) => (
+        SQLBuilder._getAttrAdapter(link.entity, condition).relationName === relationName
+      ))) {
+        return true;
+      }
+      if (SQLBuilder._checkInAttrMap(link.entity, relationName, where.equals)
+        || SQLBuilder._checkInAttrMap(link.entity, relationName, where.greater)
+        || SQLBuilder._checkInAttrMap(link.entity, relationName, where.less)) {
+        return true;
+      }
     }
 
-    // return SQLBuilder._checkInAttrMap(link.entity, relationName, this._query.options && this._query.options.order);
-    return SQLBuilder._checkInAttrMap(link.entity, relationName);
+    return SQLBuilder._checkInAttrMap(link.entity, relationName, this._query.options && this._query.options.order);
   }
 
   private _addToParams(value: any): string {

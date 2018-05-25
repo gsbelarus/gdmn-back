@@ -5,17 +5,17 @@ export interface IEntityQueryWhereInspector {
   or?: IEntityQueryWhereInspector;
   and?: IEntityQueryWhereInspector;
 
-  isNull?: IEntityQueryAlias<string>;
-  equals?: IEntityQueryAlias<{ [fieldName: string]: any }>;
-  greater?: IEntityQueryAlias<{ [fieldName: string]: any }>;
-  less?: IEntityQueryAlias<{ [fieldName: string]: any }>;
+  isNull?: IEntityLinkAlias<string>;
+  equals?: IEntityLinkAlias<{ [fieldName: string]: any }>;
+  greater?: IEntityLinkAlias<{ [fieldName: string]: any }>;
+  less?: IEntityLinkAlias<{ [fieldName: string]: any }>;
 }
 
 export interface IEntityQueryOptionsInspector {
   first?: number;
   skip?: number;
   where?: IEntityQueryWhereInspector;
-  order?: IEntityQueryAlias<{ [fieldName: string]: string }>;
+  order?: IEntityLinkAlias<{ [fieldName: string]: string }>;
 }
 
 export interface IEntityQueryWhere {
@@ -23,13 +23,13 @@ export interface IEntityQueryWhere {
   or?: IEntityQueryWhere;
   and?: IEntityQueryWhere;
 
-  isNull?: IEntityQueryAlias<Attribute>;
-  equals?: IEntityQueryAlias<Map<Attribute, any>>;
-  greater?: IEntityQueryAlias<Map<Attribute, any>>;
-  less?: IEntityQueryAlias<Map<Attribute, any>>;
+  isNull?: IEntityLinkAlias<Attribute>;
+  equals?: IEntityLinkAlias<Map<Attribute, any>>;
+  greater?: IEntityLinkAlias<Map<Attribute, any>>;
+  less?: IEntityLinkAlias<Map<Attribute, any>>;
 }
 
-export interface IEntityQueryAlias<V> {
+export interface IEntityLinkAlias<V> {
   [alias: string]: V;
 }
 
@@ -43,12 +43,12 @@ export class EntityQueryOptions {
   public first?: number;
   public skip?: number;
   public where?: IEntityQueryWhere;
-  public order?: IEntityQueryAlias<Map<Attribute, EntityQueryOrder>>;
+  public order?: IEntityLinkAlias<Map<Attribute, EntityQueryOrder>>;
 
   constructor(first?: number,
               skip?: number,
               where?: IEntityQueryWhere,
-              order?: IEntityQueryAlias<Map<Attribute, EntityQueryOrder>>) {
+              order?: IEntityLinkAlias<Map<Attribute, EntityQueryOrder>>) {
     this.first = first;
     this.skip = skip;
     this.where = where;
@@ -86,7 +86,7 @@ export class EntityQueryOptions {
         const isNull = Object.entries(inspector.isNull).reduce((aliases, [alias, value]) => {
           aliases[alias] = entity.attribute(value);
           return aliases;
-        }, {} as IEntityQueryAlias<Attribute>);
+        }, {} as IEntityLinkAlias<Attribute>);
         if (Object.keys(isNull).length) {
           where.isNull = isNull;
         }
@@ -109,8 +109,8 @@ export class EntityQueryOptions {
 
   private static _inspectorToObjectMap(
     entity: Entity,
-    map?: IEntityQueryAlias<{ [fieldName: string]: any }>
-  ): IEntityQueryAlias<Map<Attribute, any>> {
+    map?: IEntityLinkAlias<{ [fieldName: string]: any }>
+  ): IEntityLinkAlias<Map<Attribute, any>> {
     if (map) {
       return Object.entries(map)
         .reduce((aliases, [alias, condition]) => {
@@ -121,12 +121,12 @@ export class EntityQueryOptions {
             }, new Map<Attribute, any>());
 
           return aliases;
-        }, {} as IEntityQueryAlias<Map<Attribute, any>>);
+        }, {} as IEntityLinkAlias<Map<Attribute, any>>);
     }
     return {};
   }
 
-  private static _inspectMap(map?: IEntityQueryAlias<Map<Attribute, any>>): { [fieldName: string]: any } {
+  private static _inspectMap(map?: IEntityLinkAlias<Map<Attribute, any>>): { [fieldName: string]: any } {
     if (map) {
       return Object.entries(map).reduce((aliases, [alias, condition]) => {
         const newMap: { [fieldName: string]: any } = {};
@@ -135,7 +135,7 @@ export class EntityQueryOptions {
         }
         aliases[alias] = newMap;
         return aliases;
-      }, {} as IEntityQueryAlias<{ [fieldName: string]: any }>);
+      }, {} as IEntityLinkAlias<{ [fieldName: string]: any }>);
     }
     return {};
   }
@@ -156,7 +156,7 @@ export class EntityQueryOptions {
         inspector.isNull = Object.entries(where.isNull).reduce((isNull, [alias, value]) => {
           isNull[alias] = value.name;
           return isNull;
-        }, {} as IEntityQueryAlias<string>);
+        }, {} as IEntityLinkAlias<string>);
       }
       const equals = EntityQueryOptions._inspectMap(where.equals);
       if (Object.keys(equals).length) {
