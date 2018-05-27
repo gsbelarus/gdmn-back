@@ -1,21 +1,21 @@
 import {Attribute, Entity, ERModel} from "gdmn-orm";
-import {EntityQuery, IEntityQueryInspector} from "./EntityQuery";
+import {EntityLink, IEntitySubQueryInspector} from "./EntityLink";
 
 export interface IEntityQueryFieldInspector {
   attribute: string;
-  query?: IEntityQueryInspector;
   setAttributes?: string[];
+  link?: IEntitySubQueryInspector;
 }
 
 export class EntityQueryField {
 
   public attribute: Attribute;
-  public query?: EntityQuery;
+  public link?: EntityLink;
   public setAttributes?: Attribute[];
 
-  constructor(attribute: Attribute, query?: EntityQuery, setAttributes?: Attribute[]) {
+  constructor(attribute: Attribute, link?: EntityLink, setAttributes?: Attribute[]) {
     this.attribute = attribute;
-    this.query = query;
+    this.link = link;
     this.setAttributes = setAttributes;
   }
 
@@ -24,16 +24,19 @@ export class EntityQueryField {
                                   inspector: IEntityQueryFieldInspector): EntityQueryField {
     return new EntityQueryField(
       entity.attribute(inspector.attribute),
-      inspector.query && EntityQuery.inspectorToObject(erModel, inspector.query),
+      inspector.link && EntityLink.inspectorToObject(erModel, inspector.link),
       inspector.setAttributes && inspector.setAttributes.map((attr) => entity.attribute(attr))
     );
   }
 
   public inspect(): IEntityQueryFieldInspector {
-    return {
-      attribute: this.attribute.name,
-      query: this.query && this.query.inspect(),
-      setAttributes: this.setAttributes && this.setAttributes.map((attr) => attr.name)
-    };
+    const inspect: IEntityQueryFieldInspector = {attribute: this.attribute.name};
+    if (this.link) {
+      inspect.link = this.link.inspect();
+    }
+    if (this.setAttributes) {
+      inspect.setAttributes = this.setAttributes.map((attr) => attr.name);
+    }
+    return inspect;
   }
 }

@@ -1,4 +1,4 @@
-import {AConnectionPool, DBStructure, IDefaultConnectionPoolOptions} from "gdmn-db";
+import {AConnection, AConnectionPool, ATransaction, DBStructure, IDefaultConnectionPoolOptions} from "gdmn-db";
 import {ERModel} from "gdmn-orm";
 import {ERGraphQLSchema} from "../graphql/ERGraphQLSchema";
 import {Context, IDBDetail} from "./Context";
@@ -27,6 +27,14 @@ export abstract class ContextWrapper extends Context {
 
   get connectionPool(): AConnectionPool<IDefaultConnectionPoolOptions> {
     return this._context.connectionPool;
+  }
+
+  get connection(): AConnection {
+    return this._context.connection;
+  }
+
+  get readTransaction(): ATransaction {
+    return this._context.readTransaction;
   }
 
   get erModel(): ERModel {

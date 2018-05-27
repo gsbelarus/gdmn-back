@@ -1,22 +1,19 @@
-import {Entity, ERModel} from "gdmn-orm";
-import {EntityQueryField, IEntityQueryFieldInspector} from "./EntityQueryField";
+import {ERModel} from "gdmn-orm";
+import {EntityLink, IEntitySubQueryInspector} from "./EntityLink";
 import {EntityQueryOptions, IEntityQueryOptionsInspector} from "./EntityQueryOptions";
 
 export interface IEntityQueryInspector {
-  entity: string;
-  fields: IEntityQueryFieldInspector[];
+  link: IEntitySubQueryInspector;
   options?: IEntityQueryOptionsInspector;
 }
 
 export class EntityQuery {
 
-  public entity: Entity;
-  public fields: EntityQueryField[];
+  public link: EntityLink;
   public options?: EntityQueryOptions;
 
-  constructor(entity: Entity, fields: EntityQueryField[], options?: EntityQueryOptions) {
-    this.entity = entity;
-    this.fields = fields;
+  constructor(query: EntityLink, options?: EntityQueryOptions) {
+    this.link = query;
     this.options = options;
   }
 
@@ -25,24 +22,17 @@ export class EntityQuery {
   }
 
   public static inspectorToObject(erModel: ERModel, inspector: IEntityQueryInspector): EntityQuery {
-    const entity = erModel.entity(inspector.entity);
-    const fields = inspector.fields.map((inspectorField) => (
-      EntityQueryField.inspectorToObject(erModel, entity, inspectorField)
-    ));
-    const options = inspector.options && EntityQueryOptions.inspectorToObject(entity, inspector.options);
+    const query = EntityLink.inspectorToObject(erModel, inspector.link);
+    const options = inspector.options && EntityQueryOptions.inspectorToObject(query.entity, inspector.options);
 
-    return new EntityQuery(entity, fields, options);
-  }
-
-  public serialize(): string {
-    return JSON.stringify(this.inspect());
+    return new EntityQuery(query, options);
   }
 
   public inspect(): IEntityQueryInspector {
-    return {
-      entity: this.entity.name,
-      fields: this.fields.map((field) => field.inspect()),
-      options: this.options && this.options.inspect()
-    };
+    const inspect: IEntityQueryInspector = {link: this.link.inspect()};
+    if (this.options) {
+      inspect.options = this.options.inspect();
+    }
+    return inspect;
   }
 }

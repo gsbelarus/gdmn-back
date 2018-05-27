@@ -1,9 +1,15 @@
+import bodyParser from "body-parser";
+import {AConnection} from "gdmn-db";
 import {GraphQLServer} from "graphql-yoga";
 import {Server as HttpServer} from "http";
 import {Server as HttpsServer} from "https";
 import {Application} from "./context/Application";
 import {User} from "./context/User";
 import databases from "./db/databases";
+import {EntityLink} from "./sql/models/EntityLink";
+import {EntityQuery} from "./sql/models/EntityQuery";
+import {EntityQueryField} from "./sql/models/EntityQueryField";
+import {SQLBuilder} from "./sql/SQLBuilder";
 
 interface IServer {
   application: Application;
@@ -20,7 +26,7 @@ async function create(): Promise<IServer> {
     context: (params) => User.login(application.context, {username: "user", password: "password"})
   });
 
-  graphQLServer.express.use((req, res, next) => {
+  graphQLServer.express.use(bodyParser.json(), (req, res, next) => {
     res.header("Access-Control-Allow-Origin", "*");
     res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
     next();
@@ -29,6 +35,66 @@ async function create(): Promise<IServer> {
   graphQLServer.express.get("/er", async (req, res) => {
     console.log("GET /er");
     res.send(JSON.stringify(application.erModel.serialize()));
+  });
+
+  graphQLServer.express.post("/data", async (req, res, next) => {  // TODO replace with GraphQL?
+    console.log("GET /data");
+    try {
+      const context = application.context;
+      const bodyQuery = EntityQuery.inspectorToObject(context.erModel, req.body);
+      const {sql, params, fieldAliases} = new SQLBuilder(context, bodyQuery).build();
+
+      const data = await AConnection.executeQueryResultSet({
+        connection: context.connection,
+        transaction: context.readTransaction,
+        sql,
+        params,
+        callback: async (resultSet) => {
+          const result = [];
+          while (await resultSet.next()) {
+            const row: { [key: string]: any } = {};
+            for (let i = 0; i < resultSet.metadata.columnCount; i++) {
+              // TODO binary blob support
+              row[resultSet.metadata.getColumnLabel(i)] = await resultSet.getAny(i);
+            }
+            result.push(row);
+          }
+          return result;
+        }
+      });
+
+      function deepFindLink(link: EntityLink, field: EntityQueryField): EntityLink {
+        const find = link.fields
+          .filter((qField) => !qField.link)
+          .some((qField) => qField === field);
+
+        if (find) {
+          return link;
+        }
+
+        for (const qField of link.fields) {
+          if (qField.link) {
+            const findLink = deepFindLink(qField.link, field);
+            if (findLink) {
+              return findLink;
+            }
+          }
+        }
+        return link;
+      }
+
+      const aliases = [];
+      for (const [key, value] of fieldAliases) {
+        aliases.push({
+          alias: deepFindLink(bodyQuery.link, key).alias,
+          attribute: key.attribute.name,
+          values: value
+        });
+      }
+      res.send({data, aliases});
+    } catch (error) {
+      next(error);
+    }
   });
 
   const server = await graphQLServer.start({
