@@ -4,16 +4,18 @@ import {
   Attribute2FieldMap,
   DetailAttributeMap,
   Entity,
+  EntityLink,
+  EntityQuery,
+  EntityQueryField,
+  IEntityLinkAlias,
+  IEntityQueryInspector,
+  IEntityQueryWhere,
   isDetailAttribute,
   isScalarAttribute,
   isSetAttribute,
   SetAttribute2CrossMap
 } from "gdmn-orm";
 import {Context} from "../context/Context";
-import {EntityLink} from "./models/EntityLink";
-import {EntityQuery, IEntityQueryInspector} from "./models/EntityQuery";
-import {EntityQueryField} from "./models/EntityQueryField";
-import {IEntityLinkAlias, IEntityQueryWhere} from "./models/EntityQueryOptions";
 import {SQLTemplates} from "./SQLTemplates";
 
 interface IEntityQueryAlias {

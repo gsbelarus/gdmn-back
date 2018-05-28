@@ -1,14 +1,12 @@
 import bodyParser from "body-parser";
 import {AConnection} from "gdmn-db";
+import {EntityLink, EntityQuery, EntityQueryField} from "gdmn-orm";
 import {GraphQLServer} from "graphql-yoga";
 import {Server as HttpServer} from "http";
 import {Server as HttpsServer} from "https";
 import {Application} from "./context/Application";
 import {User} from "./context/User";
 import databases from "./db/databases";
-import {EntityLink} from "./sql/models/EntityLink";
-import {EntityQuery} from "./sql/models/EntityQuery";
-import {EntityQueryField} from "./sql/models/EntityQueryField";
 import {SQLBuilder} from "./sql/SQLBuilder";
 
 interface IServer {

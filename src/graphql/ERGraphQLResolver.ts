@@ -1,10 +1,8 @@
 import {AConnection} from "gdmn-db";
+import {EntityLink, EntityQuery, EntityQueryField} from "gdmn-orm";
 import {GraphQLResolveInfo, isListType} from "graphql/type/definition";
 import NestHydrationJS from "nesthydrationjs";
 import {User} from "../context/User";
-import {EntityLink} from "../sql/models/EntityLink";
-import {EntityQuery} from "../sql/models/EntityQuery";
-import {EntityQueryField} from "../sql/models/EntityQueryField";
 import {IEntityQueryFieldAlias, SQLBuilder} from "../sql/SQLBuilder";
 import {IArgs, IERGraphQLResolver} from "./ERGraphQLSchema";
 import ERQueryAnalyzer, {IQuery} from "./ERQueryAnalyzer";
