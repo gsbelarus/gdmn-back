@@ -1,6 +1,6 @@
 import bodyParser from "body-parser";
 import {AConnection} from "gdmn-db";
-import {EntityLink, EntityQuery, EntityQueryField} from "gdmn-orm";
+import {EntityQuery} from "gdmn-orm";
 import {GraphQLServer} from "graphql-yoga";
 import {Server as HttpServer} from "http";
 import {Server as HttpsServer} from "https";
@@ -40,6 +40,7 @@ async function create(): Promise<IServer> {
     try {
       const context = application.context;
       const bodyQuery = EntityQuery.inspectorToObject(context.erModel, req.body);
+      console.log(bodyQuery);
       const {sql, params, fieldAliases} = new SQLBuilder(context, bodyQuery).build();
 
       const data = await AConnection.executeQueryResultSet({
@@ -61,30 +62,14 @@ async function create(): Promise<IServer> {
         }
       });
 
-      function deepFindLink(link: EntityLink, field: EntityQueryField): EntityLink {
-        const find = link.fields
-          .filter((qField) => !qField.link)
-          .some((qField) => qField === field);
-
-        if (find) {
-          return link;
-        }
-
-        for (const qField of link.fields) {
-          if (qField.link) {
-            const findLink = deepFindLink(qField.link, field);
-            if (findLink) {
-              return findLink;
-            }
-          }
-        }
-        return link;
-      }
-
       const aliases = [];
       for (const [key, value] of fieldAliases) {
+        const link = bodyQuery.link.deepFindLinkByField(key);
+        if (!link) {
+          throw new Error("Field not found");
+        }
         aliases.push({
-          alias: deepFindLink(bodyQuery.link, key).alias,
+          alias: link.alias,
           attribute: key.attribute.name,
           values: value
         });
