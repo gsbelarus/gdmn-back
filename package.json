@@ -15,7 +15,7 @@
   "license": "ISC",
   "dependencies": {
     "gdmn-er-bridge": "git://github.com/gsbelarus/gdmn-er-bridge.git",
-    "graphql-yoga": "^1.14.5",
+    "graphql-yoga": "^1.14.6",
     "nesthydrationjs": "^1.0.5"
   },
   "devDependencies": {

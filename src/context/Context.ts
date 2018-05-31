@@ -5,9 +5,9 @@ import {
   ATransaction,
   DBStructure,
   IConnectionOptions,
-  IDefaultConnectionPoolOptions
+  IDefaultConnectionPoolOptions,
+  TExecutor
 } from "gdmn-db";
-import {TExecutor} from "gdmn-db/dist/definitions/types";
 import {ERModel} from "gdmn-orm";
 import {ERGraphQLSchema} from "../graphql/ERGraphQLSchema";
 import {User} from "./User";
