@@ -28,6 +28,7 @@ import {
   GraphQLFieldConfigMap,
   GraphQLFieldResolver,
   GraphQLFloat,
+  GraphQLInputObjectType,
   GraphQLInt,
   GraphQLList,
   GraphQLNonNull,
@@ -35,8 +36,12 @@ import {
   GraphQLScalarType,
   GraphQLSchema,
   GraphQLString,
-  GraphQLUnionType
+  GraphQLUnionType,
+  isEnumType,
+  isInputObjectType,
+  isObjectType
 } from "graphql";
+import {GraphQLFieldConfigArgumentMap, GraphQLInputFieldConfigMap} from "graphql/type/definition";
 import {User} from "../context/User";
 import {GraphQLDate} from "./types/GraphQLDate";
 import {GraphQLDateTime} from "./types/GraphQLDateTime";
@@ -54,6 +59,7 @@ interface IContext {
   erModel: ERModel;
   resolver: IERGraphQLResolver;
   types: GraphQLObjectType[];
+  inputTypes: GraphQLInputObjectType[];
 }
 
 export type TLocale = "ru" | "en" | "by";
@@ -71,7 +77,8 @@ export class ERGraphQLSchema extends GraphQLSchema {
       locale,
       erModel,
       resolver,
-      types: []
+      types: [],
+      inputTypes: []
     };
 
     super({
@@ -89,8 +96,8 @@ export class ERGraphQLSchema extends GraphQLSchema {
           },
           entityData: {
             type: new GraphQLObjectType({
-              name: "EntityData", // FIXME possible conflicts
-              fields: () => ERGraphQLSchema._createDataTypeFields(context)
+              name: "EntityQuery", // FIXME possible conflicts
+              fields: ERGraphQLSchema._createQueryTypeFields(context)
             }),
             resolve: (source) => ({entityData: source})
           }
@@ -107,30 +114,22 @@ export class ERGraphQLSchema extends GraphQLSchema {
       .replace(/\./g, "_dot_");
   }
 
-  private static _createDataTypeFields(context: IContext): GraphQLFieldConfigMap<any, any> {
+  private static _createQueryTypeFields(context: IContext): GraphQLFieldConfigMap<any, any> {
     return Object.entries(context.erModel.entities)
       .filter(([entityName, entity]) => !entity.isAbstract)
       .reduce((fields, [entityName, entity]) => {
-        const entityType = ERGraphQLSchema._createEntityType(context, entity);
+        const lName = entity.lName[context.locale];
 
-        if (entityType) {
-          const lName = entity.lName[context.locale];
-
-          fields[ERGraphQLSchema._escapeName(context, entityName)] = {
-            type: new GraphQLList(entityType),
-            description: lName && lName.name,
-            resolve: context.resolver.queryResolver.bind(context.resolver)
-          };
-        }
+        fields[ERGraphQLSchema._escapeName(context, entityName)] = {
+          type: new GraphQLList(ERGraphQLSchema._createEntityType(context, entity)),
+          description: lName && lName.name,
+          resolve: context.resolver.queryResolver.bind(context.resolver)
+        };
         return fields;
       }, {} as GraphQLFieldConfigMap<any, any>);
   }
 
-  private static _createEntityType(context: IContext, entity: Entity): GraphQLObjectType | null {
-    if (!Object.keys(entity.attributes).length) {
-      return null;
-    }
-
+  private static _createEntityType(context: IContext, entity: Entity): GraphQLObjectType {
     const duplicate = context.types.find((item) => item.name === ERGraphQLSchema._escapeName(context, entity.name));
     if (duplicate) {
       return duplicate;
@@ -256,13 +255,7 @@ export class ERGraphQLSchema extends GraphQLSchema {
     entity: Entity,
     attribute: EntityAttribute
   ): GraphQLUnionType | GraphQLObjectType | GraphQLList<any> | null {
-    const entityTypes = attribute.entity.reduce((types, item) => {
-      const entityType = ERGraphQLSchema._createEntityType(context, item);
-      if (entityType) {
-        types.push(entityType);
-      }
-      return types;
-    }, [] as GraphQLObjectType[]);
+    const entityTypes = attribute.entity.map((item) => ERGraphQLSchema._createEntityType(context, item));
 
     if (entityTypes.length > 1) {
       const unionType = new GraphQLUnionType({
@@ -301,15 +294,13 @@ export class ERGraphQLSchema extends GraphQLSchema {
 
     return new GraphQLList(new GraphQLObjectType({
       name: ERGraphQLSchema._escapeName(context, `${entity.name}_SET_${attribute.name}`),
-      fields: () => {
-        return {
-          ...this._createScalarAttributes(context, entity, attribute.attributes),
-          [ERGraphQLSchema._escapeName(context, attribute.name)]: { // TODO possible conflict names ???
-            type: entityType,
-            description: lName && lName.name,
-            attribute
-          }
-        };
+      fields: {
+        ...this._createScalarAttributes(context, entity, attribute.attributes),
+        [ERGraphQLSchema._escapeName(context, attribute.name)]: { // TODO possible conflict names ???
+          type: entityType,
+          description: lName && lName.name,
+          attribute
+        }
       },
       isSet: true,
       entity
