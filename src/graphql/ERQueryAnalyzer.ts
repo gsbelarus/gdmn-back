@@ -39,8 +39,25 @@ export interface IQueryField {
   setAttributes?: Attribute[];
 }
 
+export interface IQueryOptionsWhereIsNullNested {
+  [fieldName: string]: IQueryOptionsWhereIsNull | { [fieldName: string]: IQueryOptionsWhereIsNull };
+}
+
+export interface IQueryOptionsWhereIsNull {
+  attribute: string;
+  nested: IQueryOptionsWhereIsNullNested;
+}
+
+export interface IQueryOptionsWhere {
+  isNull: IQueryOptionsWhereIsNull;
+}
+
+export interface IQueryOptions {
+  where: IQueryOptionsWhere;
+}
+
 export interface IQuery {
-  args: IArgs;
+  args?: IQueryOptions;
   entity: Entity;
   fields: IQueryField[];
 }
@@ -134,11 +151,11 @@ export default class ERQueryAnalyzer {
   private static analyze(fieldNode: FieldNode,
                          parentType: GraphQLType,
                          context: IContext): IQuery | undefined {
-    let args: IArgs = {};
+    let args: IQueryOptions | undefined;
 
     if (parentType instanceof GraphQLObjectType) {
       const field = parentType.getFields()[fieldNode.name.value];
-      args = getArgumentValues(field, fieldNode, context.variableValues);
+      args = getArgumentValues(field, fieldNode, context.variableValues) as IQueryOptions;
 
       const {type} = ERQueryAnalyzer.skipWrappingTypes(field.type);
       const skippedRelay = ERQueryAnalyzer.skipRelayConnection(type, fieldNode, context);
@@ -180,15 +197,17 @@ export default class ERQueryAnalyzer {
           query.fields = selections.reduce((fields, selection) => {
             if (selection.kind === "Field" && isObjectType(parentType)) {
               const field = parentType.getFields()[selection.name.value];
-              const attribute: Attribute = (field as any).attribute;
-              if (attribute) {
-                const {isArray} = ERQueryAnalyzer.skipWrappingTypes(field.type);
-                fields.push({
-                  attribute,
-                  isArray,
-                  selectionValue: selection.name.value,
-                  query: ERQueryAnalyzer.analyze(selection, parentType, context)
-                });
+              if (field) {
+                const attribute: Attribute = (field as any).attribute;
+                if (attribute) {
+                  const {isArray} = ERQueryAnalyzer.skipWrappingTypes(field.type);
+                  fields.push({
+                    attribute,
+                    isArray,
+                    selectionValue: selection.name.value,
+                    query: ERQueryAnalyzer.analyze(selection, parentType, context)
+                  });
+                }
               }
             }
             return fields;

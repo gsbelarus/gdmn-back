@@ -36,10 +36,7 @@ import {
   GraphQLScalarType,
   GraphQLSchema,
   GraphQLString,
-  GraphQLUnionType,
-  isEnumType,
-  isInputObjectType,
-  isObjectType
+  GraphQLUnionType
 } from "graphql";
 import {GraphQLFieldConfigArgumentMap, GraphQLInputFieldConfigMap} from "graphql/type/definition";
 import {User} from "../context/User";
@@ -60,6 +57,8 @@ interface IContext {
   resolver: IERGraphQLResolver;
   types: GraphQLObjectType[];
   inputTypes: GraphQLInputObjectType[];
+  nullableFieldsEnumTypes: GraphQLEnumType[];
+  aliasesFields: { [entityName: string]: GraphQLInputFieldConfigMap };
 }
 
 export type TLocale = "ru" | "en" | "by";
@@ -78,7 +77,9 @@ export class ERGraphQLSchema extends GraphQLSchema {
       erModel,
       resolver,
       types: [],
-      inputTypes: []
+      inputTypes: [],
+      nullableFieldsEnumTypes: [],
+      aliasesFields: {}
     };
 
     super({
@@ -122,6 +123,7 @@ export class ERGraphQLSchema extends GraphQLSchema {
 
         fields[ERGraphQLSchema._escapeName(context, entityName)] = {
           type: new GraphQLList(ERGraphQLSchema._createEntityType(context, entity)),
+          args: ERGraphQLSchema._createQueryArgs(context, entity),
           description: lName && lName.name,
           resolve: context.resolver.queryResolver.bind(context.resolver)
         };
@@ -305,5 +307,119 @@ export class ERGraphQLSchema extends GraphQLSchema {
       isSet: true,
       entity
     }));
+  }
+
+  private static _createQueryArgs(context: IContext, entity: Entity): GraphQLFieldConfigArgumentMap {
+    const args: GraphQLFieldConfigArgumentMap = {};
+
+    const where = ERGraphQLSchema._createWhereInputType(context, entity);
+    if (where) {
+      args.where = {type: where};
+    }
+
+    return args;
+  }
+
+  private static _createWhereInputType(context: IContext, entity: Entity): GraphQLInputObjectType | undefined {
+    const entityName = ERGraphQLSchema._escapeName(context, entity.name);
+
+    const whereType = new GraphQLInputObjectType({
+      name: `${entityName}_Where`,
+      fields: () => {
+        const whereFields: GraphQLInputFieldConfigMap = {};
+
+        const isNullType = ERGraphQLSchema._createIsNullType(context, entity);
+        if (Object.keys(isNullType).length) {
+          whereFields.isNull = {type: isNullType};
+        }
+
+        return whereFields;
+      }
+    });
+
+    if (Object.keys(whereType.getFields()).length) {
+      return whereType;
+    }
+  }
+
+  private static _createIsNullType(context: IContext, entity: Entity): GraphQLInputObjectType {
+    const entityName = ERGraphQLSchema._escapeName(context, entity.name);
+
+    const duplicate = context.inputTypes.find((item) => item.name === `${entityName}_IsNull`);
+    if (duplicate) {
+      return duplicate;
+    }
+
+    const lName = entity.lName[context.locale];
+    const type = new GraphQLInputObjectType({
+      name: `${entityName}_IsNull`,
+      description: lName && lName.name,
+      fields: () => {
+        const fields: GraphQLInputFieldConfigMap = {_dummyField: {type: GraphQLBoolean}};
+
+        const isNullType = ERGraphQLSchema._createIsNullEnumType(context, entity);
+        if (isNullType) {
+          fields.attribute = {type: isNullType};
+        }
+
+        fields.nested = {
+          type: new GraphQLInputObjectType({
+            name: `${entityName}_IsNull_Nested`,
+            fields: () => Object.values(entity.attributes).reduce((nestedFields, attribute) => {
+              if (isEntityAttribute(attribute)) {
+                if (attribute.entity.length) {
+                  const attributeName = ERGraphQLSchema._escapeName(context, attribute.name);
+                  let nestedType: GraphQLInputObjectType | undefined;
+                  if (attribute.entity.length > 1) {
+                    nestedType = new GraphQLInputObjectType({
+                      name: `${entityName}_${attributeName}_IsNull_Union`,
+                      fields: attribute.entity.reduce((unionFields, nestedEntity) => {
+                        const unionEntityName = ERGraphQLSchema._escapeName(context, nestedEntity.name);
+                        unionFields[unionEntityName] = {
+                          type: ERGraphQLSchema._createIsNullType(context, nestedEntity)
+                        };
+                        return unionFields;
+                      }, {} as GraphQLInputFieldConfigMap)
+                    });
+                  } else if (attribute.entity.length === 1) {
+                    nestedType = ERGraphQLSchema._createIsNullType(context, attribute.entity[0]);
+                  }
+                  if (nestedType) {
+                    nestedFields[`${attributeName}`] = {type: nestedType};
+                  }
+                }
+              }
+              return nestedFields;
+            }, {_dummyField: {type: GraphQLBoolean}} as GraphQLInputFieldConfigMap)
+          })
+        };
+        return fields;
+      }
+    });
+    context.inputTypes.push(type);
+
+    return type;
+  }
+
+  private static _createIsNullEnumType(context: IContext, entity: Entity): GraphQLEnumType | undefined {
+    const entityName = ERGraphQLSchema._escapeName(context, entity.name);
+
+    const nullValues = Object.values(entity.attributes)
+      .filter((attribute) => !attribute.required)
+      .reduce((values, attribute) => {
+        const lName = attribute.lName && attribute.lName[context.locale];
+        values[ERGraphQLSchema._escapeName(context, attribute.name)] = {
+          value: attribute.name,
+          description: lName && lName.name
+        };
+        return values;
+      }, {} as GraphQLEnumValueConfigMap);
+
+    if (Object.keys(nullValues).length) {
+      return new GraphQLEnumType({
+        name: `${entityName}_IsNull_Attr`,
+        values: nullValues
+      });
+    }
   }
 }

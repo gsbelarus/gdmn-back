@@ -38,10 +38,13 @@ export class ERGraphQLResolver implements IERGraphQLResolver {
       });
 
       let definition = this._getDefinition(query, entityLink, fieldAliases);
-      if (isListType(info.returnType)) {
-        definition = [definition];
+
+      if (definition) {
+        if (isListType(info.returnType)) {
+          definition = [definition];
+        }
+        return NestHydrationJS().nest(data, definition);
       }
-      return NestHydrationJS().nest(data, definition);
     }
     return null;
   }
@@ -70,13 +73,13 @@ export class ERGraphQLResolver implements IERGraphQLResolver {
   }
 
   private _getDefinition(query: IQuery,
-                         entityQuery: EntityLink,
-                         fieldAliases: Map<EntityQueryField, IEntityQueryFieldAlias>): any {
+                         link: EntityLink,
+                         fieldAliases: Map<EntityQueryField, IEntityQueryFieldAlias>): any | undefined {
     const definition: any = {};
 
     query.fields.reduce((def, field) => {
       if (!field.query) {
-        const eQField = entityQuery.fields.find((entityField) => entityField.attribute === field.attribute);
+        const eQField = link.fields.find((entityField) => entityField.attribute === field.attribute);
         if (eQField) {
           const fieldAlias = fieldAliases.get(eQField);
           if (fieldAlias) {
@@ -89,15 +92,20 @@ export class ERGraphQLResolver implements IERGraphQLResolver {
 
     query.fields.reduce((def, field) => {
       if (field.query) {
-        const eQField = entityQuery.fields.find((entityField) => entityField.attribute === field.attribute);
+        const eQField = link.fields.find((entityField) => entityField.attribute === field.attribute);
         if (eQField && eQField.link) {
-          def[field.selectionValue] = field.isArray
-            ? [this._getDefinition(field.query, eQField.link, fieldAliases)]
-            : this._getDefinition(field.query, eQField.link, fieldAliases);
+          const nestedDef = this._getDefinition(field.query, eQField.link, fieldAliases);
+          if (nestedDef) {
+            def[field.selectionValue] = field.isArray ? [nestedDef] : nestedDef;
+          }
         }
       }
       return def;
     }, definition);
+
+    if (!Object.keys(definition).length) {
+      return;
+    }
 
     return definition;
   }
