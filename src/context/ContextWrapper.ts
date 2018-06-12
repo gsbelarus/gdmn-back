@@ -29,14 +29,6 @@ export abstract class ContextWrapper extends Context {
     return this._context.connectionPool;
   }
 
-  get connection(): AConnection {
-    return this._context.connection;
-  }
-
-  get readTransaction(): ATransaction {
-    return this._context.readTransaction;
-  }
-
   get erModel(): ERModel {
     return this._context.erModel;
   }

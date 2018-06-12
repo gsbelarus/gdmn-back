@@ -2,7 +2,6 @@ import {
   AConnection,
   AConnectionPool,
   ADriver,
-  ATransaction,
   DBStructure,
   IConnectionOptions,
   IDefaultConnectionPoolOptions,
@@ -23,8 +22,6 @@ export interface ISources {
   dbDetail: IDBDetail;
   dbStructure: DBStructure;
   connectionPool: AConnectionPool<IDefaultConnectionPoolOptions>;
-  connection: AConnection;
-  readTransaction: ATransaction;
   erModel: ERModel;
   erGraphQLSchema: ERGraphQLSchema;
   users?: User[];
@@ -59,20 +56,6 @@ export abstract class Context {
   get connectionPool(): AConnectionPool<IDefaultConnectionPoolOptions> {
     if (this._sources) {
       return this._sources.connectionPool;
-    }
-    throw new Error("No context");
-  }
-
-  get connection(): AConnection {
-    if (this._sources) {
-      return this._sources.connection;
-    }
-    throw new Error("No context");
-  }
-
-  get readTransaction(): ATransaction {
-    if (this._sources) {
-      return this._sources.readTransaction;
     }
     throw new Error("No context");
   }

@@ -1,4 +1,4 @@
-import {AConnection} from "gdmn-db";
+import {AccessMode, AConnection} from "gdmn-db";
 import {EntityLink, EntityQuery, EntityQueryField} from "gdmn-orm";
 import {GraphQLResolveInfo, isListType} from "graphql/type/definition";
 import NestHydrationJS from "nesthydrationjs";
@@ -18,24 +18,29 @@ export class ERGraphQLResolver implements IERGraphQLResolver {
 
       const {sql, params, fieldAliases} = new SQLBuilder(context, entityQuery).build();
 
-      const data = await AConnection.executeQueryResultSet({
-        connection: context.connection,
-        transaction: context.readTransaction,
-        sql,
-        params,
-        callback: async (resultSet) => {
-          const result = [];
-          while (await resultSet.next()) {
-            const row: { [key: string]: any } = {};
-            for (let i = 0; i < resultSet.metadata.columnCount; i++) {
-              // TODO binary blob support
-              row[resultSet.metadata.getColumnLabel(i)] = await resultSet.getAny(i);
+      const data = await context.executeConnection((connection) => AConnection.executeTransaction({
+          connection,
+          options: {accessMode: AccessMode.READ_ONLY},
+          callback: (transaction) => AConnection.executeQueryResultSet({
+            connection,
+            transaction,
+            sql,
+            params,
+            callback: async (resultSet) => {
+              const result = [];
+              while (await resultSet.next()) {
+                const row: { [key: string]: any } = {};
+                for (let i = 0; i < resultSet.metadata.columnCount; i++) {
+                  // TODO binary blob support
+                  row[resultSet.metadata.getColumnLabel(i)] = await resultSet.getAny(i);
+                }
+                result.push(row);
+              }
+              return result;
             }
-            result.push(row);
-          }
-          return result;
-        }
-      });
+          })
+        })
+      );
 
       let definition = this._getDefinition(query, entityLink, fieldAliases);
 
