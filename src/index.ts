@@ -21,16 +21,16 @@ async function create(): Promise<IServer> {
 
   const graphQLServer = new GraphQLServer({
     schema: application.erGraphQLSchema,
-    context: (params) => User.login(application.context, {username: "user", password: "password"})
+    context: (_params) => User.login(application.context, {username: "user", password: "password"})
   });
 
-  graphQLServer.express.use(bodyParser.json(), (req, res, next) => {
+  graphQLServer.express.use(bodyParser.json(), (_req, res, next) => {
     res.header("Access-Control-Allow-Origin", "*");
     res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
     next();
   });
 
-  graphQLServer.express.get("/er", async (req, res) => {
+  graphQLServer.express.get("/er", async (_req, res) => {
     console.log("GET /er");
     res.send(JSON.stringify(application.erModel.serialize()));
   });

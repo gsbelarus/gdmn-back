@@ -1,4 +1,4 @@
-import {AConnection, AConnectionPool, ATransaction, DBStructure, IDefaultConnectionPoolOptions} from "gdmn-db";
+import {AConnectionPool, DBStructure, IDefaultConnectionPoolOptions} from "gdmn-db";
 import {ERModel} from "gdmn-orm";
 import {ERGraphQLSchema} from "../graphql/ERGraphQLSchema";
 import {Context, IDBDetail} from "./Context";

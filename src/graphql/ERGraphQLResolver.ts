@@ -9,7 +9,7 @@ import ERQueryAnalyzer, {IQuery} from "./ERQueryAnalyzer";
 
 export class ERGraphQLResolver implements IERGraphQLResolver {
 
-  public async queryResolver(source: any, args: IArgs, context: User, info: GraphQLResolveInfo): Promise<any> {
+  public async queryResolver(_source: any, _args: IArgs, context: User, info: GraphQLResolveInfo): Promise<any> {
     const queries = ERQueryAnalyzer.resolveInfo(info);
     if (queries.length) {
       const query = queries[0];

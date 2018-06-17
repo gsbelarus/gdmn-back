@@ -69,7 +69,7 @@ export interface IArgs {
 
 export class ERGraphQLSchema extends GraphQLSchema {
 
-  private _context: IContext;
+  // private _context: IContext;
 
   constructor(erModel: ERModel, locale: TLocale, resolver: IERGraphQLResolver) {
     const context: IContext = {
@@ -89,7 +89,7 @@ export class ERGraphQLSchema extends GraphQLSchema {
           entityModel: {
             type: GraphQLJSON,
             args: {name: {type: GraphQLString}},
-            resolve: (source, args) => context.erModel.entity(args.name).serialize()
+            resolve: (_source, args) => context.erModel.entity(args.name).serialize()
           },
           entityModels: {
             type: GraphQLJSON,
@@ -106,10 +106,10 @@ export class ERGraphQLSchema extends GraphQLSchema {
       })
     });
 
-    this._context = context;
+    // this._context = context;
   }
 
-  private static _escapeName(context: IContext, name: string): string {  // TODO tmp
+  private static _escapeName(_context: IContext, name: string): string {  // TODO tmp
     return name
       .replace(/\$/g, "_dollar_")
       .replace(/\./g, "_dot_");
@@ -117,7 +117,7 @@ export class ERGraphQLSchema extends GraphQLSchema {
 
   private static _createQueryTypeFields(context: IContext): GraphQLFieldConfigMap<any, any> {
     return Object.entries(context.erModel.entities)
-      .filter(([entityName, entity]) => !entity.isAbstract)
+      .filter(([, entity]) => !entity.isAbstract)
       .reduce((fields, [entityName, entity]) => {
         const lName = entity.lName[context.locale];
 
@@ -263,7 +263,7 @@ export class ERGraphQLSchema extends GraphQLSchema {
       const unionType = new GraphQLUnionType({
         name: ERGraphQLSchema._escapeName(context, `${entity.name}_UNION_${attribute.name}`),
         types: entityTypes,
-        resolveType: (source, ctx, info) => { // FIXME
+        resolveType: (_source, _ctx, info) => { // FIXME
           const selection = info.fieldNodes[0].selectionSet!.selections[0];
           if (selection.kind === "InlineFragment"
             && selection.typeCondition

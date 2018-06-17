@@ -344,7 +344,7 @@ export class SQLBuilder {
       return equals;
     }, [] as string[]);
 
-    return link.fields.reduce((equals, field) => { // FIXME ???
+    return link.fields.reduce((equals, _field) => { // FIXME ???
       // if (field.link) {
       //   return equals.concat(this._makeWhereLinkConditions(field.link));
       // }
