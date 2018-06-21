@@ -7,13 +7,14 @@
 */
 
 import {Factory} from "gdmn-db";
-import {IDBDetail} from "../Context";
+import {IDBDetail} from "../context/Context";
 
 const test: IDBDetail = {
   alias: "some alias",
   driver: Factory.FBDriver,
   poolOptions: {
-    max: 3
+    max: 3,
+    acquireTimeoutMillis: 60000
   },
   connectionOptions: {
     host: "host name",

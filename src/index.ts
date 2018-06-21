@@ -17,7 +17,7 @@ interface IServer {
 async function create(): Promise<IServer> {
   const env = process.env.NODE_ENV || "development";
 
-  const application = await Application.create(databases.broiler);
+  const application = await Application.create(databases.test);
 
   const graphQLServer = new GraphQLServer({
     schema: application.erGraphQLSchema,
