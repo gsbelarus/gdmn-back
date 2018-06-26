@@ -79,7 +79,11 @@ async function create(): Promise<IServer> {
           values: value
         });
       }
-      res.send({data, aliases});
+      res.send({
+        data,
+        aliases,
+        sql
+      });
     } catch (error) {
       next(error);
     }
