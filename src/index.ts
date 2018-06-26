@@ -82,7 +82,10 @@ async function create(): Promise<IServer> {
       res.send({
         data,
         aliases,
-        sql
+        sql: {
+          query: sql,
+          params
+        }
       });
     } catch (error) {
       next(error);
