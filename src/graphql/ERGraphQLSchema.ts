@@ -39,7 +39,7 @@ import {
   GraphQLUnionType
 } from "graphql";
 import {GraphQLFieldConfigArgumentMap, GraphQLInputFieldConfigMap} from "graphql/type/definition";
-import {User} from "../context/User";
+import {Context} from "../context/Context";
 import {GraphQLDate} from "./types/GraphQLDate";
 import {GraphQLDateTime} from "./types/GraphQLDateTime";
 import GraphQLJSON from "./types/GraphQLJSON";
@@ -48,7 +48,7 @@ import {GraphQLSeqInt} from "./types/GraphQLSeqInt";
 import {GraphQLTime} from "./types/GraphQLTime";
 
 export interface IERGraphQLResolver {
-  queryResolver: GraphQLFieldResolver<any, User, IArgs>;
+  queryResolver: GraphQLFieldResolver<any, Context, IArgs>;
 }
 
 interface IContext {

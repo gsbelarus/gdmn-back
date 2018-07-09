@@ -2,14 +2,14 @@ import {AccessMode, AConnection} from "gdmn-db";
 import {EntityLink, EntityQuery, EntityQueryField} from "gdmn-orm";
 import {GraphQLResolveInfo, isListType} from "graphql/type/definition";
 import NestHydrationJS from "nesthydrationjs";
-import {User} from "../context/User";
+import {Context} from "../context/Context";
 import {IEntityQueryFieldAlias, SQLBuilder} from "../sql/SQLBuilder";
 import {IArgs, IERGraphQLResolver} from "./ERGraphQLSchema";
 import ERQueryAnalyzer, {IQuery} from "./ERQueryAnalyzer";
 
 export class ERGraphQLResolver implements IERGraphQLResolver {
 
-  public async queryResolver(_source: any, _args: IArgs, context: User, info: GraphQLResolveInfo): Promise<any> {
+  public async queryResolver(_source: any, _args: IArgs, context: Context, info: GraphQLResolveInfo): Promise<any> {
     const queries = ERQueryAnalyzer.resolveInfo(info);
     if (queries.length) {
       const query = queries[0];

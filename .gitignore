@@ -1,6 +1,9 @@
 lib
 dist
 
+# Firebird
+*.fdb
+
 # VS Code
 .vscode
 

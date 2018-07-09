@@ -1,118 +1,78 @@
-import bodyParser from "body-parser";
-import {AccessMode, AConnection} from "gdmn-db";
-import {EntityQuery} from "gdmn-orm";
-import {GraphQLServer} from "graphql-yoga";
-import {Server as HttpServer} from "http";
-import {Server as HttpsServer} from "https";
-import {Application} from "./context/Application";
-import {User} from "./context/User";
-import databases from "./db/databases";
-import {SQLBuilder} from "./sql/SQLBuilder";
+import config from "config";
+import http, {Server as HttpServer} from "http";
+import Koa from "koa";
+import bodyParser from "koa-bodyParser";
+import errorHandler from "koa-error";
+import logger from "koa-logger";
+import Router from "koa-router";
+import serve from "koa-static";
+import cors from "koa2-cors";
+import {ApplicationManager} from "./ApplicationManager";
+import {ErrorCodes, throwCtx} from "./ErrorCodes";
+import passport from "./passport";
+import account from "./router/account";
+import app from "./router/app";
 
 interface IServer {
-  application: Application;
-  server: HttpServer | HttpsServer;
+  appManager: ApplicationManager;
+  httpServer?: HttpServer;
 }
 
 async function create(): Promise<IServer> {
   const env = process.env.NODE_ENV || "development";
 
-  const application = await Application.create(databases.test);
+  const appManager = new ApplicationManager();
+  await appManager.create();
 
-  const graphQLServer = new GraphQLServer({
-    schema: application.erGraphQLSchema,
-    context: (_params) => User.login(application.context, {username: "user", password: "password"})
+  const serverApp = new Koa()
+    .use(logger())
+    .use(serve(config.get("server.publicDir")))
+    .use(bodyParser())
+    .use(passport.initialize())
+    .use(cors())
+    .use(errorHandler());
+
+  serverApp.use(async (ctx, next) => {
+    ctx.state.appManager = appManager;
+    await next();
   });
 
-  graphQLServer.express.use(bodyParser.json(), (_req, res, next) => {
-    res.header("Access-Control-Allow-Origin", "*");
-    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
-    next();
-  });
+  const router = new Router()
+    .use("/account", account.routes(), account.allowedMethods())
+    .use("/app", passport.authenticate("jwt"), app.routes(), app.allowedMethods());
 
-  graphQLServer.express.get("/er", async (_req, res) => {
-    console.log("GET /er");
-    res.send(JSON.stringify(application.erModel.serialize()));
-  });
+  serverApp
+    .use(router.routes())
+    .use(router.allowedMethods())
+    .use((ctx) => throwCtx(ctx, 404, "Not found", ErrorCodes.NOT_FOUND, ["route"]));
 
-  graphQLServer.express.post("/data", async (req, res, next) => {  // TODO replace with GraphQL?
-    console.log("GET /data");
-    try {
-      const context = application.context;
-      const bodyQuery = EntityQuery.inspectorToObject(context.erModel, req.body);
+  let httpServer: HttpServer | undefined;
+  if (config.get("server.http.enabled")) {
+    httpServer = http.createServer(serverApp.callback());
+    httpServer.listen(config.get("server.http.port"), config.get("server.http.host"));
+    httpServer.on("error", serverErrorHandler);
+    httpServer.on("listening", () => {
+      console.log(`Listening on http://${httpServer!.address().address}:${httpServer!.address().port}; env: ${env}`);
+    });
+  }
 
-      const {sql, params, fieldAliases} = new SQLBuilder(context, bodyQuery).build();
-
-      const data = await context.executeConnection((connection) => AConnection.executeTransaction({
-          connection,
-          options: {accessMode: AccessMode.READ_ONLY},
-          callback: (transaction) => AConnection.executeQueryResultSet({
-            connection,
-            transaction,
-            sql,
-            params,
-            callback: async (resultSet) => {
-              const result = [];
-              while (await resultSet.next()) {
-                const row: { [key: string]: any } = {};
-                for (let i = 0; i < resultSet.metadata.columnCount; i++) {
-                  // TODO binary blob support
-                  row[resultSet.metadata.getColumnLabel(i)] = await resultSet.getAny(i);
-                }
-                result.push(row);
-              }
-              return result;
-            }
-          })
-        })
-      );
-
-      const aliases = [];
-      for (const [key, value] of fieldAliases) {
-        const link = bodyQuery.link.deepFindLinkByField(key);
-        if (!link) {
-          throw new Error("Field not found");
-        }
-        aliases.push({
-          alias: link.alias,
-          attribute: key.attribute.name,
-          values: value
-        });
-      }
-      res.send({
-        data,
-        aliases,
-        sql: {
-          query: sql,
-          params
-        }
-      });
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  const server = await graphQLServer.start({
-    tracing: env === "development",
-    port: 4000
-  });
-  console.log(`Server is running on http://localhost:${server.address().port}`);
-
-  return {application, server};
+  return {appManager, httpServer};
 }
 
 const creating = create();
-creating.catch(console.error);
 
 process.on("SIGINT", exit);
 process.on("SIGTERM", exit);
 
 async function exit(): Promise<void> {
   try {
-    const {application, server} = await creating;
+    const {appManager, httpServer} = await creating;
 
-    await new Promise((resolve) => server.close(resolve));
-    await Application.destroy(application);
+    if (httpServer) {
+      httpServer.removeAllListeners();
+      await new Promise((resolve) => httpServer.close(resolve));
+    }
+    await appManager.destroy();
 
   } catch (error) {
     switch (error.message) {
@@ -125,5 +85,23 @@ async function exit(): Promise<void> {
   } finally {
     console.log("Application destroyed");
     process.exit();
+  }
+}
+
+function serverErrorHandler(error: NodeJS.ErrnoException): void {
+  if (error.syscall !== "listen") {
+    throw error;
+  }
+  switch (error.code) {
+    case "EACCES":
+      console.error("Port requires elevated privileges");
+      process.exit();
+      break;
+    case "EADDRINUSE":
+      console.error("Port is already in use");
+      process.exit();
+      break;
+    default:
+      throw error;
   }
 }

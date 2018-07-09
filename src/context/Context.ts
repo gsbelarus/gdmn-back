@@ -8,8 +8,6 @@ import {
   TExecutor
 } from "gdmn-db";
 import {ERModel} from "gdmn-orm";
-import {ERGraphQLSchema} from "../graphql/ERGraphQLSchema";
-import {User} from "./User";
 
 export interface IDBDetail<ConnectionOptions extends IConnectionOptions = IConnectionOptions> {
   alias: string;
@@ -23,8 +21,6 @@ export interface ISources {
   dbStructure: DBStructure;
   connectionPool: AConnectionPool<IDefaultConnectionPoolOptions>;
   erModel: ERModel;
-  erGraphQLSchema: ERGraphQLSchema;
-  users?: User[];
 }
 
 export abstract class Context {
@@ -40,48 +36,31 @@ export abstract class Context {
   }
 
   get dbDetail(): IDBDetail {
-    if (this._sources) {
-      return this._sources.dbDetail;
+    if (!this._sources) {
+      throw new Error("No context");
     }
-    throw new Error("No context");
+    return this._sources.dbDetail;
   }
 
   get dbStructure(): DBStructure {
-    if (this._sources) {
-      return this._sources.dbStructure;
+    if (!this._sources) {
+      throw new Error("No context");
     }
-    throw new Error("No context");
+    return this._sources.dbStructure;
   }
 
   get connectionPool(): AConnectionPool<IDefaultConnectionPoolOptions> {
-    if (this._sources) {
-      return this._sources.connectionPool;
+    if (!this._sources) {
+      throw new Error("No context");
     }
-    throw new Error("No context");
+    return this._sources.connectionPool;
   }
 
   get erModel(): ERModel {
-    if (this._sources) {
-      return this._sources.erModel;
+    if (!this._sources) {
+      throw new Error("No context");
     }
-    throw new Error("No context");
-  }
-
-  get erGraphQLSchema(): ERGraphQLSchema {
-    if (this._sources) {
-      return this._sources.erGraphQLSchema;
-    }
-    throw new Error("No context");
-  }
-
-  get users(): User[] {
-    if (this._sources) {
-      if (!this._sources.users) {
-        this._sources.users = [];
-      }
-      return this._sources.users;
-    }
-    throw new Error("No context");
+    return this._sources.erModel;
   }
 
   public async executeConnection<R>(callback: TExecutor<AConnection, R>): Promise<R> {
