@@ -18,7 +18,7 @@
 2. Run next commands
     ```bash 
     $ ln -s /Library/Frameworks/Firebird.framework/Versions/A/Firebird /usr/local/lib/libfbclient.dylib
-    $ npm install gdmn-db
+    $ npm install
     ```
 
 ### Linux
