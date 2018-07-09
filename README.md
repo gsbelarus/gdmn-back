@@ -1,8 +1,8 @@
-#gdmn-back (DEV)
+# gdmn-back (DEV)
 
-##Install
+## Install
 
-###Windows
+### Windows
 1. Install [Firebird](https://www.firebirdsql.org/en/firebird-3-0/) version greater than or equal to 3.0.
 2. Add to PATH `fbclient.dll`.
 3. Run next commands
@@ -13,7 +13,7 @@
     $ npm install gdmn-db
     ```
 
-###Mac OS X
+### Mac OS X
 1. Install [Firebird](https://www.firebirdsql.org/en/firebird-3-0/), [see also](https://www.firebirdsql.org/file/documentation/papers_presentations/html/paper-fb-macosx-install.html)
 2. Run next commands
     ```bash 
@@ -21,10 +21,12 @@
     $ npm install gdmn-db
     ```
 
-###Linux
+### Linux
 ...
 
 ## Usage
+
+### Startup
 1. Verify the configuration is correct (`./config/development.json`).
 2. Run command.
     ```bash 
