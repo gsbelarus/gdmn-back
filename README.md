@@ -4,7 +4,7 @@
 
 ### Windows
 1. Install [Firebird](https://www.firebirdsql.org/en/firebird-3-0/) version greater than or equal to 3.0.
-2. Add to PATH `fbclient.dll`.
+2. Add `fbclient.dll` directory to the PATH.
 3. Run next commands
 
     ```bash
