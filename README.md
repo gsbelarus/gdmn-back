@@ -10,7 +10,7 @@
     ```bash
     $ npm install --global --production windows-build-tools
     $ npm install --global node-gyp
-    $ npm install gdmn-db
+    $ npm install
     ```
 
 ### Mac OS X
