@@ -71,21 +71,29 @@ export class ApplicationManager {
     }
 
     // TODO tmp
-    this._applications.set(`broiler`, await Application.start({
-      alias: "broiler",
-      driver: Factory.FBDriver,
-      poolOptions: {
-        max: 3,
-        acquireTimeoutMillis: 60000
-      },
-      connectionOptions: {
-        host: "192.168.0.34",
-        port: 3053,
-        username: "SYSDBA",
-        password: "masterkey",
-        path: "k:\\bases\\broiler\\GDBASE_2017_10_02.FDB"
+    try {
+      this._applications.set(`broiler`, await Application.start({
+        alias: "broiler",
+        driver: Factory.FBDriver,
+        poolOptions: {
+          max: 3,
+          acquireTimeoutMillis: 60000
+        },
+        connectionOptions: {
+          host: "192.168.0.34",
+          port: 3053,
+          username: "SYSDBA",
+          password: "masterkey",
+          path: "k:\\bases\\broiler\\GDBASE_2017_10_02.FDB"
+        }
+      }, GDMNApplication));
+      const user = await this._mainApplication.findUser({login: "Administrator"});
+      if (user) {
+        await this._mainApplication.addApplicationInfo(user.id, {alias: "broiler", uid: "broiler"});
       }
-    }, GDMNApplication));
+    } catch (error) {
+      // ignore
+    }
 
     if (!existsSync(ApplicationManager.WORK_DIR)) {
       mkdirSync(ApplicationManager.WORK_DIR);

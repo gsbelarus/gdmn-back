@@ -100,9 +100,7 @@ export class MainApplication extends Application {
       }
     });
 
-    const user = await this.addUser({login: "Administrator", password: "Administrator", admin: true});
-    // TODO tmp
-    await this.addApplicationInfo(user.id, {alias: "broiler", uid: "broiler"});
+    await this.addUser({login: "Administrator", password: "Administrator", admin: true});
   }
 
   public async addUser(user: IUserInput): Promise<IUserOutput> {
