@@ -109,45 +109,19 @@ export class MainApplication extends Application {
 
     return await this.executeConnection((connection) => AConnection.executeTransaction({
       connection,
-      callback: (transaction) => AConnection.executeQueryResultSet({
-        connection,
-        transaction,
-        sql: `
-          EXECUTE BLOCK (
-            login                 VARCHAR(80)         = :login,
-            passwordHash          BLOB                = :passwordHash,
-            salt                  BLOB                = :salt,
-            isAdmin               SMALLINT            = :admin
-          )
-          RETURNS (ID INTEGER)
-          AS
-          BEGIN
-            INSERT INTO APP_USER (LOGIN, PASSWORD_HASH, SALT, IS_ADMIN)
-            VALUES (:login, :passwordHash, :salt, :isAdmin)
-            RETURNING ID INTO :ID;
-
-            SUSPEND;
-          END
-        `,
-        params: {
+      callback: async (transaction) => {
+        const result = await connection.executeReturning(transaction, `
+          INSERT INTO APP_USER (LOGIN, PASSWORD_HASH, SALT, IS_ADMIN)
+          VALUES (:login, :passwordHash, :salt, :isAdmin)
+          RETURNING ID
+        `, {
           login: user.login,
           passwordHash: Buffer.from(passwordHash),
           salt: Buffer.from(salt),
-          admin: user.admin
-        },
-        callback: async (resultSet) => {
-          if (await resultSet.next()) {
-            return {
-              id: resultSet.getNumber("ID"),
-              login: user.login,
-              passwordHash,
-              salt,
-              admin: user.admin
-            };
-          }
-          throw new Error("User not created");
-        }
-      })
+          isAdmin: user.admin
+        });
+        return result[0];
+      }
     }));
   }
 
