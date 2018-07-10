@@ -15,7 +15,8 @@
 
 ### Mac OS X
 1. Install [Firebird](https://www.firebirdsql.org/en/firebird-3-0/), [see also](https://www.firebirdsql.org/file/documentation/papers_presentations/html/paper-fb-macosx-install.html)
-2. Run next commands
+2. Install Xcode Command Line Tools
+3. Run next commands
     ```bash 
     $ ln -s /Library/Frameworks/Firebird.framework/Versions/A/Firebird /usr/local/lib/libfbclient.dylib
     $ npm install
