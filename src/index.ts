@@ -8,19 +8,20 @@ import Router from "koa-router";
 import serve from "koa-static";
 import cors from "koa2-cors";
 import {ApplicationManager} from "./ApplicationManager";
-import {ErrorCodes, throwCtx} from "./ErrorCodes";
+import {checkHandledError, ErrorCodes, throwCtx} from "./ErrorCodes";
 import passport from "./passport";
 import account from "./router/account";
 import app from "./router/app";
+import Application = require("koa");
 
 interface IServer {
   appManager: ApplicationManager;
   httpServer?: HttpServer;
 }
 
-async function create(): Promise<IServer> {
-  const env = process.env.NODE_ENV || "development";
+process.env.NODE_ENV = process.env.NODE_ENV || "development";
 
+async function create(): Promise<IServer> {
   const appManager = new ApplicationManager();
   await appManager.create();
 
@@ -30,7 +31,17 @@ async function create(): Promise<IServer> {
     .use(bodyParser())
     .use(passport.initialize())
     .use(cors())
-    .use(errorHandler());
+    .use(errorHandler())
+    .use(async (ctx, next) => {
+      try {
+        await next();
+      } catch (error) {
+        if (checkHandledError(error)) {
+          throw error;
+        }
+        throwCtx(ctx, 500, error, ErrorCodes.INTERNAL);
+      }
+    });
 
   serverApp.use(async (ctx, next) => {
     ctx.state.appManager = appManager;
@@ -46,17 +57,24 @@ async function create(): Promise<IServer> {
     .use(router.allowedMethods())
     .use((ctx) => throwCtx(ctx, 404, "Not found", ErrorCodes.NOT_FOUND, ["route"]));
 
+  return {
+    appManager,
+    httpServer: startHttpServer(serverApp)
+  };
+}
+
+function startHttpServer(serverApp: Application): HttpServer | undefined {
   let httpServer: HttpServer | undefined;
   if (config.get("server.http.enabled")) {
     httpServer = http.createServer(serverApp.callback());
     httpServer.listen(config.get("server.http.port"), config.get("server.http.host"));
     httpServer.on("error", serverErrorHandler);
     httpServer.on("listening", () => {
-      console.log(`Listening on http://${httpServer!.address().address}:${httpServer!.address().port}; env: ${env}`);
+      console.log(`Listening on http://${httpServer!.address().address}:${httpServer!.address().port};` +
+        ` env: ${process.env.NODE_ENV}`);
     });
   }
-
-  return {appManager, httpServer};
+  return httpServer;
 }
 
 const creating = create();

@@ -1,6 +1,7 @@
 import {IEntityQueryInspector} from "gdmn-orm";
 import Router from "koa-router";
 import {ApplicationManager} from "../ApplicationManager";
+import {Application} from "../context/Application";
 import {ErrorCodes, throwCtx} from "../ErrorCodes";
 
 function isAppManagerExists(obj: any): obj is { appManager: ApplicationManager } {
@@ -36,29 +37,25 @@ export default new Router()
   })
   .use("/:uid", async (ctx, next) => {
     const appManager = ctx.state.appManager as ApplicationManager;
-    const application = await appManager.get(ctx.state.user.id, ctx.params.uid);
-    if (!application) {
+    ctx.state.application = await appManager.get(ctx.state.user.id, ctx.params.uid);
+    if (!ctx.state.application) {
       throwCtx(ctx, 400, "Invalid application uid", ErrorCodes.INVALID_ARGUMENTS, ["uid"]);
     }
     await next();
   })
   .delete("/:uid", async (ctx) => {
     const appManager = ctx.state.appManager as ApplicationManager;
-    if (!await appManager.delete(ctx.state.user.id, ctx.params.uid)) {
-      throwCtx(ctx, 500, "Can't delete application", ErrorCodes.INTERNAL);
-    }
+    await appManager.delete(ctx.state.user.id, ctx.params.uid);
     return ctx.body = {uid: ctx.params.uid};
   })
   .get("/:uid/er", async (ctx) => {
-    const appManager = ctx.state.appManager as ApplicationManager;
-    const application = await appManager.get(ctx.state.user.id, ctx.params.uid);
-    return ctx.body = JSON.stringify(application!.erModel.serialize());
+    const application = ctx.state.application as Application;
+    return ctx.body = JSON.stringify(application.erModel.serialize());
   })
   .post("/:uid/data", async (ctx) => {
     if (isQueryExists(ctx.request.body)) {
-      const appManager = ctx.state.appManager as ApplicationManager;
-      const application = await appManager.get(ctx.state.user.id, ctx.params.uid);
-      return ctx.body = await application!.query(ctx.request.body.query);
+      const application = ctx.state.application as Application;
+      return ctx.body = await application.query(ctx.request.body.query);
     }
     throwCtx(ctx, 400, "Query is not provided", ErrorCodes.INVALID_ARGUMENTS, ["query"]);
   });
