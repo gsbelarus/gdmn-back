@@ -55,7 +55,7 @@ async function create(): Promise<IServer> {
   serverApp
     .use(router.routes())
     .use(router.allowedMethods())
-    .use((ctx) => throwCtx(ctx, 404, "Not found", ErrorCodes.NOT_FOUND, ["route"]));
+    .use((ctx) => throwCtx(ctx, 404, "Not found", ErrorCodes.NOT_FOUND));
 
   return {
     appManager,

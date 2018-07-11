@@ -39,7 +39,7 @@ export default new Router()
     const appManager = ctx.state.appManager as ApplicationManager;
     ctx.state.application = await appManager.get(ctx.state.user.id, ctx.params.uid);
     if (!ctx.state.application) {
-      throwCtx(ctx, 400, "Invalid application uid", ErrorCodes.INVALID_ARGUMENTS, ["uid"]);
+      throwCtx(ctx, 404, "Application not found", ErrorCodes.NOT_FOUND);
     }
     await next();
   })

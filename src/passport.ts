@@ -29,7 +29,7 @@ passport.use(new LocalStrategy({
       if (user) {
         return done(null, user);
       }
-      throwCtx(req.ctx, 400, "Invalid login or password", ErrorCodes.INVALID_ARGUMENTS,
+      throwCtx(req.ctx, 401, "Invalid login or password", ErrorCodes.INVALID_ARGUMENTS,
         [USERNAME_FIELD, PASSWORD_FIELD]);
     }
     throwCtx(req.ctx, 500, "ApplicationManager is not provided", ErrorCodes.INTERNAL);
@@ -50,7 +50,7 @@ passport.use(new JWTStrategy({
         if (user) {
           return done(null, user);
         }
-        throwCtx(req.ctx, 400, "Invalid auth token", ErrorCodes.INVALID_AUTH_TOKEN);
+        throwCtx(req.ctx, 401, "Invalid auth token", ErrorCodes.INVALID_AUTH_TOKEN);
       }
       throwCtx(req.ctx, 500, "ApplicationManager is not provided", ErrorCodes.INTERNAL);
     } catch (error) {
