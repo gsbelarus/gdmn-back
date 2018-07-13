@@ -227,8 +227,8 @@ export class MainApplication extends Application {
         transaction,
         sql: `
           SELECT
-            apps.ALIAS                                          AS ALIAS,
-            app.UID                                             AS UID
+            apps.ALIAS,
+            app.UID
           FROM APP_USER_APPLICATIONS apps
             LEFT JOIN APPLICATION app ON app.ID = apps.APP_KEY
           WHERE COALESCE(apps.DELETED, 0) = 0

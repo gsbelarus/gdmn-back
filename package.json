@@ -18,7 +18,7 @@
     "gdmn-er-bridge": "git://github.com/gsbelarus/gdmn-er-bridge.git",
     "graphql": "^0.13.2",
     "jsonwebtoken": "^8.3.0",
-    "koa": "^2.5.1",
+    "koa": "^2.5.2",
     "koa-bodyparser": "^4.2.1",
     "koa-error": "^3.2.0",
     "koa-logger": "^3.2.0",
@@ -32,7 +32,7 @@
     "uuid": "^3.3.2"
   },
   "devDependencies": {
-    "@types/config": "0.0.34",
+    "@types/config": "^0.0.34",
     "@types/graphql": "^0.13.3",
     "@types/jsonwebtoken": "^7.2.8",
     "@types/koa": "^2.0.46",
@@ -45,9 +45,9 @@
     "@types/passport-jwt": "^3.0.1",
     "@types/passport-local": "^1.0.33",
     "@types/uuid": "^3.4.3",
-    "nodemon": "^1.17.5",
+    "nodemon": "^1.18.1",
     "ts-node": "^7.0.0",
     "tslint": "^5.10.0",
-    "typescript": "^2.9.2"
+    "typescript": "^3.0.0-rc"
   }
 }
