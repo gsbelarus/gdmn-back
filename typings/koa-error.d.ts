@@ -1,9 +1,8 @@
-/* tslint:disable */
 declare module "koa-error" {
 
   import * as Koa from "koa";
 
-  interface Options {
+  interface IOptions {
     template?: string;
     engine?: string;
     cache?: boolean;
@@ -11,8 +10,5 @@ declare module "koa-error" {
     accepts?: string[];
   }
 
-  declare function error(options?: Options): Koa.Middleware;
-
-  export = error;
+  export default function error(options?: IOptions): Koa.Middleware;
 }
-/* tslint:enable */
