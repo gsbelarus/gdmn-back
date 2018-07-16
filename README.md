@@ -35,6 +35,10 @@
     ```
 3. Wait for initialization and startup
 
+##### For old verison of gdmn-front:
+1. Clone config file `./db/database.ts.sample` to the same directory and rename it to `./db/database.ts`
+2. Fill this config file
+
 ### Endpoints
 
 HEADERS:  
@@ -43,7 +47,7 @@ HEADERS:
 `Accept: text/html` - for errors in the response as html  
 `Accept: application/json` - for errors in the response as json  
 
-#### Create account
+##### Create account
 Request: `POST` - `/account`  
 ```json
 {
@@ -58,7 +62,7 @@ Response:
 }
 ```
 
-#### Login
+##### Login
 Request: `POST` - `/account/login`  
 ```json
 {
@@ -73,7 +77,7 @@ Response:
 }
 ```
 
-#### Create application
+##### Create application
 Request: `POST` - `/app`   
 ```json
 {
@@ -87,7 +91,7 @@ Response:
 }
 ```
 
-#### Delete application
+##### Delete application
 Request: `DELETE` - `/app/:uid`  
 Response:
 ```json
@@ -96,7 +100,7 @@ Response:
 }
 ```
 
-#### Get applications
+##### Get applications
 Request: `GET` - `/app`  
 Response:
 ```json
@@ -106,10 +110,10 @@ Response:
 }]
 ```
 
-#### Application endpoints
+##### Application endpoints
 Request: `GET` - `/app/:uid/er`  
 Request: `POST` - `/app/:uid/data`  
 
-#### Default user
+##### Default user
 login: `Administrator`  
 password: `Administrator`

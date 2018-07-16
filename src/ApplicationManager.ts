@@ -7,6 +7,7 @@ import {GDMNApplication} from "./apps/GDMNApplication";
 import {IApplicationInfoOutput, MainApplication} from "./apps/MainApplication";
 import {Application} from "./context/Application";
 import {IDBDetail} from "./context/Context";
+import databases from "./db/databases";
 
 // TODO целостность данных для операций вставки и удаления приложений
 export class ApplicationManager {
@@ -72,24 +73,18 @@ export class ApplicationManager {
 
     // TODO tmp
     try {
-      this._applications.set(`broiler`, await Application.start({
-        alias: "broiler",
-        driver: Factory.FBDriver,
-        poolOptions: {
-          max: 3,
-          acquireTimeoutMillis: 60000
-        },
-        connectionOptions: {
-          host: "192.168.0.34",
-          port: 3053,
-          username: "SYSDBA",
-          password: "masterkey",
-          path: "k:\\bases\\broiler\\GDBASE_2017_10_02.FDB"
+      const testDBDetail = databases.test;
+      if (testDBDetail) {
+        this._applications.set(testDBDetail.alias, await Application.start({
+          alias: testDBDetail.alias,
+          driver: testDBDetail.driver,
+          poolOptions: testDBDetail.poolOptions,
+          connectionOptions: testDBDetail.connectionOptions
+        }, GDMNApplication));
+        const user = await this._mainApplication.findUser({login: "Administrator"});
+        if (user) {
+          await this._mainApplication.addApplicationInfo(user.id, {alias: testDBDetail.alias, uid: testDBDetail.alias});
         }
-      }, GDMNApplication));
-      const user = await this._mainApplication.findUser({login: "Administrator"});
-      if (user) {
-        await this._mainApplication.addApplicationInfo(user.id, {alias: "broiler", uid: "broiler"});
       }
     } catch (error) {
       // ignore

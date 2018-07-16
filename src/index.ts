@@ -9,6 +9,7 @@ import serve from "koa-static";
 import cors from "koa2-cors";
 import {ApplicationManager} from "./ApplicationManager";
 import {Application} from "./context/Application";
+import databases from "./db/databases";
 import {checkHandledError, ErrorCodes, throwCtx} from "./ErrorCodes";
 import passport from "./passport";
 import account from "./router/account";
@@ -58,7 +59,7 @@ async function create(): Promise<IServer> {
       if (!user) {
         throwCtx(ctx, 401, "User not found", ErrorCodes.INVALID_AUTH_TOKEN);
       } else {
-        ctx.state.application = await appManager.get(user.id, "broiler");
+        ctx.state.application = await appManager.get(user.id, databases.test.alias);
         if (!ctx.state.application) {
           throwCtx(ctx, 404, "Application not found", ErrorCodes.NOT_FOUND);
         } else {
