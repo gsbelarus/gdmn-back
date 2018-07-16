@@ -8,11 +8,11 @@ import Router from "koa-router";
 import serve from "koa-static";
 import cors from "koa2-cors";
 import {ApplicationManager} from "./ApplicationManager";
+import {Application} from "./context/Application";
 import {checkHandledError, ErrorCodes, throwCtx} from "./ErrorCodes";
 import passport from "./passport";
 import account from "./router/account";
 import app from "./router/app";
-import Application = require("koa");
 
 interface IServer {
   appManager: ApplicationManager;
@@ -50,7 +50,30 @@ async function create(): Promise<IServer> {
 
   const router = new Router()
     .use("/account", account.routes(), account.allowedMethods())
-    .use("/app", passport.authenticate("jwt"), app.routes(), app.allowedMethods());
+    .use("/app", passport.authenticate("jwt"), app.routes(), app.allowedMethods())
+
+    // TODO tmp; for old version of gdmn-front
+    .use("/", async (ctx, next) => {
+      const user = await appManager.mainApplication!.findUser({login: "Administrator"});
+      if (!user) {
+        throwCtx(ctx, 401, "User not found", ErrorCodes.INVALID_AUTH_TOKEN);
+      } else {
+        ctx.state.application = await appManager.get(user.id, "broiler");
+        if (!ctx.state.application) {
+          throwCtx(ctx, 404, "Application not found", ErrorCodes.NOT_FOUND);
+        } else {
+          await next();
+        }
+      }
+    })
+    .get("/er", async (ctx) => {
+      const application = ctx.state.application as Application;
+      return ctx.body = JSON.stringify(application.erModel.serialize());
+    })
+    .post("data", async (ctx) => {
+      const application = ctx.state.application as Application;
+      return ctx.body = await application.query(ctx.request.body as any);
+    });
 
   serverApp
     .use(router.routes())
@@ -63,7 +86,7 @@ async function create(): Promise<IServer> {
   };
 }
 
-function startHttpServer(serverApp: Application): HttpServer | undefined {
+function startHttpServer(serverApp: Koa): HttpServer | undefined {
   let httpServer: HttpServer | undefined;
   if (config.get("server.http.enabled")) {
     httpServer = http.createServer(serverApp.callback());
@@ -101,7 +124,7 @@ async function exit(): Promise<void> {
         console.error(error);
     }
   } finally {
-    console.log("Application destroyed");
+    console.log("Server destroyed");
     process.exit();
   }
 }
