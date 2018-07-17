@@ -71,7 +71,7 @@ async function create(): Promise<IServer> {
       const application = ctx.state.application as Application;
       return ctx.body = JSON.stringify(application.erModel.serialize());
     })
-    .post("data", async (ctx) => {
+    .post("/data", async (ctx) => {
       const application = ctx.state.application as Application;
       return ctx.body = await application.query(ctx.request.body as any);
     });
