@@ -2,7 +2,7 @@
   "server": {
     "http": {
       "enabled": true,
-      "host": "localhost",
+      "host": "192.168.0.62",
       "port": 4000
     },
     "publicDir": "./public"

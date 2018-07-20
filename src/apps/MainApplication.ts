@@ -113,14 +113,20 @@ export class MainApplication extends Application {
         const result = await connection.executeReturning(transaction, `
           INSERT INTO APP_USER (LOGIN, PASSWORD_HASH, SALT, IS_ADMIN)
           VALUES (:login, :passwordHash, :salt, :isAdmin)
-          RETURNING ID
+          RETURNING ID, LOGIN, PASSWORD_HASH, SALT, IS_ADMIN
         `, {
           login: user.login,
           passwordHash: Buffer.from(passwordHash),
           salt: Buffer.from(salt),
           isAdmin: user.admin
         });
-        return result[0];
+        return {
+          id: result.getNumber("ID"),
+          login: result.getString("LOGIN"),
+          passwordHash: await result.getBlob("PASSWORD_HASH").asString(),
+          salt: await result.getBlob("SALT").asString(),
+          admin: result.getBoolean("IS_ADMIN")
+        };
       }
     }));
   }
@@ -189,7 +195,7 @@ export class MainApplication extends Application {
           VALUES (:userKey, :appKey, :alias)
         `, {
           userKey,
-          appKey: result[0],
+          appKey: result.getNumber("ID"),
           alias: application.alias
         });
       }
