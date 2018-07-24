@@ -45,7 +45,9 @@ export default new Router()
   })
   .delete("/:uid", async (ctx) => {
     const appManager = ctx.state.appManager as ApplicationManager;
-    await appManager.delete(ctx.state.user.id, ctx.params.uid);
+    if (!await appManager.delete(ctx.state.user.id, ctx.params.uid)) {
+      throwCtx(ctx, 500, "Can't delete 'test' application");
+    }
     return ctx.body = {uid: ctx.params.uid};
   })
   .get("/:uid/er", async (ctx) => {

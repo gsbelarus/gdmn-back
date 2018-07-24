@@ -5,7 +5,8 @@ const test: IDBDetail = {
   alias: "test",
   driver: Factory.FBDriver,
   poolOptions: {
-    max: 3
+    max: 3,
+    acquireTimeoutMillis: 60000
   },
   connectionOptions: {
     host: "localhost",

@@ -128,11 +128,11 @@ export class ApplicationManager {
     if (!this._mainApplication) {
       throw new Error("Main application is not created");
     }
-    await this._mainApplication.deleteApplicationInfo(userKey, uid);
     const application = this._applications.get(uid);
-    if (!application) {
+    if (!application || application.dbDetail.alias === databases.test.alias) {
       return false;
     }
+    await this._mainApplication.deleteApplicationInfo(userKey, uid);
     await Application.delete(application);
     return true;
   }
