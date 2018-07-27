@@ -1,7 +1,7 @@
 import Router from "koa-router";
 import {ApplicationManager} from "../ApplicationManager";
 import {assertCtx, ErrorCodes, throwCtx} from "../ErrorCodes";
-import passport, {createJwtToken} from "../passport";
+import passport, {createAccessJwtToken, createRefreshJwtToken} from "../passport";
 
 function isAuthExists(obj: any): obj is { login: string, password: string } {
   return obj && obj.login && obj.password;
@@ -19,10 +19,25 @@ export default new Router()
         password: ctx.request.body.password,
         admin: false
       });
-      return ctx.body = {token: createJwtToken(user)};
+      return ctx.body = {
+        access_token: createAccessJwtToken(user),
+        refresh_token: createRefreshJwtToken(user),
+        token_type: "Bearer"
+      };
     }
     throwCtx(ctx, 400, "Login or password is not provided", ErrorCodes.INVALID_ARGUMENTS);
   })
   .post("/login", passport.authenticate("local"), (ctx) => {
-    return ctx.body = {token: createJwtToken(ctx.state.user)};
+    return ctx.body = {
+      access_token: createAccessJwtToken(ctx.state.user),
+      refresh_token: createRefreshJwtToken(ctx.state.user),
+      token_type: "Bearer"
+    };
+  })
+  .post("/refresh", passport.authenticate("refresh_jwt"), async (ctx) => {
+    return ctx.body = {
+      access_token: createAccessJwtToken(ctx.state.user),
+      refresh_token: createRefreshJwtToken(ctx.state.user),
+      token_type: "Bearer"
+    };
   });

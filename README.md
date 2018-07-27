@@ -44,7 +44,7 @@
 ### Endpoints
 
 HEADERS:  
-`Authorization: Bearer jwtToken` - for authorization  
+`Authorization: Bearer accessJWTToken/refreshJWTToken` - for authorization or refresh token
 `Accept: text/plan` - for errors in the response as text  
 `Accept: text/html` - for errors in the response as html  
 `Accept: application/json` - for errors in the response as json  
@@ -60,12 +60,14 @@ Request: `POST` - `/account`
 Response:
 ```json
 {
-  "token": "JWTToken"
+  "access_token": "JWTToken",
+  "refresh_token": "JWTToken",
+  "token_type": "type"
 }
 ```
 
 ##### Login
-Request: `POST` - `/account/login`  
+Request: `POST` - `/account/login`
 ```json
 {
   "login": "Login",
@@ -75,7 +77,20 @@ Request: `POST` - `/account/login`
 Response:
 ```json
 {
-  "token": "JWTToken"
+  "access_token": "JWTToken",
+  "refresh_token": "JWTToken",
+  "token_type": "type"
+}
+```
+
+##### Refresh token
+Request: `POST` - `/account/refresh`
+Response:
+```json
+{
+  "access_token": "JWTToken",
+  "refresh_token": "JWTToken",
+  "token_type": "type"
 }
 ```
 
