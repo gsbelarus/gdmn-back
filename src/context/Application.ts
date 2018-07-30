@@ -1,4 +1,5 @@
 import {AccessMode, AConnection, AConnectionPool} from "gdmn-db";
+import {ERBridge} from "gdmn-er-bridge";
 import {EntityQuery, ERModel, IEntityQueryInspector} from "gdmn-orm";
 import {SQLBuilder} from "../sql/SQLBuilder";
 import {Context, IDBDetail, ISources} from "./Context";
@@ -61,6 +62,9 @@ export abstract class Application extends Context {
     const connectionResult = await AConnectionPool.executeConnection({
       connectionPool,
       callback: async (connection) => {
+        const erBridge = new ERBridge(connection);
+        await erBridge.init();
+
         const transactionResult = await AConnection.executeTransaction({
           connection,
           options: {accessMode: AccessMode.READ_ONLY},

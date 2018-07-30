@@ -1,5 +1,5 @@
 import {AccessMode, AConnection} from "gdmn-db";
-import {erExport} from "gdmn-er-bridge";
+import {ERBridge} from "gdmn-er-bridge";
 import {Application} from "../context/Application";
 
 export class GDMNApplication extends Application {
@@ -12,7 +12,10 @@ export class GDMNApplication extends Application {
       await AConnection.executeTransaction({
         connection,
         options: {accessMode: AccessMode.READ_ONLY},
-        callback: (transaction) => erExport(this.dbStructure, connection, transaction, this.erModel)
+        callback: async (transaction) => {
+          const erBridge = new ERBridge(connection);
+          await erBridge.exportFromDatabase(this.dbStructure, transaction, this.erModel);
+        }
       });
     } catch (error) {
       console.warn(error);
