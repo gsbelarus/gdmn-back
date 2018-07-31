@@ -1,5 +1,6 @@
 import config from "config";
 import {sign} from "jsonwebtoken";
+import {Middleware} from "koa";
 import passport from "koa-passport";
 import {ExtractJwt, Strategy as JWTStrategy} from "passport-jwt";
 import {Strategy as LocalStrategy} from "passport-local";
@@ -13,7 +14,7 @@ export function createAccessJwtToken(user: IUserOutput): string {
   return sign({
     id: user.id
   }, config.get("auth.jwtSecret"), {
-    expiresIn: "1h"
+    expiresIn: "3h"
   });
 }
 
@@ -100,5 +101,24 @@ passport.serializeUser((user, done) => {
 passport.deserializeUser((user, done) => {
   done(null, user);
 });
+
+// type hack
+class KoaPassport extends passport.KoaPassport {
+}
+
+export function getAuthMiddleware(strategyName: string, passportInstance: KoaPassport): Middleware {
+  return async (ctx, next) => {
+    await passportInstance.authenticate(strategyName, (error: Error, user: any, info: Error) => {
+      console.log(info);
+      if (info) {
+        throwCtx(ctx, 401, info, ErrorCodes.INVALID_AUTH);
+      }
+      if (error) {
+        throw error;
+      }
+      return ctx.login(user, {session: false});
+    })(ctx, next);
+  };
+}
 
 export default passport;

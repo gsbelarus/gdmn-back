@@ -1,11 +1,12 @@
 import {Context} from "koa";
 
 export enum ErrorCodes {
-  INTERNAL,
-  NOT_FOUND,
-  NOT_UNIQUE,
-  INVALID_AUTH_TOKEN,
-  INVALID_ARGUMENTS
+  INTERNAL = 0,
+  NOT_FOUND = 1,
+  NOT_UNIQUE = 2,
+  INVALID_AUTH = 5,
+  INVALID_AUTH_TOKEN = 3,
+  INVALID_ARGUMENTS = 4
 }
 
 export function checkHandledError(error: any): boolean {

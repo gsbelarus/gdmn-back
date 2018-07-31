@@ -1,7 +1,7 @@
 import Router from "koa-router";
 import {ApplicationManager} from "../ApplicationManager";
 import {assertCtx, ErrorCodes, throwCtx} from "../ErrorCodes";
-import passport, {createAccessJwtToken, createRefreshJwtToken} from "../passport";
+import passport, {createAccessJwtToken, createRefreshJwtToken, getAuthMiddleware} from "../passport";
 
 function isAuthExists(obj: any): obj is { login: string, password: string } {
   return obj && obj.login && obj.password;
@@ -27,14 +27,14 @@ export default new Router()
     }
     throwCtx(ctx, 400, "Login or password is not provided", ErrorCodes.INVALID_ARGUMENTS);
   })
-  .post("/login", passport.authenticate("local"), (ctx) => {
+  .post("/login", getAuthMiddleware("local", passport), (ctx) => {
     return ctx.body = {
       access_token: createAccessJwtToken(ctx.state.user),
       refresh_token: createRefreshJwtToken(ctx.state.user),
       token_type: "Bearer"
     };
   })
-  .post("/refresh", passport.authenticate("refresh_jwt"), async (ctx) => {
+  .post("/refresh", getAuthMiddleware("refresh_jwt", passport), async (ctx) => {
     return ctx.body = {
       access_token: createAccessJwtToken(ctx.state.user),
       refresh_token: createRefreshJwtToken(ctx.state.user),

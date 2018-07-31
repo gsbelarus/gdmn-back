@@ -11,7 +11,7 @@ import {ApplicationManager} from "./ApplicationManager";
 import {Application} from "./context/Application";
 import databases from "./db/databases";
 import {checkHandledError, ErrorCodes, throwCtx} from "./ErrorCodes";
-import passport from "./passport";
+import passport, {getAuthMiddleware} from "./passport";
 import account from "./router/account";
 import app from "./router/app";
 
@@ -51,7 +51,7 @@ async function create(): Promise<IServer> {
 
   const router = new Router()
     .use("/account", account.routes(), account.allowedMethods())
-    .use("/app", passport.authenticate("jwt"), app.routes(), app.allowedMethods())
+    .use("/app", getAuthMiddleware("jwt", passport), app.routes(), app.allowedMethods())
 
     // TODO tmp; for old version of gdmn-front
     .use("/", async (ctx, next) => {
