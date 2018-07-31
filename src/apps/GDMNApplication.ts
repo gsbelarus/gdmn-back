@@ -8,18 +8,14 @@ export class GDMNApplication extends Application {
     await super.onStart(connection);
 
     console.time("erModel load time");
-    try {
-      await AConnection.executeTransaction({
-        connection,
-        options: {accessMode: AccessMode.READ_ONLY},
-        callback: async (transaction) => {
-          const erBridge = new ERBridge(connection);
-          await erBridge.exportFromDatabase(this.dbStructure, transaction, this.erModel);
-        }
-      });
-    } catch (error) {
-      console.warn(error);
-    }
+    await AConnection.executeTransaction({
+      connection,
+      options: {accessMode: AccessMode.READ_ONLY},
+      callback: async (transaction) => {
+        const erBridge = new ERBridge(connection);
+        await erBridge.exportFromDatabase(this.dbStructure, transaction, this.erModel);
+      }
+    });
     console.log(`erModel: loaded ${Object.entries(this.erModel.entities).length} entities`);
     console.timeEnd("erModel load time");
 

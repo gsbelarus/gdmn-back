@@ -34,7 +34,7 @@ export default new Router()
       token_type: "Bearer"
     };
   })
-  .post("/refresh", getAuthMiddleware("refresh_jwt", passport), async (ctx) => {
+  .post("/refresh", getAuthMiddleware("refresh_jwt", passport), (ctx) => {
     return ctx.body = {
       access_token: createAccessJwtToken(ctx.state.user),
       refresh_token: createRefreshJwtToken(ctx.state.user),

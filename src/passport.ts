@@ -109,7 +109,6 @@ class KoaPassport extends passport.KoaPassport {
 export function getAuthMiddleware(strategyName: string, passportInstance: KoaPassport): Middleware {
   return async (ctx, next) => {
     await passportInstance.authenticate(strategyName, (error: Error, user: any, info: Error) => {
-      console.log(info);
       if (info) {
         throwCtx(ctx, 401, info, ErrorCodes.INVALID_AUTH);
       }
@@ -118,6 +117,7 @@ export function getAuthMiddleware(strategyName: string, passportInstance: KoaPas
       }
       return ctx.login(user, {session: false});
     })(ctx, next);
+    await next();
   };
 }
 
