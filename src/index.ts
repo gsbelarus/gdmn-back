@@ -53,7 +53,9 @@ async function create(): Promise<IServer> {
     .use("/account", account.routes(), account.allowedMethods())
     .use("/app", getAuthMiddleware("jwt", passport), app.routes(), app.allowedMethods())
 
-    .get(/\/spa(\/*)?/g, async (ctx) => {   // TODO temp
+    // TODO temp
+    .get("/", (ctx) => ctx.redirect("/spa"))
+    .get(/\/spa(\/*)?/g, async (ctx) => {
       console.log(path.resolve(process.cwd(), config.get("server.publicDir")));
       await send(ctx, "/gs/ng/", {
         root: path.resolve(process.cwd(), config.get("server.publicDir")),

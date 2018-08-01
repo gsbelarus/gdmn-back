@@ -121,7 +121,6 @@ export class ApplicationManager {
     if (applications.some((app) => app.uid === uid)) {
       return this._applications.get(uid);
     }
-    return this._applications.get(uid);
   }
 
   public async delete(userKey: number, uid: string): Promise<boolean> {
