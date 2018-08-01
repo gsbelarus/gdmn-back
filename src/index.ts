@@ -5,8 +5,10 @@ import bodyParser from "koa-bodyParser";
 import errorHandler from "koa-error";
 import logger from "koa-logger";
 import Router from "koa-router";
+import send from "koa-send";
 import serve from "koa-static";
 import cors from "koa2-cors";
+import path from "path";
 import {ApplicationManager} from "./ApplicationManager";
 import {Application} from "./context/Application";
 import databases from "./db/databases";
@@ -52,6 +54,15 @@ async function create(): Promise<IServer> {
   const router = new Router()
     .use("/account", account.routes(), account.allowedMethods())
     .use("/app", getAuthMiddleware("jwt", passport), app.routes(), app.allowedMethods())
+
+    .get(/\/spa(\/*)?/g, async (ctx) => {   // TODO temp
+      console.log(path.resolve(process.cwd(), config.get("server.publicDir")));
+      await send(ctx, "/gs/ng/", {
+        root: path.resolve(process.cwd(), config.get("server.publicDir")),
+        index: "index",
+        extensions: ["html"]
+      });
+    })
 
     // TODO tmp; for old version of gdmn-front
     .use("/", async (ctx, next) => {

@@ -3,8 +3,8 @@ import {
   AConnectionPool,
   ADriver,
   DBStructure,
+  ICommonConnectionPoolOptions,
   IConnectionOptions,
-  IDefaultConnectionPoolOptions,
   TExecutor
 } from "gdmn-db";
 import {ERModel} from "gdmn-orm";
@@ -13,13 +13,13 @@ export interface IDBDetail<ConnectionOptions extends IConnectionOptions = IConne
   alias: string;
   driver: ADriver;
   connectionOptions: ConnectionOptions;
-  poolOptions: IDefaultConnectionPoolOptions;
+  poolOptions: ICommonConnectionPoolOptions;
 }
 
 export interface ISources {
   dbDetail: IDBDetail;
   dbStructure: DBStructure;
-  connectionPool: AConnectionPool<IDefaultConnectionPoolOptions>;
+  connectionPool: AConnectionPool<ICommonConnectionPoolOptions>;
   erModel: ERModel;
 }
 
@@ -49,7 +49,7 @@ export abstract class Context {
     return this._sources.dbStructure;
   }
 
-  get connectionPool(): AConnectionPool<IDefaultConnectionPoolOptions> {
+  get connectionPool(): AConnectionPool<ICommonConnectionPoolOptions> {
     if (!this._sources) {
       throw new Error("No context");
     }

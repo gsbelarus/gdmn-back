@@ -55,7 +55,7 @@ export abstract class Application extends Context {
     const {driver, poolOptions, connectionOptions}: IDBDetail = dbDetail;
     console.time("Total load time");
 
-    const connectionPool = driver.newDefaultConnectionPool();
+    const connectionPool = driver.newCommonConnectionPool();
     await connectionPool.create(connectionOptions, poolOptions);
     console.log(JSON.stringify(connectionOptions));
 
@@ -63,7 +63,7 @@ export abstract class Application extends Context {
       connectionPool,
       callback: async (connection) => {
         const erBridge = new ERBridge(connection);
-        await erBridge.init();
+        await erBridge.initDatabase();
 
         const transactionResult = await AConnection.executeTransaction({
           connection,
