@@ -141,7 +141,7 @@ export class ApplicationManager {
     if (!this._mainApplication) {
       throw new Error("Main application is not created");
     }
-    const uid = uuidV1();
+    const uid = uuidV1().toUpperCase();
     await this._mainApplication.addApplicationInfo(userKey, {
       uid,
       alias
