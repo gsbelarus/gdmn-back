@@ -10,8 +10,6 @@ import serve from "koa-static";
 import cors from "koa2-cors";
 import path from "path";
 import {ApplicationManager} from "./ApplicationManager";
-import {Application} from "./context/Application";
-import databases from "./db/databases";
 import {checkHandledError, ErrorCodes, throwCtx} from "./ErrorCodes";
 import passport, {getAuthMiddleware} from "./passport";
 import account from "./router/account";
@@ -62,29 +60,6 @@ async function create(): Promise<IServer> {
         index: "index",
         extensions: ["html"]
       });
-    })
-
-    // TODO tmp; for old version of gdmn-front
-    .use("/", async (ctx, next) => {
-      const user = await appManager.mainApplication!.findUser({login: "Administrator"});
-      if (!user) {
-        throwCtx(ctx, 401, "User not found", ErrorCodes.INVALID_AUTH_TOKEN);
-      } else {
-        ctx.state.application = await appManager.get(user.id, databases.test.alias);
-        if (!ctx.state.application) {
-          throwCtx(ctx, 404, "Application not found", ErrorCodes.NOT_FOUND);
-        } else {
-          await next();
-        }
-      }
-    })
-    .get("/er", async (ctx) => {
-      const application = ctx.state.application as Application;
-      return ctx.body = JSON.stringify(application.erModel.serialize());
-    })
-    .post("/data", async (ctx) => {
-      const application = ctx.state.application as Application;
-      return ctx.body = await application.query(ctx.request.body as any);
     });
 
   serverApp
