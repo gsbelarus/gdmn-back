@@ -1,23 +1,26 @@
 import config from "config";
 import http, {Server as HttpServer} from "http";
 import Koa from "koa";
-import bodyParser from "koa-bodyParser";
+import koaBody from "koa-body";
 import errorHandler from "koa-error";
 import logger from "koa-logger";
 import Router from "koa-router";
 import send from "koa-send";
 import serve from "koa-static";
 import cors from "koa2-cors";
+import io, { Socket } from "socket.io";
 import path from "path";
 import {ApplicationManager} from "./ApplicationManager";
 import {checkHandledError, ErrorCodes, throwCtx} from "./ErrorCodes";
-import passport, {getAuthMiddleware} from "./passport";
+import passport, {getAuthMiddleware, getPayloadFromJwtToken} from "./passport";
 import account from "./router/account";
 import app from "./router/app";
+import backup from "./router/backup";
 
 interface IServer {
   appManager: ApplicationManager;
   httpServer?: HttpServer;
+  sio: io.Server;
 }
 
 process.env.NODE_ENV = process.env.NODE_ENV || "development";
@@ -29,7 +32,7 @@ async function create(): Promise<IServer> {
   const serverApp = new Koa()
     .use(logger())
     .use(serve(config.get("server.publicDir")))
-    .use(bodyParser())
+    .use(koaBody({multipart: true}))
     .use(passport.initialize())
     .use(cors())
     .use(errorHandler())
@@ -49,9 +52,19 @@ async function create(): Promise<IServer> {
     await next();
   });
 
+  const usersToSockets = new Map<number, Socket>();
+
+  const extractSocket = async (ctx: Router.IRouterContext, next: () => Promise<any>) => {
+    const userId = ctx.state.user.id;
+    ctx.state.socket = usersToSockets.get(userId);
+    await next();
+  };
+
   const router = new Router()
     .use("/account", account.routes(), account.allowedMethods())
     .use("/app", getAuthMiddleware("jwt", passport), app.routes(), app.allowedMethods())
+    .use("/app/:uid/backup", getAuthMiddleware("jwt", passport),
+      extractSocket, backup.routes(), backup.allowedMethods())
 
     // TODO temp
     .get("/", (ctx) => ctx.redirect("/spa"))
@@ -69,9 +82,38 @@ async function create(): Promise<IServer> {
     .use(router.allowedMethods())
     .use((ctx) => throwCtx(ctx, 404, "Not found", ErrorCodes.NOT_FOUND));
 
+  const httpServer = startHttpServer(serverApp);
+
+  const sio = io(httpServer);
+
+  sio.use((socket: Socket, next) => {
+    const token = socket.handshake.query.token;
+    try {
+      const payload = getPayloadFromJwtToken(token);
+      const userId = payload.id;
+      usersToSockets.set(userId, socket);
+      next();
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  sio.on("connection", (socket: Socket) => {
+    socket.on("disconnect", async () => {
+      const sockets = Array.from(usersToSockets.entries());
+      const pair = sockets.find(([_, s]) => socket.id === s.id);
+      if (!pair) {
+        throw new Error("Such socket not found");
+      }
+      const [userId]: [number, Socket] = pair;
+      usersToSockets.delete(userId);
+    });
+  });
+
   return {
     appManager,
-    httpServer: startHttpServer(serverApp)
+    httpServer,
+    sio,
   };
 }
 
@@ -96,7 +138,9 @@ process.on("SIGTERM", exit);
 
 async function exit(): Promise<void> {
   try {
-    const {appManager, httpServer} = await creating;
+    const {appManager, httpServer, sio} = await creating;
+
+    await sio.close();
 
     if (httpServer) {
       httpServer.removeAllListeners();

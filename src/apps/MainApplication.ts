@@ -1,6 +1,8 @@
 import crypto from "crypto";
-import {AccessMode, AConnection} from "gdmn-db";
+import {AccessMode, AConnection, Factory, AService} from "gdmn-db";
 import {Application} from "../context/Application";
+import { IServiceOptions } from "../../node_modules/gdmn-db/dist/definitions/fb/Service";
+import { ReadStream } from "fs";
 
 export interface IUserInput {
   login: string;
@@ -26,6 +28,15 @@ export interface IApplicationInfoOutput {
   alias: string;
 }
 
+export interface IAppBackupInfoOutput {
+  uid: string;
+}
+
+export interface IAppBackupExport {
+  backupPath: string;
+  backupReadStream: ReadStream;
+}
+
 export class MainApplication extends Application {
 
   private static _createPasswordHash(password: string, salt: string): string {
@@ -38,6 +49,7 @@ export class MainApplication extends Application {
     await AConnection.executeTransaction({
       connection,
       callback: async (transaction) => {
+
         // user
         await connection.execute(transaction, `
           CREATE TABLE APP_USER (
@@ -97,6 +109,28 @@ export class MainApplication extends Application {
             IF (NEW.ID IS NULL) THEN NEW.ID = GEN_ID(GEN_APP_USER_APPLICATIONS_ID, 1);
           END
         `);
+
+        // application backups
+        await connection.execute(transaction, `
+          CREATE TABLE APPLICATION_BACKUPS (
+            ID                  INT                   NOT NULL    PRIMARY KEY,
+            UID                 VARCHAR(36)           NOT NULL    UNIQUE,
+            APP_KEY             INT                   NOT NULL    REFERENCES APPLICATION,
+            ALIAS               VARCHAR(32),
+            DELETED             SMALLINT
+          )
+        `);
+        await connection.execute(transaction, `CREATE GENERATOR GEN_APPLICATION_BACKUPS_ID`);
+        await connection.execute(transaction, `SET GENERATOR GEN_APPLICATION_BACKUPS_ID TO 0`);
+        await connection.execute(transaction, `
+          CREATE TRIGGER APPLICATION_BACKUPS_BI FOR APPLICATION_BACKUPS
+          ACTIVE BEFORE INSERT POSITION 0
+          AS
+          BEGIN
+            IF (NEW.ID IS NULL) THEN NEW.ID = GEN_ID(GEN_APPLICATION_BACKUPS_ID, 1);
+          END
+        `);
+
       }
     });
 
@@ -246,6 +280,82 @@ export class MainApplication extends Application {
           while (await resultSet.next()) {
             result.push({
               alias: resultSet.getString("ALIAS"),
+              uid: resultSet.getString("UID")
+            });
+          }
+          return result;
+        }
+      })
+    }));
+  }
+
+  public async getAppId(appUid: string): Promise<number> {
+    return await this.executeConnection((connection) => AConnection.executeTransaction({
+      connection,
+      callback: async (transaction) => {
+        const result = await connection.executeReturning(transaction, `
+            SELECT
+              app.ID
+            FROM APPLICATION app
+            WHERE app.UID = :appUid
+        `, {appUid});
+
+        return result.getNumber("ID");
+      }
+    }));
+  }
+
+  public async addBackup(appId: number, backupUid: string, alias?: string): Promise<void> {
+    return await this.executeConnection((connection) => AConnection.executeTransaction({
+      connection,
+      callback: async (transaction) => {
+        await connection.executeReturning(transaction, `
+          INSERT INTO APPLICATION_BACKUPS (UID, APP_KEY, ALIAS)
+          VALUES (:backupUid, :appId, :alias)
+          RETURNING ID
+        `, {backupUid, appId, alias: alias || "undefined"});
+      }
+    }));
+  }
+
+  public async backup(svcOptions: IServiceOptions, appPath: string, backupPath: string): Promise<void> {
+    const svcManager: AService = Factory.FBDriver.newService();
+    await svcManager.attach(svcOptions);
+    try {
+      await svcManager.backupDatabase(appPath, backupPath);
+    } finally {
+      await svcManager.detach();
+    }
+  }
+
+  public async restore(svcOptions: IServiceOptions, appPath: string, backupPath: string): Promise<void> {
+    const svcManager: AService = Factory.FBDriver.newService();
+    await svcManager.attach(svcOptions);
+    try {
+      await svcManager.restoreDatabase(appPath, backupPath);
+    } finally {
+      await svcManager.detach();
+    }
+  }
+
+  public async getBackups(appUid: string): Promise<IAppBackupInfoOutput[]> {
+    return await this.executeConnection((connection) => AConnection.executeTransaction({
+      connection,
+      callback: (transaction) => AConnection.executeQueryResultSet({
+        connection,
+        transaction,
+        sql: `
+          SELECT
+            backup.UID
+          FROM APPLICATION_BACKUPS backup
+            LEFT JOIN APPLICATION app ON backup.APP_KEY = app.ID
+          WHERE app.UID = :appUid
+        `,
+        params: {appUid},
+        callback: async (resultSet) => {
+          const result: IAppBackupInfoOutput[] = [];
+          while (await resultSet.next()) {
+            result.push({
               uid: resultSet.getString("UID")
             });
           }
