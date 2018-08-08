@@ -1,8 +1,6 @@
 import {INamedParams} from "gdmn-db";
 import {
   Attribute,
-  Attribute2FieldMap,
-  DetailAttributeMap,
   Entity,
   EntityLink,
   EntityQuery,
@@ -12,8 +10,7 @@ import {
   IEntityQueryWhere,
   isDetailAttribute,
   isScalarAttribute,
-  isSetAttribute,
-  SetAttribute2CrossMap
+  isSetAttribute
 } from "gdmn-orm";
 import {Context} from "../context/Context";
 import {SQLTemplates} from "./SQLTemplates";
@@ -64,19 +61,22 @@ export class SQLBuilder {
     let fieldName = attribute.name;
     if (attribute.adapter) {
       if (isSetAttribute(attribute)) {
-        const setAdapter = attribute.adapter as SetAttribute2CrossMap;
-        relationName = setAdapter.crossRelation;
-        fieldName = setAdapter.presentationField || "";
+        if (attribute.adapter) {
+          relationName = attribute.adapter.crossRelation;
+          fieldName = attribute.adapter.presentationField || "";
+        }
 
       } else if (isDetailAttribute(attribute)) {
-        const detailAdapter = attribute.adapter as DetailAttributeMap;
-        relationName = detailAdapter.masterLinks[0].detailRelation;
-        fieldName = detailAdapter.masterLinks[0].link2masterField;
+        if (attribute.adapter) {
+          relationName = attribute.adapter.masterLinks[0].detailRelation;
+          fieldName = attribute.adapter.masterLinks[0].link2masterField;
+        }
 
       } else if (isScalarAttribute(attribute)) {
-        const attrAdapter = attribute.adapter as Attribute2FieldMap;
-        relationName = attrAdapter.relation;
-        fieldName = attrAdapter.field;
+        if (attribute.adapter) {
+          relationName = attribute.adapter.relation;
+          fieldName = attribute.adapter.field;
+        }
       }
     }
 
