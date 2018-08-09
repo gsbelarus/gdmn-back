@@ -1,8 +1,8 @@
 import crypto from "crypto";
-import {AccessMode, AConnection, Factory, AService} from "gdmn-db";
+import {ReadStream} from "fs";
+import {AccessMode, AConnection, AService} from "gdmn-db";
+import {IServiceOptions} from "../../node_modules/gdmn-db/dist/definitions/fb/Service";
 import {Application} from "../context/Application";
-import { IServiceOptions } from "../../node_modules/gdmn-db/dist/definitions/fb/Service";
-import { ReadStream } from "fs";
 
 export interface IUserInput {
   login: string;
@@ -294,7 +294,7 @@ export class MainApplication extends Application {
       connection,
       callback: async (transaction) => {
         const result = await connection.executeReturning(transaction, `
-            SELECT
+            SELECT FIRST 1
               app.ID
             FROM APPLICATION app
             WHERE app.UID = :appUid
@@ -309,17 +309,16 @@ export class MainApplication extends Application {
     return await this.executeConnection((connection) => AConnection.executeTransaction({
       connection,
       callback: async (transaction) => {
-        await connection.executeReturning(transaction, `
+        await connection.execute(transaction, `
           INSERT INTO APPLICATION_BACKUPS (UID, APP_KEY, ALIAS)
           VALUES (:backupUid, :appId, :alias)
-          RETURNING ID
         `, {backupUid, appId, alias: alias || "undefined"});
       }
     }));
   }
 
   public async backup(svcOptions: IServiceOptions, appPath: string, backupPath: string): Promise<void> {
-    const svcManager: AService = Factory.FBDriver.newService();
+    const svcManager: AService = this.dbDetail.driver.newService();
     await svcManager.attach(svcOptions);
     try {
       await svcManager.backupDatabase(appPath, backupPath);
@@ -329,7 +328,7 @@ export class MainApplication extends Application {
   }
 
   public async restore(svcOptions: IServiceOptions, appPath: string, backupPath: string): Promise<void> {
-    const svcManager: AService = Factory.FBDriver.newService();
+    const svcManager: AService = this.dbDetail.driver.newService();
     await svcManager.attach(svcOptions);
     try {
       await svcManager.restoreDatabase(appPath, backupPath);
