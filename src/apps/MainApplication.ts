@@ -30,6 +30,8 @@ export interface IApplicationInfoOutput {
 
 export interface IAppBackupInfoOutput {
   uid: string;
+  alias: string;
+  created: Date;
 }
 
 export interface IAppBackupExport {
@@ -117,6 +119,7 @@ export class MainApplication extends Application {
             UID                 VARCHAR(36)           NOT NULL    UNIQUE,
             APP_KEY             INT                   NOT NULL    REFERENCES APPLICATION,
             ALIAS               VARCHAR(32),
+            CREATED             TIMESTAMP             DEFAULT CURRENT_TIMESTAMP,
             DELETED             SMALLINT
           )
         `);
@@ -130,7 +133,6 @@ export class MainApplication extends Application {
             IF (NEW.ID IS NULL) THEN NEW.ID = GEN_ID(GEN_APPLICATION_BACKUPS_ID, 1);
           END
         `);
-
       }
     });
 
@@ -345,7 +347,7 @@ export class MainApplication extends Application {
         transaction,
         sql: `
           SELECT
-            backup.UID
+            *
           FROM APPLICATION_BACKUPS backup
             LEFT JOIN APPLICATION app ON backup.APP_KEY = app.ID
           WHERE app.UID = :appUid
@@ -355,7 +357,9 @@ export class MainApplication extends Application {
           const result: IAppBackupInfoOutput[] = [];
           while (await resultSet.next()) {
             result.push({
-              uid: resultSet.getString("UID")
+              uid: resultSet.getString("UID"),
+              alias: resultSet.getString("ALIAS"),
+              created: resultSet.getDate("CREATED")!
             });
           }
           return result;
