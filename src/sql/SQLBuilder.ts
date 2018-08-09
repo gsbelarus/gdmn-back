@@ -1,6 +1,7 @@
 import {INamedParams} from "gdmn-db";
 import {
   Attribute,
+  DetailAttribute,
   Entity,
   EntityLink,
   EntityQuery,
@@ -8,9 +9,8 @@ import {
   IEntityLinkAlias,
   IEntityQueryInspector,
   IEntityQueryWhere,
-  isDetailAttribute,
-  isScalarAttribute,
-  isSetAttribute
+  ScalarAttribute,
+  SetAttribute
 } from "gdmn-orm";
 import {Context} from "../context/Context";
 import {SQLTemplates} from "./SQLTemplates";
@@ -60,19 +60,19 @@ export class SQLBuilder {
     let relationName = entity.adapter.relation[0].relationName;
     let fieldName = attribute.name;
     if (attribute.adapter) {
-      if (isSetAttribute(attribute)) {
+      if (SetAttribute.isType(attribute)) {
         if (attribute.adapter) {
           relationName = attribute.adapter.crossRelation;
           fieldName = attribute.adapter.presentationField || "";
         }
 
-      } else if (isDetailAttribute(attribute)) {
+      } else if (DetailAttribute.isType(attribute)) {
         if (attribute.adapter) {
           relationName = attribute.adapter.masterLinks[0].detailRelation;
           fieldName = attribute.adapter.masterLinks[0].link2masterField;
         }
 
-      } else if (isScalarAttribute(attribute)) {
+      } else if (ScalarAttribute.isType(attribute)) {
         if (attribute.adapter) {
           relationName = attribute.adapter.relation;
           fieldName = attribute.adapter.field;
@@ -133,7 +133,7 @@ export class SQLBuilder {
 
     link.fields.forEach((field) => {
       if (field.link) {
-        if (isSetAttribute(field.attribute)) {
+        if (SetAttribute.isType(field.attribute)) {
           if (field.setAttributes) {
             const fieldAlias = field.setAttributes.reduce((alias, attr) => {
               alias[attr.name] = `F$${this._fieldAliases.size + 1}_${Object.keys(alias).length + 1}`;
@@ -265,7 +265,7 @@ export class SQLBuilder {
         const nestedPrimaryAttrAdapter = SQLBuilder._getAttrAdapter(field.link.entity, nestedPrimaryAttr);
 
         const mainRelation = field.link.entity.adapter.relation[0];
-        if (isSetAttribute(field.attribute)) {
+        if (SetAttribute.isType(field.attribute)) {
           joins.push(
             SQLTemplates.join(
               attrAdapter.relationName,
@@ -284,7 +284,7 @@ export class SQLBuilder {
               this._getPrimaryName(attrAdapter.relationName, 1)
             )
           );
-        } else if (isDetailAttribute(field.attribute)) {
+        } else if (DetailAttribute.isType(field.attribute)) {
           joins.push(
             SQLTemplates.join(
               mainRelation.relationName,
