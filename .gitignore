@@ -73,3 +73,10 @@ jspm_packages/
 src/db/databases.ts
 test/db/test.fdb
 
+
+.DS_Store
+databases/
+
+testSocket.html
+testBackup0.html
+api.md

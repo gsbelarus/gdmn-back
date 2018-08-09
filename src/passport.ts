@@ -1,5 +1,5 @@
 import config from "config";
-import {sign} from "jsonwebtoken";
+import jwt from "jsonwebtoken";
 import {Middleware} from "koa";
 import passport from "koa-passport";
 import {ExtractJwt, Strategy as JWTStrategy} from "passport-jwt";
@@ -11,7 +11,7 @@ const USERNAME_FIELD = "login";
 const PASSWORD_FIELD = "password";
 
 export function createAccessJwtToken(user: IUserOutput): string {
-  return sign({
+  return jwt.sign({
     id: user.id
   }, config.get("auth.jwtSecret"), {
     expiresIn: "3h"
@@ -19,12 +19,27 @@ export function createAccessJwtToken(user: IUserOutput): string {
 }
 
 export function createRefreshJwtToken(user: IUserOutput): string {
-  return sign({
+  return jwt.sign({
     id: user.id,
     isRefresh: true
   }, config.get("auth.jwtSecret"), {
     expiresIn: "7d"
   });
+}
+
+export function getPayloadFromJwtToken(token: string): any {
+  const verified = jwt.verify(token, config.get("auth.jwtSecret"));
+
+  if (verified) {
+    const payload = jwt.decode(token);
+    if (!payload) {
+      throw new Error("No payload");
+    }
+
+    return payload;
+  }
+
+  throw new Error("Token not valid");
 }
 
 passport.use(new LocalStrategy({
