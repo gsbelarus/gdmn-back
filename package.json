@@ -15,7 +15,6 @@
   "license": "ISC",
   "dependencies": {
     "config": "^2.0.1",
-    "gdmn-db": "git://github.com/gsbelarus/gdmn-db.git",
     "gdmn-er-bridge": "git://github.com/gsbelarus/gdmn-er-bridge.git",
     "graphql": "^0.13.2",
     "jsonwebtoken": "^8.3.0",
