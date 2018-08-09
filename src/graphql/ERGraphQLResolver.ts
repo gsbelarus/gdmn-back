@@ -2,23 +2,23 @@ import {AccessMode, AConnection} from "gdmn-db";
 import {EntityLink, EntityQuery, EntityQueryField} from "gdmn-orm";
 import {GraphQLResolveInfo, isListType} from "graphql/type/definition";
 import NestHydrationJS from "nesthydrationjs";
-import {Context} from "../context/Context";
+import {Application} from "../apps/Application";
 import {IEntityQueryFieldAlias, SQLBuilder} from "../sql/SQLBuilder";
 import {IArgs, IERGraphQLResolver} from "./ERGraphQLSchema";
 import ERQueryAnalyzer, {IQuery} from "./ERQueryAnalyzer";
 
 export class ERGraphQLResolver implements IERGraphQLResolver {
 
-  public async queryResolver(_source: any, _args: IArgs, context: Context, info: GraphQLResolveInfo): Promise<any> {
+  public async queryResolver(_source: any, _args: IArgs, application: Application, info: GraphQLResolveInfo): Promise<any> {
     const queries = ERQueryAnalyzer.resolveInfo(info);
     if (queries.length) {
       const query = queries[0];
       const entityLink = this._convertToEntityLink(query);
       const entityQuery = new EntityQuery(this._completeLink(entityLink));
 
-      const {sql, params, fieldAliases} = new SQLBuilder(context, entityQuery).build();
+      const {sql, params, fieldAliases} = new SQLBuilder(application, entityQuery).build();
 
-      const data = await context.executeConnection((connection) => AConnection.executeTransaction({
+      const data = await application.executeConnection((connection) => AConnection.executeTransaction({
           connection,
           options: {accessMode: AccessMode.READ_ONLY},
           callback: (transaction) => AConnection.executeQueryResultSet({

@@ -1,7 +1,7 @@
 import {IEntityQueryInspector} from "gdmn-orm";
 import Router from "koa-router";
 import {ApplicationManager} from "../ApplicationManager";
-import {Application} from "../context/Application";
+import {Application} from "../apps/Application";
 import {ErrorCodes, throwCtx} from "../ErrorCodes";
 
 function isAppManagerExists(obj: any): obj is { appManager: ApplicationManager } {
@@ -26,8 +26,8 @@ export default new Router()
   .post("/", async (ctx) => {
     if (isAliasExists(ctx.request.body)) {
       const appManager = ctx.state.appManager as ApplicationManager;
-      const uid = await appManager.add(ctx.state.user.id, ctx.request.body.alias);
-      return ctx.body = {uid};
+      const result = await appManager.add(ctx.state.user.id, ctx.request.body.alias);
+      return ctx.body = result;
     }
     throwCtx(ctx, 400, "Alias is not provided", ErrorCodes.INVALID_ARGUMENTS, ["alias"]);
   })

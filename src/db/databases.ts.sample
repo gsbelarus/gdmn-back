@@ -1,5 +1,5 @@
 import {Factory} from "gdmn-db";
-import {IDBDetail} from "../context/Context";
+import {IDBDetail} from "./Database";
 
 const test: IDBDetail = {
   alias: "test",

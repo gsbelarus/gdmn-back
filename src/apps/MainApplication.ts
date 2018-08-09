@@ -1,8 +1,18 @@
 import crypto from "crypto";
-import {ReadStream} from "fs";
-import {AccessMode, AConnection, AService} from "gdmn-db";
-import {IServiceOptions} from "../../node_modules/gdmn-db/dist/definitions/fb/Service";
-import {Application} from "../context/Application";
+import {AccessMode, AConnection} from "gdmn-db";
+import {ERBridge} from "gdmn-er-bridge";
+import {
+  BlobAttribute,
+  BooleanAttribute,
+  Entity,
+  EntityAttribute,
+  ERModel,
+  SetAttribute,
+  StringAttribute,
+  TimeStampAttribute
+} from "gdmn-orm";
+import {IDBDetail} from "../db/Database";
+import {Application} from "./Application";
 
 export interface IUserInput {
   login: string;
@@ -26,117 +36,23 @@ export interface IApplicationInfoInput {
 export interface IApplicationInfoOutput {
   uid: string;
   alias: string;
+  creationDate: Date;
 }
 
 export interface IAppBackupInfoOutput {
   uid: string;
   alias: string;
-  created: Date;
-}
-
-export interface IAppBackupExport {
-  backupPath: string;
-  backupReadStream: ReadStream;
+  creationDate: Date;
 }
 
 export class MainApplication extends Application {
 
-  private static _createPasswordHash(password: string, salt: string): string {
-    return crypto.pbkdf2Sync(password, salt, 1, 128, "sha1").toString("base64");
+  constructor(dbDetail: IDBDetail) {
+    super(dbDetail);
   }
 
-  public async onCreate(connection: AConnection): Promise<void> { // TODO заменить на работу через erModel
-    await super.onCreate(connection);
-
-    await AConnection.executeTransaction({
-      connection,
-      callback: async (transaction) => {
-
-        // user
-        await connection.execute(transaction, `
-          CREATE TABLE APP_USER (
-            ID                  INT                   NOT NULL    PRIMARY KEY,
-            LOGIN               VARCHAR(32)           NOT NULL    UNIQUE,
-            PASSWORD_HASH       BLOB SUB_TYPE TEXT    NOT NULL,
-            SALT                BLOB SUB_TYPE TEXT    NOT NULL,
-            IS_ADMIN            SMALLINT
-          )
-        `);
-        await connection.execute(transaction, `CREATE GENERATOR GEN_APP_USER_ID`);
-        await connection.execute(transaction, `SET GENERATOR GEN_APP_USER_ID TO 0`);
-        await connection.execute(transaction, `
-          CREATE TRIGGER APP_USER_BI FOR APP_USER
-          ACTIVE BEFORE INSERT POSITION 0
-          AS
-          BEGIN
-            IF (NEW.ID IS NULL) THEN NEW.ID = GEN_ID(GEN_APP_USER_ID, 1);
-          END
-        `);
-
-        // application
-        await connection.execute(transaction, `
-          CREATE TABLE APPLICATION (
-            ID                  INT                   NOT NULL    PRIMARY KEY,
-            UID                 VARCHAR(36)           NOT NULL    UNIQUE
-          )
-        `);
-        await connection.execute(transaction, `CREATE GENERATOR GEN_APPLICATION_ID`);
-        await connection.execute(transaction, `SET GENERATOR GEN_APPLICATION_ID TO 0`);
-        await connection.execute(transaction, `
-          CREATE TRIGGER APPLICATION_BI FOR APPLICATION
-          ACTIVE BEFORE INSERT POSITION 0
-          AS
-          BEGIN
-            IF (NEW.ID IS NULL) THEN NEW.ID = GEN_ID(GEN_APPLICATION_ID, 1);
-          END
-        `);
-
-        // user applications
-        await connection.execute(transaction, `
-          CREATE TABLE APP_USER_APPLICATIONS (
-            ID                  INT                   NOT NULL    PRIMARY KEY,
-            USER_KEY            INT                   NOT NULL    REFERENCES APP_USER,
-            APP_KEY             INT                   NOT NULL    REFERENCES APPLICATION,
-            ALIAS               VARCHAR(32)           NOT NULL,
-            DELETED             SMALLINT
-          )
-        `);
-        await connection.execute(transaction, `CREATE GENERATOR GEN_APP_USER_APPLICATIONS_ID`);
-        await connection.execute(transaction, `SET GENERATOR GEN_APP_USER_APPLICATIONS_ID TO 0`);
-        await connection.execute(transaction, `
-          CREATE TRIGGER APP_USER_APPLICATIONS_BI FOR APP_USER_APPLICATIONS
-          ACTIVE BEFORE INSERT POSITION 0
-          AS
-          BEGIN
-            IF (NEW.ID IS NULL) THEN NEW.ID = GEN_ID(GEN_APP_USER_APPLICATIONS_ID, 1);
-          END
-        `);
-
-        // application backups
-        await connection.execute(transaction, `
-          CREATE TABLE APPLICATION_BACKUPS (
-            ID                  INT                   NOT NULL    PRIMARY KEY,
-            UID                 VARCHAR(36)           NOT NULL    UNIQUE,
-            APP_KEY             INT                   NOT NULL    REFERENCES APPLICATION,
-            ALIAS               VARCHAR(32),
-            CREATED             TIMESTAMP             DEFAULT CURRENT_TIMESTAMP,
-            DELETED             SMALLINT
-          )
-        `);
-        await connection.execute(transaction, `CREATE GENERATOR GEN_APPLICATION_BACKUPS_ID`);
-        await connection.execute(transaction, `SET GENERATOR GEN_APPLICATION_BACKUPS_ID TO 0`);
-        await connection.execute(transaction, `
-          CREATE TRIGGER APPLICATION_BACKUPS_BI FOR APPLICATION_BACKUPS
-          ACTIVE BEFORE INSERT POSITION 0
-          AS
-          BEGIN
-            IF (NEW.ID IS NULL) THEN NEW.ID = GEN_ID(GEN_APPLICATION_BACKUPS_ID, 1);
-          END
-        `);
-      }
-    });
-
-    await this.addUser({login: "Administrator", password: "Administrator", admin: true});
+  private static _createPasswordHash(password: string, salt: string): string {
+    return crypto.pbkdf2Sync(password, salt, 1, 128, "sha1").toString("base64");
   }
 
   public async addUser(user: IUserInput): Promise<IUserOutput> {
@@ -216,24 +132,30 @@ export class MainApplication extends Application {
     }));
   }
 
-  public async addApplicationInfo(userKey: number, application: IApplicationInfoInput): Promise<void> {
+  public async addApplicationInfo(userKey: number,
+                                  application: IApplicationInfoInput): Promise<IApplicationInfoOutput> {
     return await this.executeConnection((connection) => AConnection.executeTransaction({
       connection,
       callback: async (transaction) => {
         const result = await connection.executeReturning(transaction, `
           INSERT INTO APPLICATION (UID)
           VALUES (:uid)
-          RETURNING ID
+          RETURNING ID, CREATIONDATE
         `, {uid: application.uid});
 
         await connection.execute(transaction, `
-          INSERT INTO APP_USER_APPLICATIONS (USER_KEY, APP_KEY, ALIAS)
+          INSERT INTO APP_USER_APPLICATIONS (KEY1, KEY2, ALIAS)
           VALUES (:userKey, :appKey, :alias)
         `, {
           userKey,
           appKey: result.getNumber("ID"),
           alias: application.alias
         });
+        return {
+          alias: application.alias,
+          uid: application.uid,
+          creationDate: result.getDate("CREATIONDATE")!
+        };
       }
     }));
   }
@@ -243,17 +165,15 @@ export class MainApplication extends Application {
       connection,
       callback: async (transaction) => {
         await connection.execute(transaction, `
-          UPDATE APP_USER_APPLICATIONS
-            SET DELETED = :deleted
-          WHERE USER_KEY = :userKey
+          DELETE FROM APP_USER_APPLICATIONS
+          WHERE KEY1 = :userKey
             AND EXISTS (
               SELECT ID
               FROM APPLICATION app
-              WHERE app.ID = APP_KEY
+              WHERE app.ID = KEY2
                 AND app.UID = :uid
             )
         `, {
-          deleted: true,
           userKey,
           uid
         });
@@ -270,11 +190,11 @@ export class MainApplication extends Application {
         sql: `
           SELECT
             apps.ALIAS,
-            app.UID
+            app.UID,
+            app.CREATIONDATE
           FROM APP_USER_APPLICATIONS apps
-            LEFT JOIN APPLICATION app ON app.ID = apps.APP_KEY
-          WHERE COALESCE(apps.DELETED, 0) = 0
-            ${userKey !== undefined ? `AND apps.USER_KEY = :userKey` : ""}
+            LEFT JOIN APPLICATION app ON app.ID = apps.KEY2
+          ${userKey !== undefined ? `WHERE apps.USER_KEY = :userKey` : ""}
         `,
         params: {userKey},
         callback: async (resultSet) => {
@@ -282,7 +202,8 @@ export class MainApplication extends Application {
           while (await resultSet.next()) {
             result.push({
               alias: resultSet.getString("ALIAS"),
-              uid: resultSet.getString("UID")
+              uid: resultSet.getString("UID"),
+              creationDate: resultSet.getDate("CREATIONDATE")!
             });
           }
           return result;
@@ -291,7 +212,7 @@ export class MainApplication extends Application {
     }));
   }
 
-  public async getAppId(appUid: string): Promise<number> {
+  public async getAppKey(appUid: string): Promise<number> {
     return await this.executeConnection((connection) => AConnection.executeTransaction({
       connection,
       callback: async (transaction) => {
@@ -307,36 +228,16 @@ export class MainApplication extends Application {
     }));
   }
 
-  public async addBackup(appId: number, backupUid: string, alias?: string): Promise<void> {
+  public async addBackupInfo(appKey: number, backupUid: string, alias?: string): Promise<void> {
     return await this.executeConnection((connection) => AConnection.executeTransaction({
       connection,
       callback: async (transaction) => {
         await connection.execute(transaction, `
-          INSERT INTO APPLICATION_BACKUPS (UID, APP_KEY, ALIAS)
-          VALUES (:backupUid, :appId, :alias)
-        `, {backupUid, appId, alias: alias || "undefined"});
+          INSERT INTO APPLICATION_BACKUPS (UID, APP, ALIAS)
+          VALUES (:backupUid, :appKey, :alias)
+        `, {backupUid, appKey, alias: alias || "Unknown"});
       }
     }));
-  }
-
-  public async backup(svcOptions: IServiceOptions, appPath: string, backupPath: string): Promise<void> {
-    const svcManager: AService = this.dbDetail.driver.newService();
-    await svcManager.attach(svcOptions);
-    try {
-      await svcManager.backupDatabase(appPath, backupPath);
-    } finally {
-      await svcManager.detach();
-    }
-  }
-
-  public async restore(svcOptions: IServiceOptions, appPath: string, backupPath: string): Promise<void> {
-    const svcManager: AService = this.dbDetail.driver.newService();
-    await svcManager.attach(svcOptions);
-    try {
-      await svcManager.restoreDatabase(appPath, backupPath);
-    } finally {
-      await svcManager.detach();
-    }
   }
 
   public async getBackups(appUid: string): Promise<IAppBackupInfoOutput[]> {
@@ -347,9 +248,10 @@ export class MainApplication extends Application {
         transaction,
         sql: `
           SELECT
-            *
+            backup.UID
+            backup.CREATIONDATE
           FROM APPLICATION_BACKUPS backup
-            LEFT JOIN APPLICATION app ON backup.APP_KEY = app.ID
+            LEFT JOIN APPLICATION app ON app.ID = backup.APP
           WHERE app.UID = :appUid
         `,
         params: {appUid},
@@ -359,12 +261,76 @@ export class MainApplication extends Application {
             result.push({
               uid: resultSet.getString("UID"),
               alias: resultSet.getString("ALIAS"),
-              created: resultSet.getDate("CREATED")!
+              creationDate: resultSet.getDate("CREATIONDATE")!
             });
           }
           return result;
         }
       })
     }));
+  }
+
+  protected async _onCreate(_connection: AConnection): Promise<void> {
+    await super._onCreate(_connection);
+
+    const erModel = ERBridge.completeERModel(new ERModel());
+
+    // APP_USER
+    const userEntity = ERBridge.addEntityToERModel(erModel, new Entity({
+      name: "APP_USER", lName: {ru: {name: "Пользователь"}}
+    }));
+    userEntity.add(new StringAttribute({
+      name: "LOGIN", lName: {ru: {name: "Логин"}}, required: true, minLength: 1, maxLength: 32
+    }));
+    userEntity.add(new BlobAttribute({
+      name: "PASSWORD_HASH", lName: {ru: {name: "Хешированный пароль"}}, required: true
+    }));
+    userEntity.add(new BlobAttribute({name: "SALT", lName: {ru: {name: "Примесь"}}, required: true}));
+    userEntity.add(new BooleanAttribute({
+      name: "IS_ADMIN", lName: {ru: {name: "Флаг администратора"}}
+    }));
+
+    // APPLICATION
+    const appEntity = ERBridge.addEntityToERModel(erModel, new Entity({
+      name: "APPLICATION", lName: {ru: {name: "Приложение"}}
+    }));
+    const appUid = new StringAttribute({
+      name: "UID", lName: {ru: {name: "Идентификатор приложения"}}, required: true, minLength: 1, maxLength: 36
+    });
+    appEntity.add(appUid);
+    appEntity.addUnique([appUid]);
+    appEntity.add(new TimeStampAttribute({
+      name: "CREATIONDATE", lName: {ru: {name: "Дата создания"}}, required: true, defaultValue: "CURRENT_TIMESTAMP"
+    }));
+
+    const appSet = new SetAttribute({
+      name: "APPLICATIONS", lName: {ru: {name: "Приложения"}}, required: true, entities: [appEntity],
+      adapter: {crossRelation: "APP_USER_APPLICATIONS"}
+    });
+    appSet.add(new StringAttribute({
+      name: "ALIAS", lName: {ru: {name: "Название приложения"}}, required: true, minLength: 1, maxLength: 120
+    }));
+    userEntity.add(appSet);
+
+    // APPLICATION_BACKUPS
+    const backupEntity = ERBridge.addEntityToERModel(erModel, new Entity({
+      name: "APPLICATION_BACKUPS", lName: {ru: {name: "Бэкап"}}
+    }));
+    const backupUid = new StringAttribute({
+      name: "UID", lName: {ru: {name: "Идентификатор бэкапа"}}, required: true, minLength: 1, maxLength: 36
+    });
+    backupEntity.add(backupUid);
+    backupEntity.addUnique([backupUid]);
+    backupEntity.add(new EntityAttribute({
+      name: "APP", lName: {ru: {name: "Приложение"}}, required: true, entities: [appEntity]
+    }));
+    backupEntity.add(new TimeStampAttribute({
+      name: "CREATIONDATE", lName: {ru: {name: "Дата создания"}}, required: true, defaultValue: "CURRENT_TIMESTAMP"
+    }));
+    backupEntity.add(new StringAttribute({
+      name: "ALIAS", lName: {ru: {name: "Название бэкапа"}}, required: true, minLength: 1, maxLength: 120
+    }));
+
+    await new ERBridge(_connection).importToDatabase(erModel);
   }
 }

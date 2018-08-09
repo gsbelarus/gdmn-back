@@ -104,7 +104,9 @@ Request: `POST` - `/app`
 Response:
 ```json
 {
-  "uid": "Application-UID"
+  "alias": "Alias",
+  "uid": "Application-UID",
+  "creationDate": "2018-01-01T00:00:00.000Z"
 }
 ```
 
@@ -123,7 +125,8 @@ Response:
 ```json
 [{
   "alias": "Alias",
-  "uid": "Application-UID"
+  "uid": "Application-UID",
+  "creationDate": "2018-01-01T00:00:00.000Z"
 }]
 ```
 

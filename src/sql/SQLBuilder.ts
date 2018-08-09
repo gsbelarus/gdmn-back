@@ -12,7 +12,7 @@ import {
   ScalarAttribute,
   SetAttribute
 } from "gdmn-orm";
-import {Context} from "../context/Context";
+import {Application} from "../apps/Application";
 import {SQLTemplates} from "./SQLTemplates";
 
 interface IEntityQueryAlias {
@@ -25,7 +25,7 @@ export interface IEntityQueryFieldAlias {
 
 export class SQLBuilder {
 
-  private readonly _context: Context;
+  private readonly _application: Application;
   private readonly _query: EntityQuery;
 
   private _linkAliases = new Map<EntityLink, IEntityQueryAlias>();
@@ -33,17 +33,17 @@ export class SQLBuilder {
 
   private _params: any = {};
 
-  constructor(context: Context, query: string);
-  constructor(context: Context, query: IEntityQueryInspector);
-  constructor(context: Context, query: EntityQuery);
-  constructor(context: Context, query: any) {
-    this._context = context;
+  constructor(application: Application, query: string);
+  constructor(application: Application, query: IEntityQueryInspector);
+  constructor(application: Application, query: EntityQuery);
+  constructor(application: Application, query: any) {
+    this._application = application;
     if (query instanceof EntityQuery) {
       this._query = query;
     } else if (typeof query === "object") {
-      this._query = EntityQuery.inspectorToObject(context.erModel, query);
+      this._query = EntityQuery.inspectorToObject(application.erModel, query);
     } else {
-      this._query = EntityQuery.deserialize(context.erModel, query);
+      this._query = EntityQuery.deserialize(application.erModel, query);
     }
   }
 
@@ -454,7 +454,7 @@ export class SQLBuilder {
   }
 
   private _getPrimaryName(relationName: string, index: number = 0): string {
-    const relation = this._context.dbStructure.findRelation((item) => item.name === relationName);
+    const relation = this._application.dbStructure.findRelation((item) => item.name === relationName);
     if (relation && relation.primaryKey) {
       return relation.primaryKey.fields[relation.primaryKey.fields.length - 1 - index];
     }
