@@ -10,12 +10,16 @@ export default new Router()
 
     const socket = ctx.state.socket;
 
-    socket.emit("backupStarted");
-    appManager.makeBackup(appUid, alias)
-      .then(() => {
-        socket.emit("backupFinished");
-      })
-      .catch((error) => console.error(error));
+    if (socket === undefined) {
+      await appManager.makeBackup(appUid, alias);
+    } else {
+      socket.emit("backupStarted");
+      appManager.makeBackup(appUid, alias)
+        .then(() => {
+          socket.emit("backupFinished");
+        })
+        .catch((error) => console.error(error));
+    }
 
     ctx.status = 200;
     return ctx;
@@ -62,12 +66,16 @@ export default new Router()
 
     const socket = ctx.state.socket;
 
-    socket.emit("restoreStarted");
-    appManager.makeRestore(appUid, backupUid)
+    if (socket === undefined) {
+      await appManager.makeRestore(appUid, backupUid);
+    } else {
+      socket.emit("restoreStarted");
+      appManager.makeRestore(appUid, backupUid)
       .then(() => {
         socket.emit("restoreFinished");
       })
       .catch((error) => console.error(error));
+    }
 
     ctx.status = 200;
     return ctx;
