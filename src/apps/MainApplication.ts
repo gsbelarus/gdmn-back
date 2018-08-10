@@ -56,31 +56,7 @@ export class MainApplication extends Application {
   }
 
   public async addUser(user: IUserInput): Promise<IUserOutput> {
-    const salt = crypto.randomBytes(128).toString("base64");
-    const passwordHash = MainApplication._createPasswordHash(user.password, salt);
-
-    return await this.executeConnection((connection) => AConnection.executeTransaction({
-      connection,
-      callback: async (transaction) => {
-        const result = await connection.executeReturning(transaction, `
-          INSERT INTO APP_USER (LOGIN, PASSWORD_HASH, SALT, IS_ADMIN)
-          VALUES (:login, :passwordHash, :salt, :isAdmin)
-          RETURNING ID, LOGIN, PASSWORD_HASH, SALT, IS_ADMIN
-        `, {
-          login: user.login,
-          passwordHash: Buffer.from(passwordHash),
-          salt: Buffer.from(salt),
-          isAdmin: user.admin
-        });
-        return {
-          id: result.getNumber("ID"),
-          login: result.getString("LOGIN"),
-          passwordHash: await result.getBlob("PASSWORD_HASH").asString(),
-          salt: await result.getBlob("SALT").asString(),
-          admin: result.getBoolean("IS_ADMIN")
-        };
-      }
-    }));
+    return await this.executeConnection((connection) => this._addUserInternal(connection, user));
   }
 
   public async checkUserPassword(login: string, password: string): Promise<IUserOutput | undefined> {
@@ -304,7 +280,7 @@ export class MainApplication extends Application {
     }));
 
     const appSet = new SetAttribute({
-      name: "APPLICATIONS", lName: {ru: {name: "Приложения"}}, required: true, entities: [appEntity],
+      name: "APPLICATIONS", lName: {ru: {name: "Приложения"}}, entities: [appEntity],
       adapter: {crossRelation: "APP_USER_APPLICATIONS"}
     });
     appSet.add(new StringAttribute({
@@ -332,5 +308,35 @@ export class MainApplication extends Application {
     }));
 
     await new ERBridge(_connection).importToDatabase(erModel);
+
+    await this._addUserInternal(_connection, {login: "Administrator", password: "Administrator", admin: true});
+  }
+
+  private async _addUserInternal(connection: AConnection, user: IUserInput): Promise<IUserOutput> {
+    const salt = crypto.randomBytes(128).toString("base64");
+    const passwordHash = MainApplication._createPasswordHash(user.password, salt);
+
+    return await AConnection.executeTransaction({
+      connection,
+      callback: async (transaction) => {
+        const result = await connection.executeReturning(transaction, `
+          INSERT INTO APP_USER (LOGIN, PASSWORD_HASH, SALT, IS_ADMIN)
+          VALUES (:login, :passwordHash, :salt, :isAdmin)
+          RETURNING ID, LOGIN, PASSWORD_HASH, SALT, IS_ADMIN
+        `, {
+          login: user.login,
+          passwordHash: Buffer.from(passwordHash),
+          salt: Buffer.from(salt),
+          isAdmin: user.admin
+        });
+        return {
+          id: result.getNumber("ID"),
+          login: result.getString("LOGIN"),
+          passwordHash: await result.getBlob("PASSWORD_HASH").asString(),
+          salt: await result.getBlob("SALT").asString(),
+          admin: result.getBoolean("IS_ADMIN")
+        };
+      }
+    });
   }
 }

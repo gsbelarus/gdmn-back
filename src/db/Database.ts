@@ -79,7 +79,7 @@ export abstract class Database {
 
   public async executeConnection<R>(callback: TExecutor<AConnection, R>): Promise<R> {
     return await AConnectionPool.executeConnection({
-      connectionPool: this.connectionPool,
+      connectionPool: this._connectionPool,
       callback
     });
   }
