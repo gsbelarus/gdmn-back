@@ -137,3 +137,87 @@ Request: `POST` - `/app/:uid/data`
 ##### Default user
 login: `Administrator`  
 password: `Administrator`
+
+
+#### Backup/Restore
+
+For backup and restore you need connect to server's socket (on client) and subscribe on events (backupFinished, restoreFinished):
+```
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.0.3/socket.io.js"></script>>
+<script>
+  var socket = io('http://localhost:4000', {
+    query: {
+      token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwiaWF0IjoxNTMzODI0NDY1LCJleHAiOjE1MzM4MzUyNjV9.wb8Fh4OCZksz4GoG7HJIWGsNqxFVuA7sKqkNoviHcSk'
+    }
+  });
+
+  socket.on('backupFinished', function (data) {
+    console.log('on backup finish');
+  });
+
+  socket.on('restoreFinished', function (data) {
+    console.log('on restore finish');
+  })
+</script>
+```
+
+1. Make backup
+
+    - Request:  POST /app/:uid/backup
+    - Response: 200 OK
+
+2. Make restore
+    - Request: POST /app/:uid/:backupUid/restore
+    
+3. Get all backups for application with UID `:uid`
+
+    - Request: GET /app/:uid/backup
+    - Response: 200 OK
+
+      ```
+      [
+        {
+            "uid": "91A13180-9BE0-11E8-87E7-7702BC65EB93",
+            "alias": "bkpAlias",
+            "created": "2018-08-09T14:29:05.897Z"
+        },
+        {
+            "uid": "64CC1290-9BE2-11E8-A2D3-45848C52A2D6",
+            "alias": "bkpAlias2",
+            "created": "2018-08-09T14:42:09.437Z"
+        }
+      ]
+      ```
+
+4. Download one backup file
+    - Request: GET /app/:uid/backup/:backupUid/download
+    - Response: File downloading...
+
+5. Upload one backup file
+    - Request: 
+      ```
+      curl \
+      -X POST -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwiaWF0IjoxNTMzODI0NDY1LCJleHAiOjE1MzM4MzUyNjV9.wb8Fh4OCZksz4GoG7HJIWGsNqxFVuA7sKqkNoviHcSk" \ 
+      -F 'bkpFile=/Users/antonshwab/source/gdmn/gdmn-back/databases/backup/64CC1290-9BE2-11E8-A2D3-45848C52A2D6.fbk' \
+      -F 'alias=bkpALIAS' localhost:4000/app/C95519D0-9BDF-11E8-A31C-99F0847D6DDA/backup/upload
+
+      // how such request looks like in koa ctx:
+      { request:
+        { method: 'POST',
+          url: '/app/C95519D0-9BDF-11E8-A31C-99F0847D6DDA/backup/upload',
+          header:
+            { host: 'localhost:4000',
+              'user-agent': 'curl/7.54.0',
+              accept: '*/*',
+              authorization:
+              'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwiaWF0IjoxNTMzODI0NDY1LCJleHAiOjE1MzM4MzUyNjV9.wb8Fh4OCZksz4GoG7HJIWGsNqxFVuA7sKqkNoviHcSk',
+              'content-length': '341',
+              expect: '100-continue',
+              'content-type': 'multipart/form-data; boundary=------------------------8374df0255da9cd9' 
+            } 
+          }
+      }
+      ```
+    - Response: 200 OK
+
+
