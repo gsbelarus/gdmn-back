@@ -1,17 +1,7 @@
 import {AccessMode, AConnection, DBStructure} from "gdmn-db";
-import {ERBridge} from "gdmn-er-bridge";
-import {EntityQuery, ERModel, IEntityQueryInspector} from "gdmn-orm";
+import {ERBridge, IQueryResponse} from "gdmn-er-bridge";
+import {ERModel, IEntityQueryInspector} from "gdmn-orm";
 import {Database, IDBDetail} from "../db/Database";
-import {SQLBuilder} from "../sql/SQLBuilder";
-
-export interface IQueryResponse {
-  data: any[];
-  aliases: Array<{ alias: string, attribute: string, values: any }>;
-  sql: {
-    query: string;
-    params: { [field: string]: any };
-  };
-}
 
 export abstract class Application extends Database {
 
@@ -31,55 +21,9 @@ export abstract class Application extends Database {
   }
 
   public async query(query: IEntityQueryInspector): Promise<IQueryResponse> {
-    const bodyQuery = EntityQuery.inspectorToObject(this.erModel, query);
-
-    const {sql, params, fieldAliases} = new SQLBuilder(this, bodyQuery).build();
-
-    const data = await this.executeConnection((connection) => AConnection.executeTransaction({
-        connection,
-        options: {accessMode: AccessMode.READ_ONLY},
-        callback: (transaction) => AConnection.executeQueryResultSet({
-          connection,
-          transaction,
-          sql,
-          params,
-          callback: async (resultSet) => {
-            const result = [];
-            while (await resultSet.next()) {
-              const row: { [key: string]: any } = {};
-              for (let i = 0; i < resultSet.metadata.columnCount; i++) {
-                // TODO binary blob support
-                row[resultSet.metadata.getColumnLabel(i)] = await resultSet.getAny(i);
-              }
-              result.push(row);
-            }
-            return result;
-          }
-        })
-      })
-    );
-
-    const aliases = [];
-    for (const [key, value] of fieldAliases) {
-      const link = bodyQuery.link.deepFindLinkByField(key);
-      if (!link) {
-        throw new Error("Field not found");
-      }
-      aliases.push({
-        alias: link.alias,
-        attribute: key.attribute.name,
-        values: value
-      });
-    }
-
-    return {
-      data,
-      aliases,
-      sql: {
-        query: sql,
-        params
-      }
-    };
+    return await this.executeConnection(async (connection) => {
+      return await new ERBridge(connection).query(this._erModel, this._dbStructure, query);
+    });
   }
 
   protected async _onCreate(_connection: AConnection): Promise<void> {
