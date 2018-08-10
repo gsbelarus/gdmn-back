@@ -170,7 +170,7 @@ export class MainApplication extends Application {
             app.CREATIONDATE
           FROM APP_USER_APPLICATIONS apps
             LEFT JOIN APPLICATION app ON app.ID = apps.KEY2
-          ${userKey !== undefined ? `WHERE apps.USER_KEY = :userKey` : ""}
+          ${userKey !== undefined ? `WHERE apps.KEY1 = :userKey` : ""}
         `,
         params: {userKey},
         callback: async (resultSet) => {
