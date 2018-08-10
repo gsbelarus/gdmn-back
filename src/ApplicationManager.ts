@@ -202,11 +202,18 @@ export class ApplicationManager {
     return backupUid;
   }
 
-  public async getBackups(appUid: string): Promise<IAppBackupInfoOutput[]> {
+  public async getBackups(appUid: string): Promise<Array<IAppBackupInfoOutput & {size: number}>> {
     if (!this._mainApplication) {
       throw new Error("Main application is not created");
     }
-    return await this._mainApplication.getBackups(appUid);
+    const backups = await this._mainApplication.getBackups(appUid);
+    const backupsWithSize = backups.map((backup) => {
+      const backupPath = join(ApplicationManager.BACKUP_DIR, `${backup.uid}${ApplicationManager.BACKUP_EXT}`);
+      const size = fs.statSync(backupPath).size;
+      return { ...backup, size };
+    });
+
+    return backupsWithSize;
   }
 
   public downloadBackup(backupUid: string): IAppBackupExport {
