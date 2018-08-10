@@ -224,7 +224,8 @@ export class MainApplication extends Application {
         transaction,
         sql: `
           SELECT
-            backup.UID
+            backup.UID,
+            backup.ALIAS,
             backup.CREATIONDATE
           FROM APPLICATION_BACKUPS backup
             LEFT JOIN APPLICATION app ON app.ID = backup.APP
