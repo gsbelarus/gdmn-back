@@ -179,12 +179,12 @@ For backup and restore you need connect to server's socket (on client) and subsc
         {
             "uid": "91A13180-9BE0-11E8-87E7-7702BC65EB93",
             "alias": "bkpAlias",
-            "created": "2018-08-09T14:29:05.897Z"
+            "creationDate": "2018-08-09T14:29:05.897Z"
         },
         {
             "uid": "64CC1290-9BE2-11E8-A2D3-45848C52A2D6",
             "alias": "bkpAlias2",
-            "created": "2018-08-09T14:42:09.437Z"
+            "creationDate": "2018-08-09T14:42:09.437Z"
         }
       ]
       ```

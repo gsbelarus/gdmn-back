@@ -1,9 +1,8 @@
 import config from "config";
 import fs, {createReadStream, existsSync, mkdirSync, readdirSync, ReadStream} from "fs";
-import {AService, Factory} from "gdmn-db";
+import {AService, Factory, IServiceOptions} from "gdmn-db";
 import path, {extname, join, resolve} from "path";
 import {v1 as uuidV1} from "uuid";
-import {IServiceOptions} from "../node_modules/gdmn-db/dist/definitions/fb/Service";
 import {Application} from "./apps/Application";
 import {GDMNApplication} from "./apps/GDMNApplication";
 import {IAppBackupInfoOutput, IApplicationInfoOutput, MainApplication} from "./apps/MainApplication";
