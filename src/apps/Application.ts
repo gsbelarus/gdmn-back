@@ -26,19 +26,7 @@ export abstract class Application extends Database {
     });
   }
 
-  protected async _onCreate(_connection: AConnection): Promise<void> {
-    await super._onCreate(_connection);
-    const erBridge = new ERBridge(_connection);
-    await erBridge.initDatabase();
-  }
-
-  protected async _onConnect(): Promise<void> {
-    await super._onConnect();
-
-    await this.reload();
-  }
-
-  protected async reload(): Promise<void> {
+  public async reload(): Promise<void> {
     await this.executeConnection(async (connection) => {
       const erBridge = new ERBridge(connection);
       await erBridge.initDatabase();
@@ -60,5 +48,17 @@ export abstract class Application extends Database {
         }
       });
     });
+  }
+
+  protected async _onCreate(_connection: AConnection): Promise<void> {
+    await super._onCreate(_connection);
+    const erBridge = new ERBridge(_connection);
+    await erBridge.initDatabase();
+  }
+
+  protected async _onConnect(): Promise<void> {
+    await super._onConnect();
+
+    await this.reload();
   }
 }

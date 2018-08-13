@@ -202,7 +202,7 @@ export class ApplicationManager {
     return backupUid;
   }
 
-  public async getBackups(appUid: string): Promise<Array<IAppBackupInfoOutput & {size: number}>> {
+  public async getBackups(appUid: string): Promise<Array<IAppBackupInfoOutput & { size: number }>> {
     if (!this._mainApplication) {
       throw new Error("Main application is not created");
     }
@@ -210,7 +210,7 @@ export class ApplicationManager {
     const backupsWithSize = backups.map((backup) => {
       const backupPath = join(ApplicationManager.BACKUP_DIR, `${backup.uid}${ApplicationManager.BACKUP_EXT}`);
       const size = fs.statSync(backupPath).size;
-      return { ...backup, size };
+      return {...backup, size};
     });
 
     return backupsWithSize;
@@ -249,14 +249,24 @@ export class ApplicationManager {
       throw new Error("Main application is not created");
     }
 
-    const backupPath = join(ApplicationManager.BACKUP_DIR, `${backupUid}${ApplicationManager.BACKUP_EXT}`);
-    const appPath = join(ApplicationManager.WORK_DIR, `${appUid}${ApplicationManager.EXT}`);
-    const svcManager: AService = this._mainApplication.dbDetail.driver.newService();
-    try {
-      await svcManager.attach(ApplicationManager.serviceOptions);
-      await svcManager.restoreDatabase(appPath, backupPath);
-    } finally {
-      await svcManager.detach();
+    const application = this._applications.get(appUid);
+    if (application) {
+      if (application.dbDetail.alias !== databases.test.alias) {
+
+        const backupPath = join(ApplicationManager.BACKUP_DIR, `${backupUid}${ApplicationManager.BACKUP_EXT}`);
+        const appPath = join(ApplicationManager.WORK_DIR, `${appUid}${ApplicationManager.EXT}`);
+        const svcManager: AService = this._mainApplication.dbDetail.driver.newService();
+        try {
+          await svcManager.attach(ApplicationManager.serviceOptions);
+          await svcManager.restoreDatabase(appPath, backupPath);
+        } finally {
+          await svcManager.detach();
+        }
+
+        await application.reload();
+      } else {
+        throw new Error("Can't restore application");
+      }
     }
   }
 }
