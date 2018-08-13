@@ -42,7 +42,7 @@ export abstract class Application extends Database {
           console.timeEnd("DBStructure load time");
 
           console.time("erModel load time");
-          await erBridge.exportFromDatabase(this._dbStructure, transaction, this._erModel);
+          await erBridge.exportFromDatabase(this._dbStructure, transaction, this._erModel = new ERModel());
           console.log(`erModel: loaded ${Object.entries(this._erModel.entities).length} entities`);
           console.timeEnd("erModel load time");
         }

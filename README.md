@@ -168,6 +168,11 @@ For backup and restore you need connect to server's socket (on client) and subsc
 
 2. Make restore
     - Request: POST /app/:uid/backup/:backupUid/restore
+    ```json
+    {
+      "alias": "Alias"
+    }
+    ```
     
 3. Get all backups for application with UID `:uid`
 

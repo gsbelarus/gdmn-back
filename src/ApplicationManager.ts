@@ -1,7 +1,7 @@
 import config from "config";
-import fs, {createReadStream, existsSync, mkdirSync, readdirSync, ReadStream} from "fs";
+import fs, {createReadStream, existsSync, mkdirSync, readdirSync, ReadStream, unlinkSync} from "fs";
 import {AService, Factory, IServiceOptions} from "gdmn-db";
-import path, {extname, join, resolve} from "path";
+import {extname, resolve} from "path";
 import {v1 as uuidV1} from "uuid";
 import {Application} from "./apps/Application";
 import {GDMNApplication} from "./apps/GDMNApplication";
@@ -19,12 +19,12 @@ export class ApplicationManager {
 
   public static MAIN_DIR = resolve(config.get("db.dir"));
   public static WORK_DIR = resolve(ApplicationManager.MAIN_DIR, "work");
+  public static APP_EXT = ".FDB";
   public static BACKUP_DIR = resolve(ApplicationManager.MAIN_DIR, "backup");
-  public static BACKUP_EXT = ".fbk";
-  public static EXT = ".FDB";
-  public static MAIN_DB = `MAIN${ApplicationManager.EXT}`;
+  public static BACKUP_EXT = ".FBK";
+  public static MAIN_DB = `MAIN${ApplicationManager.APP_EXT}`;
 
-  private static serviceOptions: IServiceOptions = {
+  private static SERVICE_OPTIONS: IServiceOptions = {
     host: config.get("db.host"),
     port: config.get("db.port"),
     username: config.get("db.user"),
@@ -38,6 +38,22 @@ export class ApplicationManager {
     return this._mainApplication;
   }
 
+  private static _getAppName(uid: string): string {
+    return `${uid}${ApplicationManager.APP_EXT}`;
+  }
+
+  private static _getAppPath(uid: string): string {
+    return resolve(ApplicationManager.WORK_DIR, ApplicationManager._getAppName(uid));
+  }
+
+  private static _getBackupName(uid: string): string {
+    return `${uid}${ApplicationManager.BACKUP_EXT}`;
+  }
+
+  private static _getBackupPath(uid: string): string {
+    return resolve(ApplicationManager.BACKUP_DIR, ApplicationManager._getBackupName(uid));
+  }
+
   private static _createMainDBDetail(): IDBDetail {
     return {
       alias: "auth database",
@@ -47,10 +63,7 @@ export class ApplicationManager {
         acquireTimeoutMillis: 60000
       },
       connectionOptions: {
-        host: config.get("db.host"),
-        port: config.get("db.port"),
-        username: config.get("db.user"),
-        password: config.get("db.password"),
+        ...ApplicationManager.SERVICE_OPTIONS,
         path: resolve(ApplicationManager.MAIN_DIR, ApplicationManager.MAIN_DB)
       }
     };
@@ -69,7 +82,7 @@ export class ApplicationManager {
         port: config.get("db.port"),
         username: config.get("db.user"),
         password: config.get("db.password"),
-        path: resolve(ApplicationManager.WORK_DIR, `${uid}${ApplicationManager.EXT}`)
+        path: ApplicationManager._getAppPath(uid)
       }
     };
   }
@@ -118,13 +131,14 @@ export class ApplicationManager {
     const applicationsInfo = await this._mainApplication.getApplicationsInfo();
     for (const fileName of readdirSync(ApplicationManager.WORK_DIR)) {
       const ext = extname(resolve(ApplicationManager.WORK_DIR, fileName));
-      if (ext === ApplicationManager.EXT) {
-        const uid = fileName.replace(ext, "");
-        const application = applicationsInfo.find((info) => info.uid === uid);
-        const dbDetail = ApplicationManager._createDBDetail(uid, application ? application.alias : "Unknown");
-        const app = new GDMNApplication(dbDetail);
-        await app.connect();
-        this._applications.set(uid, app);
+      if (ext === ApplicationManager.APP_EXT) {
+        const appInfo = applicationsInfo.find((info) => ApplicationManager._getAppName(info.uid) === fileName);
+        if (appInfo) {
+          const dbDetail = ApplicationManager._createDBDetail(appInfo.uid, appInfo ? appInfo.alias : "Unknown");
+          const app = new GDMNApplication(dbDetail);
+          await app.connect();
+          this._applications.set(appInfo.uid, app);
+        }
       }
     }
   }
@@ -146,17 +160,20 @@ export class ApplicationManager {
     }
   }
 
-  public async delete(userKey: number, uid: string): Promise<boolean> {
+  public async delete(userKey: number, uid: string): Promise<void> {
     if (!this._mainApplication) {
       throw new Error("Main application is not created");
     }
     const application = this._applications.get(uid);
-    if (!application || application.dbDetail.alias === databases.test.alias) {
-      return false;
+    if (!application) {
+      throw new Error("Application not found");
     }
-    await this._mainApplication.deleteApplicationInfo(userKey, uid);
-    await application.delete();
-    return true;
+    if (application.dbDetail.alias !== databases.test.alias) {
+      await this._mainApplication.deleteApplicationInfo(userKey, uid);
+      await application.delete();
+      const backups = await this.getBackups(uid);
+      backups.forEach((backup) => unlinkSync(ApplicationManager._getBackupPath(backup.uid)));
+    }
   }
 
   public async add(userKey: number, alias: string): Promise<IApplicationInfoOutput> {
@@ -187,11 +204,11 @@ export class ApplicationManager {
     }
 
     const backupUid = uuidV1().toUpperCase();
-    const backupPath = join(ApplicationManager.BACKUP_DIR, `${backupUid}${ApplicationManager.BACKUP_EXT}`);
-    const appPath = join(ApplicationManager.WORK_DIR, `${appUid}${ApplicationManager.EXT}`);
+    const backupPath = ApplicationManager._getBackupPath(backupUid);
+    const appPath = ApplicationManager._getAppPath(appUid);
     const svcManager: AService = this._mainApplication.dbDetail.driver.newService();
     try {
-      await svcManager.attach(ApplicationManager.serviceOptions);
+      await svcManager.attach(ApplicationManager.SERVICE_OPTIONS);
       await svcManager.backupDatabase(appPath, backupPath);
     } finally {
       await svcManager.detach();
@@ -207,24 +224,22 @@ export class ApplicationManager {
       throw new Error("Main application is not created");
     }
     const backups = await this._mainApplication.getBackups(appUid);
-    const backupsWithSize = backups.map((backup) => {
-      const backupPath = join(ApplicationManager.BACKUP_DIR, `${backup.uid}${ApplicationManager.BACKUP_EXT}`);
+    return backups.map((backup) => {
+      const backupPath = ApplicationManager._getBackupPath(backup.uid);
       const size = fs.statSync(backupPath).size;
       return {...backup, size};
     });
-
-    return backupsWithSize;
   }
 
   public downloadBackup(backupUid: string): IAppBackupExport {
-    const backupPath = path.join(ApplicationManager.BACKUP_DIR, `${backupUid}${ApplicationManager.BACKUP_EXT}`);
+    const backupPath = ApplicationManager._getBackupPath(backupUid);
     if (existsSync(backupPath)) {
       return {
         backupPath,
         backupReadStream: createReadStream(backupPath)
       };
     } else {
-      throw new Error("Download is impossible. Backup file not found.");
+      throw new Error("Backup not founded");
     }
   }
 
@@ -233,40 +248,40 @@ export class ApplicationManager {
       throw new Error("Main application is not created");
     }
 
-    const bkpUid = uuidV1().toUpperCase();
-    const bkpPathToSave = path.join(ApplicationManager.BACKUP_DIR, `${bkpUid}${ApplicationManager.BACKUP_EXT}`);
+    const backupUid = uuidV1().toUpperCase();
+    const backupPath = ApplicationManager._getBackupPath(backupUid);
 
     const reader = fs.createReadStream(bkpUploadPath);
-    const writer = fs.createWriteStream(bkpPathToSave);
+    const writer = fs.createWriteStream(backupPath);
     reader.pipe(writer);
 
     const appId = await this._mainApplication.getAppKey(appUid);
-    await this._mainApplication.addBackupInfo(appId, bkpUid, alias);
+    await this._mainApplication.addBackupInfo(appId, backupUid, alias);
   }
 
-  public async makeRestore(appUid: string, backupUid: string): Promise<void> {
+  public async makeRestore(userKey: number, alias: string, backupUid: string): Promise<IApplicationInfoOutput> {
     if (!this._mainApplication) {
       throw new Error("Main application is not created");
     }
 
-    const application = this._applications.get(appUid);
-    if (application) {
-      if (application.dbDetail.alias !== databases.test.alias) {
-
-        const backupPath = join(ApplicationManager.BACKUP_DIR, `${backupUid}${ApplicationManager.BACKUP_EXT}`);
-        const appPath = join(ApplicationManager.WORK_DIR, `${appUid}${ApplicationManager.EXT}`);
-        const svcManager: AService = this._mainApplication.dbDetail.driver.newService();
-        try {
-          await svcManager.attach(ApplicationManager.serviceOptions);
-          await svcManager.restoreDatabase(appPath, backupPath);
-        } finally {
-          await svcManager.detach();
-        }
-
-        await application.reload();
-      } else {
-        throw new Error("Can't restore application");
-      }
+    const uid = uuidV1().toUpperCase();
+    const options = ApplicationManager._createDBDetail(uid, alias);
+    const backupPath = ApplicationManager._getBackupPath(backupUid);
+    const svcManager: AService = this._mainApplication.dbDetail.driver.newService();
+    try {
+      await svcManager.attach(ApplicationManager.SERVICE_OPTIONS);
+      await svcManager.restoreDatabase(options.connectionOptions.path, backupPath, {replace: true});
+    } finally {
+      await svcManager.detach();
     }
+
+    const result = await this._mainApplication.addApplicationInfo(userKey, {
+      uid,
+      alias
+    });
+    const application = new GDMNApplication(options);
+    await application.connect();
+    this._applications.set(uid, application);
+    return result;
   }
 }

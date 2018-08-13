@@ -25,12 +25,12 @@ export default new Router()
     return await next();
   })
   .post("/", async (ctx) => {
-    if (isAliasExists(ctx.request.body)) {
-      const appManager = ctx.state.appManager as ApplicationManager;
-      const result = await appManager.add(ctx.state.user.id, ctx.request.body.alias);
-      return ctx.body = result;
+    if (!isAliasExists(ctx.request.body)) {
+      throwCtx(ctx, 400, "Alias is not provided", ErrorCodes.INVALID_ARGUMENTS, ["alias"]);
     }
-    throwCtx(ctx, 400, "Alias is not provided", ErrorCodes.INVALID_ARGUMENTS, ["alias"]);
+    const appManager = ctx.state.appManager as ApplicationManager;
+    const result = await appManager.add(ctx.state.user.id, ctx.request.body.alias);
+    return ctx.body = result;
   })
   .get("/", async (ctx) => {
     const appManager = ctx.state.appManager as ApplicationManager;
@@ -46,9 +46,7 @@ export default new Router()
   })
   .delete("/:uid", async (ctx) => {
     const appManager = ctx.state.appManager as ApplicationManager;
-    if (!await appManager.delete(ctx.state.user.id, ctx.params.uid)) {
-      throwCtx(ctx, 500, "Can't delete application");
-    }
+    await appManager.delete(ctx.state.user.id, ctx.params.uid);
     return ctx.body = {uid: ctx.params.uid};
   })
   .get("/:uid/er", async (ctx) => {
@@ -56,10 +54,10 @@ export default new Router()
     return ctx.body = JSON.stringify(application.erModel.serialize());
   })
   .post("/:uid/data", async (ctx) => {
-    if (isQueryExists(ctx.request.body)) {
-      const application = ctx.state.application as Application;
-      return ctx.body = await application.query(ctx.request.body.query);
+    if (!isQueryExists(ctx.request.body)) {
+      throwCtx(ctx, 400, "Query is not provided", ErrorCodes.INVALID_ARGUMENTS, ["query"]);
     }
-    throwCtx(ctx, 400, "Query is not provided", ErrorCodes.INVALID_ARGUMENTS, ["query"]);
+    const application = ctx.state.application as Application;
+    return ctx.body = await application.query(ctx.request.body.query);
   })
   .use("/:uid/backup", backup.routes(), backup.allowedMethods());
