@@ -8,14 +8,13 @@ import Router from "koa-router";
 import send from "koa-send";
 import serve from "koa-static";
 import cors from "koa2-cors";
-import io, { Socket } from "socket.io";
 import path from "path";
+import io, {Socket} from "socket.io";
 import {ApplicationManager} from "./ApplicationManager";
 import {checkHandledError, ErrorCodes, throwCtx} from "./ErrorCodes";
 import passport, {getAuthMiddleware, getPayloadFromJwtToken} from "./passport";
 import account from "./router/account";
 import app from "./router/app";
-import backup from "./router/backup";
 
 interface IServer {
   appManager: ApplicationManager;
@@ -62,9 +61,7 @@ async function create(): Promise<IServer> {
 
   const router = new Router()
     .use("/account", account.routes(), account.allowedMethods())
-    .use("/app", getAuthMiddleware("jwt", passport), app.routes(), app.allowedMethods())
-    .use("/app/:uid/backup", getAuthMiddleware("jwt", passport),
-      extractSocket, backup.routes(), backup.allowedMethods())
+    .use("/app", getAuthMiddleware("jwt", passport), extractSocket, app.routes(), app.allowedMethods())
 
     // TODO temp
     .get("/", (ctx) => ctx.redirect("/spa"))
@@ -113,7 +110,7 @@ async function create(): Promise<IServer> {
   return {
     appManager,
     httpServer,
-    sio,
+    sio
   };
 }
 

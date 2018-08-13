@@ -3,6 +3,7 @@ import Router from "koa-router";
 import {ApplicationManager} from "../ApplicationManager";
 import {Application} from "../apps/Application";
 import {ErrorCodes, throwCtx} from "../ErrorCodes";
+import backup from "./backup";
 
 function isAppManagerExists(obj: any): obj is { appManager: ApplicationManager } {
   return obj && obj.appManager && obj.appManager instanceof ApplicationManager;
@@ -60,4 +61,5 @@ export default new Router()
       return ctx.body = await application.query(ctx.request.body.query);
     }
     throwCtx(ctx, 400, "Query is not provided", ErrorCodes.INVALID_ARGUMENTS, ["query"]);
-  });
+  })
+  .use("/:uid/backup", backup.routes(), backup.allowedMethods());

@@ -167,7 +167,7 @@ For backup and restore you need connect to server's socket (on client) and subsc
     - Response: 200 OK
 
 2. Make restore
-    - Request: POST /app/:uid/:backupUid/restore
+    - Request: POST /app/:uid/backup/:backupUid/restore
     
 3. Get all backups for application with UID `:uid`
 
