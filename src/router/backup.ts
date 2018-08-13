@@ -26,16 +26,13 @@ export default new Router()
         .catch((error) => console.error(error));
     }
 
-    ctx.status = 200;
+    ctx.body = {};
   })
   .get("/", async (ctx) => {
     const appManager = ctx.state.appManager as ApplicationManager;
     const appUid = ctx.params.uid;
 
-    const backups = await appManager.getBackups(appUid);
-
-    ctx.status = 200;
-    ctx.body = backups;
+    ctx.body = await appManager.getBackups(appUid);
   })
   .post("/upload", async (ctx) => {
     const appManager = ctx.state.appManager as ApplicationManager;
@@ -46,7 +43,7 @@ export default new Router()
 
     await appManager.uploadBackup(appUid, bkpFilePath, alias);
 
-    ctx.status = 200;
+    ctx.body = {};
   })
   .post("/:backupUid/download", async (ctx) => {
     const appManager = ctx.state.appManager as ApplicationManager;
@@ -81,5 +78,5 @@ export default new Router()
         .catch((error) => console.error(error));
     }
 
-    ctx.status = 200;
+    ctx.body = {};
   });
