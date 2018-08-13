@@ -10,6 +10,12 @@ import {ErrorCodes, throwCtx} from "./ErrorCodes";
 const USERNAME_FIELD = "login";
 const PASSWORD_FIELD = "password";
 
+const jwtFromRequest = ExtractJwt.fromExtractors([
+  ExtractJwt.fromAuthHeaderAsBearerToken(),
+  ExtractJwt.fromBodyField("access_token"),
+  ExtractJwt.fromUrlQueryParameter("access_token")
+]);
+
 export function createAccessJwtToken(user: IUserOutput): string {
   return jwt.sign({
     id: user.id
@@ -64,7 +70,7 @@ passport.use(new LocalStrategy({
 }));
 
 passport.use("jwt", new JWTStrategy({
-    jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+    jwtFromRequest,
     secretOrKey: config.get("auth.jwtSecret"),
     passReqToCallback: true
   },
@@ -87,7 +93,7 @@ passport.use("jwt", new JWTStrategy({
 ));
 
 passport.use("refresh_jwt", new JWTStrategy({
-    jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+    jwtFromRequest,
     secretOrKey: config.get("auth.jwtSecret"),
     passReqToCallback: true
   },

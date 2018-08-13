@@ -34,7 +34,7 @@ export default new Router()
     ctx.body = backups;
     return ctx;
   })
-  .get("/:backupUid/download", async (ctx) => {
+  .post("/:backupUid/download", async (ctx) => {
     const appManager = ctx.state.appManager as ApplicationManager;
     const backupUid = ctx.params.backupUid;
 
