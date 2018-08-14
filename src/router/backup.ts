@@ -1,7 +1,13 @@
+import {File} from "formidable";
+import fs from "fs";
 import Router from "koa-router";
 import path from "path";
 import {ApplicationManager} from "../ApplicationManager";
 import {ErrorCodes, throwCtx} from "../ErrorCodes";
+
+function isBkpFileExists(obj: any): obj is { bkpFile: File } {
+  return obj && obj.bkpFile;
+}
 
 function isAliasExists(obj: any): obj is { alias: string } {
   return obj && obj.alias;
@@ -37,11 +43,16 @@ export default new Router()
   .post("/upload", async (ctx) => {
     const appManager = ctx.state.appManager as ApplicationManager;
 
+    const files = ctx.request.files;
+    if (!isBkpFileExists(files)) {
+      return throwCtx(ctx, 400, "files is undefined");
+    }
     const appUid = ctx.params.uid;
-    const bkpFilePath = ctx.request.body.bkpFile;
+    const bkpFilePath = files.bkpFile;
     const alias = ctx.request.body.alias;
 
-    await appManager.uploadBackup(appUid, bkpFilePath, alias);
+    const reader = fs.createReadStream(bkpFilePath.path);
+    await appManager.uploadBackup(reader, appUid, alias);
 
     ctx.body = {};
   })

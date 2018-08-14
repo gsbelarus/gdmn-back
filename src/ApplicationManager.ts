@@ -254,7 +254,7 @@ export class ApplicationManager {
     return new Promise<void>((resolve, reject) => unlink(backupPath, (err) => err ? reject(err) : resolve()));
   }
 
-  public async uploadBackup(appUid: string, bkpUploadPath: string, alias?: string): Promise<void> {
+  public async uploadBackup(stream: ReadStream, appUid: string, alias?: string): Promise<void> {
     if (!this._mainApplication) {
       throw new Error("Main application is not created");
     }
@@ -262,9 +262,8 @@ export class ApplicationManager {
     const backupUid = uuidV1().toUpperCase();
     const backupPath = ApplicationManager._getBackupPath(backupUid);
 
-    const reader = fs.createReadStream(bkpUploadPath);
     const writer = fs.createWriteStream(backupPath);
-    reader.pipe(writer);
+    stream.pipe(writer);
 
     const appId = await this._mainApplication.getAppKey(appUid);
     await this._mainApplication.addBackupInfo(appId, backupUid, alias);
