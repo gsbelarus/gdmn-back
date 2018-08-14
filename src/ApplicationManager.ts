@@ -192,11 +192,16 @@ export class ApplicationManager {
     return result;
   }
 
-  public async getAll(userKey: number): Promise<IApplicationInfoOutput[]> {
+  public async getAll(userKey: number): Promise<Array<IApplicationInfoOutput & { size: number }>> {
     if (!this._mainApplication) {
       throw new Error("Main application is not created");
     }
-    return await this._mainApplication.getApplicationsInfo(userKey);
+    const apps = await this._mainApplication.getApplicationsInfo(userKey);
+    return apps.map((appInfo) => {
+      const appPath = ApplicationManager._getAppPath(appInfo.uid);
+      const size = fs.statSync(appPath).size;
+      return {...appInfo, size};
+    });
   }
 
   public async makeBackup(appUid: string, alias?: string): Promise<string> {
