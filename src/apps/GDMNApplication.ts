@@ -21,5 +21,7 @@ export class GDMNApplication extends Application {
     testEntity.add(new StringAttribute({
       name: "TEST_FILED", lName: {ru: {name: "Тестовое поле"}}, required: true, maxLength: 150
     }));
+
+    await new ERBridge(_connection).importToDatabase(erModel);
   }
 }
