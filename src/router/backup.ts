@@ -45,6 +45,15 @@ export default new Router()
 
     ctx.body = {};
   })
+  .delete("/:backupUid", async (ctx) => {
+    const appManager = ctx.state.appManager as ApplicationManager;
+
+    const backupUid = ctx.params.backupUid;
+
+    await appManager.deleteBackup(backupUid);
+
+    ctx.body = {};
+  })
   .post("/:backupUid/download", async (ctx) => {
     const appManager = ctx.state.appManager as ApplicationManager;
 

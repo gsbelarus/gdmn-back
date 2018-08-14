@@ -174,6 +174,11 @@ For backup and restore you need connect to server's socket (on client) and subsc
     }
     ```
     
+3. Delete backup
+
+    - Request: DELETE /app/:uid/backup/:backupUid
+    - Response: 200 OK
+    
 3. Get all backups for application with UID `:uid`
 
     - Request: GET /app/:uid/backup

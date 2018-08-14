@@ -1,7 +1,7 @@
 import config from "config";
-import fs, {createReadStream, existsSync, mkdirSync, readdirSync, ReadStream, unlinkSync} from "fs";
+import fs, {createReadStream, existsSync, mkdirSync, readdirSync, ReadStream, unlink} from "fs";
 import {AService, Factory, IServiceOptions} from "gdmn-db";
-import {extname, resolve} from "path";
+import path from "path";
 import {v1 as uuidV1} from "uuid";
 import {Application} from "./apps/Application";
 import {GDMNApplication} from "./apps/GDMNApplication";
@@ -17,10 +17,10 @@ export interface IAppBackupExport {
 // TODO целостность данных для операций вставки и удаления приложений
 export class ApplicationManager {
 
-  public static MAIN_DIR = resolve(config.get("db.dir"));
-  public static WORK_DIR = resolve(ApplicationManager.MAIN_DIR, "work");
+  public static MAIN_DIR = path.resolve(config.get("db.dir"));
+  public static WORK_DIR = path.resolve(ApplicationManager.MAIN_DIR, "work");
   public static APP_EXT = ".FDB";
-  public static BACKUP_DIR = resolve(ApplicationManager.MAIN_DIR, "backup");
+  public static BACKUP_DIR = path.resolve(ApplicationManager.MAIN_DIR, "backup");
   public static BACKUP_EXT = ".FBK";
   public static MAIN_DB = `MAIN${ApplicationManager.APP_EXT}`;
 
@@ -43,7 +43,7 @@ export class ApplicationManager {
   }
 
   private static _getAppPath(uid: string): string {
-    return resolve(ApplicationManager.WORK_DIR, ApplicationManager._getAppName(uid));
+    return path.resolve(ApplicationManager.WORK_DIR, ApplicationManager._getAppName(uid));
   }
 
   private static _getBackupName(uid: string): string {
@@ -51,7 +51,7 @@ export class ApplicationManager {
   }
 
   private static _getBackupPath(uid: string): string {
-    return resolve(ApplicationManager.BACKUP_DIR, ApplicationManager._getBackupName(uid));
+    return path.resolve(ApplicationManager.BACKUP_DIR, ApplicationManager._getBackupName(uid));
   }
 
   private static _createMainDBDetail(): IDBDetail {
@@ -64,7 +64,7 @@ export class ApplicationManager {
       },
       connectionOptions: {
         ...ApplicationManager.SERVICE_OPTIONS,
-        path: resolve(ApplicationManager.MAIN_DIR, ApplicationManager.MAIN_DB)
+        path: path.resolve(ApplicationManager.MAIN_DIR, ApplicationManager.MAIN_DB)
       }
     };
   }
@@ -93,7 +93,7 @@ export class ApplicationManager {
     }
 
     this._mainApplication = new MainApplication(ApplicationManager._createMainDBDetail());
-    if (!existsSync(resolve(ApplicationManager.MAIN_DIR, ApplicationManager.MAIN_DB))) {
+    if (!existsSync(path.resolve(ApplicationManager.MAIN_DIR, ApplicationManager.MAIN_DB))) {
       await this._mainApplication.create();
     } else {
       await this._mainApplication.connect();
@@ -130,7 +130,7 @@ export class ApplicationManager {
 
     const applicationsInfo = await this._mainApplication.getApplicationsInfo();
     for (const fileName of readdirSync(ApplicationManager.WORK_DIR)) {
-      const ext = extname(resolve(ApplicationManager.WORK_DIR, fileName));
+      const ext = path.extname(path.resolve(ApplicationManager.WORK_DIR, fileName));
       if (ext === ApplicationManager.APP_EXT) {
         const appInfo = applicationsInfo.find((info) => ApplicationManager._getAppName(info.uid) === fileName);
         if (appInfo) {
@@ -171,8 +171,9 @@ export class ApplicationManager {
     if (application.dbDetail.alias !== databases.test.alias) {
       await this._mainApplication.deleteApplicationInfo(userKey, uid);
       await application.delete();
-      const backups = await this.getBackups(uid);
-      backups.forEach((backup) => unlinkSync(ApplicationManager._getBackupPath(backup.uid)));
+      for (const backup of await this.getBackups(uid)) {
+        await this.deleteBackup(backup.uid);
+      }
     }
   }
 
@@ -241,6 +242,11 @@ export class ApplicationManager {
     } else {
       throw new Error("Backup not founded");
     }
+  }
+
+  public async deleteBackup(backupUid: string): Promise<void> {
+    const backupPath = ApplicationManager._getBackupPath(backupUid);
+    return new Promise<void>((resolve, reject) => unlink(backupPath, (err) => err ? reject(err) : resolve()));
   }
 
   public async uploadBackup(appUid: string, bkpUploadPath: string, alias?: string): Promise<void> {
