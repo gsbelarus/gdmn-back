@@ -131,7 +131,7 @@ export function getAuthMiddleware(strategyName: string, passportInstance: KoaPas
   return async (ctx, next) => {
     await passportInstance.authenticate(strategyName, (error: Error, user: any, info: Error) => {
       if (info) {
-        throwCtx(ctx, 401, info, ErrorCodes.INVALID_AUTH);
+        throwCtx(ctx, 401, info.message, ErrorCodes.INVALID_AUTH);
       }
       if (error) {
         throw error;
