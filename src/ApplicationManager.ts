@@ -232,7 +232,7 @@ export class ApplicationManager {
     if (!this._mainApplication) {
       throw new Error("Main application is not created");
     }
-    const backups = await this._mainApplication.getBackups(appUid);
+    const backups = await this._mainApplication.getBackupsInfo(appUid);
     return backups.map((backup) => {
       const backupPath = ApplicationManager._getBackupPath(backup.uid);
       const size = fs.statSync(backupPath).size;
@@ -253,6 +253,11 @@ export class ApplicationManager {
   }
 
   public async deleteBackup(backupUid: string): Promise<void> {
+    if (!this._mainApplication) {
+      throw new Error("Main application is not created");
+    }
+
+    await this._mainApplication.deleteBackupInfo(backupUid);
     const backupPath = ApplicationManager._getBackupPath(backupUid);
     return new Promise<void>((resolve, reject) => unlink(backupPath, (err) => err ? reject(err) : resolve()));
   }

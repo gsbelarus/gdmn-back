@@ -216,7 +216,19 @@ export class MainApplication extends Application {
     }));
   }
 
-  public async getBackups(appUid: string): Promise<IAppBackupInfoOutput[]> {
+  public async deleteBackupInfo(uid: string): Promise<void> {
+    await this.executeConnection((connection) => AConnection.executeTransaction({
+      connection,
+      callback: async (transaction) => {
+        await connection.execute(transaction, `
+          DELETE FROM APPLICATION_BACKUPS
+          WHERE UID = :uid
+        `, {uid});
+      }
+    }));
+  }
+
+  public async getBackupsInfo(appUid: string): Promise<IAppBackupInfoOutput[]> {
     return await this.executeConnection((connection) => AConnection.executeTransaction({
       connection,
       callback: (transaction) => AConnection.executeQueryResultSet({
