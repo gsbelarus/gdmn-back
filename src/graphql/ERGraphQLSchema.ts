@@ -1,5 +1,5 @@
 import {
-  Attributes,
+  IAttributes,
   BooleanAttribute,
   DateAttribute,
   DetailAttribute,
@@ -158,7 +158,7 @@ export class ERGraphQLSchema extends GraphQLSchema {
 
   private static _createScalarAttributes(context: IContext,
                                          entity: Entity,
-                                         attributes: Attributes): GraphQLFieldConfigMap<any, any> {
+                                         attributes: IAttributes): GraphQLFieldConfigMap<any, any> {
     return Object.entries(attributes).reduce((fields, [attributeName, attribute]) => {
 
       if (ScalarAttribute.isType(attribute)) {
@@ -178,7 +178,7 @@ export class ERGraphQLSchema extends GraphQLSchema {
 
   private static _createLinkAttributes(context: IContext,
                                        entity: Entity,
-                                       attributes: Attributes): GraphQLFieldConfigMap<any, any> {
+                                       attributes: IAttributes): GraphQLFieldConfigMap<any, any> {
     return Object.entries(attributes).reduce((fields, [attributeName, attribute]) => {
 
       if (EntityAttribute.isType(attribute)) {
@@ -253,7 +253,7 @@ export class ERGraphQLSchema extends GraphQLSchema {
     entity: Entity,
     attribute: EntityAttribute
   ): GraphQLUnionType | GraphQLObjectType | GraphQLList<any> | null {
-    const entityTypes = attribute.entity.map((item) => ERGraphQLSchema._createEntityType(context, item));
+    const entityTypes = attribute.entities.map((item) => ERGraphQLSchema._createEntityType(context, item));
 
     if (entityTypes.length > 1) {
       const unionType = new GraphQLUnionType({
@@ -363,13 +363,13 @@ export class ERGraphQLSchema extends GraphQLSchema {
             name: `${entityName}_IsNull_Nested`,
             fields: () => Object.values(entity.attributes).reduce((nestedFields, attribute) => {
               if (EntityAttribute.isType(attribute)) {
-                if (attribute.entity.length) {
+                if (attribute.entities.length) {
                   const attributeName = ERGraphQLSchema._escapeName(context, attribute.name);
                   let nestedType: GraphQLInputObjectType | undefined;
-                  if (attribute.entity.length > 1) {
+                  if (attribute.entities.length > 1) {
                     nestedType = new GraphQLInputObjectType({
                       name: `${entityName}_${attributeName}_IsNull_Union`,
-                      fields: attribute.entity.reduce((unionFields, nestedEntity) => {
+                      fields: attribute.entities.reduce((unionFields, nestedEntity) => {
                         const unionEntityName = ERGraphQLSchema._escapeName(context, nestedEntity.name);
                         unionFields[unionEntityName] = {
                           type: ERGraphQLSchema._createIsNullType(context, nestedEntity)
@@ -377,8 +377,8 @@ export class ERGraphQLSchema extends GraphQLSchema {
                         return unionFields;
                       }, {} as GraphQLInputFieldConfigMap)
                     });
-                  } else if (attribute.entity.length === 1) {
-                    nestedType = ERGraphQLSchema._createIsNullType(context, attribute.entity[0]);
+                  } else if (attribute.entities.length === 1) {
+                    nestedType = ERGraphQLSchema._createIsNullType(context, attribute.entities[0]);
                   }
                   if (nestedType) {
                     nestedFields[`${attributeName}`] = {type: nestedType};

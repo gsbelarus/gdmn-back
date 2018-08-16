@@ -21,13 +21,21 @@ export abstract class Application extends Database {
   }
 
   public async query(query: IEntityQueryInspector): Promise<IQueryResponse> {
-    return await this.executeConnection(async (connection) => {
+    this._checkBusy();
+
+    return await this._executeConnection(async (connection) => {
       return await new ERBridge(connection).query(this._erModel, this._dbStructure, query);
     });
   }
 
   public async reload(): Promise<void> {
-    await this.executeConnection(async (connection) => {
+    this._checkBusy();
+
+    await this._reload();
+  }
+
+  protected async _reload(): Promise<void> {
+    await this._executeConnection(async (connection) => {
       const erBridge = new ERBridge(connection);
       await erBridge.initDatabase();
 
@@ -59,6 +67,6 @@ export abstract class Application extends Database {
   protected async _onConnect(): Promise<void> {
     await super._onConnect();
 
-    await this.reload();
+    await this._reload();
   }
 }
