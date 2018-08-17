@@ -258,85 +258,77 @@ export class MainApplication extends Application {
     }));
   }
 
-  protected async _onCreate(_connection: AConnection): Promise<void> {
-    await super._onCreate(_connection);
+  protected async _onCreate(connection: AConnection): Promise<void> {
+    await super._onCreate(connection);
 
     await AConnection.executeTransaction({
-      connection: _connection,
-      callback: async (transaction) => {
-        const builder = await ERBridge.getERModelBuilder();
-        await builder.prepare(_connection, transaction);
-        try {
-          const erModel = await builder.initERModel();
+      connection,
+      callback: (transaction) => new ERBridge(connection).executeERModelBuilder(transaction, async (builder) => {
+        const erModel = await builder.initERModel();
 
-          // APP_USER
-          const userEntity = await builder.addEntity(erModel, new Entity({
-            name: "APP_USER", lName: {ru: {name: "Пользователь"}}
-          }));
-          await builder.entityBuilder.addAttribute(userEntity, new StringAttribute({
-            name: "LOGIN", lName: {ru: {name: "Логин"}}, required: true, minLength: 1, maxLength: 32
-          }));
-          await builder.entityBuilder.addAttribute(userEntity, new BlobAttribute({
-            name: "PASSWORD_HASH", lName: {ru: {name: "Хешированный пароль"}}, required: true
-          }));
-          await builder.entityBuilder.addAttribute(userEntity, new BlobAttribute({
-            name: "SALT", lName: {ru: {name: "Примесь"}}, required: true
-          }));
-          await builder.entityBuilder.addAttribute(userEntity, new BooleanAttribute({
-            name: "IS_ADMIN", lName: {ru: {name: "Флаг администратора"}}
-          }));
+        // APP_USER
+        const userEntity = await builder.addEntity(erModel, new Entity({
+          name: "APP_USER", lName: {ru: {name: "Пользователь"}}
+        }));
+        await builder.entityBuilder.addAttribute(userEntity, new StringAttribute({
+          name: "LOGIN", lName: {ru: {name: "Логин"}}, required: true, minLength: 1, maxLength: 32
+        }));
+        await builder.entityBuilder.addAttribute(userEntity, new BlobAttribute({
+          name: "PASSWORD_HASH", lName: {ru: {name: "Хешированный пароль"}}, required: true
+        }));
+        await builder.entityBuilder.addAttribute(userEntity, new BlobAttribute({
+          name: "SALT", lName: {ru: {name: "Примесь"}}, required: true
+        }));
+        await builder.entityBuilder.addAttribute(userEntity, new BooleanAttribute({
+          name: "IS_ADMIN", lName: {ru: {name: "Флаг администратора"}}
+        }));
 
-          // APPLICATION
-          const appEntity = await builder.addEntity(erModel, new Entity({
-            name: "APPLICATION", lName: {ru: {name: "Приложение"}}
-          }));
-          const appUid = new StringAttribute({
-            name: "UID", lName: {ru: {name: "Идентификатор приложения"}}, required: true, minLength: 1, maxLength: 36
-          });
-          await builder.entityBuilder.addAttribute(appEntity, appUid);
-          await builder.entityBuilder.addUnique(appEntity, [appUid]);
-          await builder.entityBuilder.addAttribute(appEntity, new TimeStampAttribute({
-            name: "CREATIONDATE", lName: {ru: {name: "Дата создания"}}, required: true,
-            defaultValue: "CURRENT_TIMESTAMP"
-          }));
-          const appSet = new SetAttribute({
-            name: "APPLICATIONS", lName: {ru: {name: "Приложения"}}, entities: [appEntity],
-            adapter: {crossRelation: "APP_USER_APPLICATIONS"}
-          });
-          appSet.add(new StringAttribute({
-            name: "ALIAS", lName: {ru: {name: "Название приложения"}}, required: true, minLength: 1, maxLength: 120
-          }));
+        // APPLICATION
+        const appEntity = await builder.addEntity(erModel, new Entity({
+          name: "APPLICATION", lName: {ru: {name: "Приложение"}}
+        }));
+        const appUid = new StringAttribute({
+          name: "UID", lName: {ru: {name: "Идентификатор приложения"}}, required: true, minLength: 1, maxLength: 36
+        });
+        await builder.entityBuilder.addAttribute(appEntity, appUid);
+        await builder.entityBuilder.addUnique(appEntity, [appUid]);
+        await builder.entityBuilder.addAttribute(appEntity, new TimeStampAttribute({
+          name: "CREATIONDATE", lName: {ru: {name: "Дата создания"}}, required: true,
+          defaultValue: "CURRENT_TIMESTAMP"
+        }));
+        const appSet = new SetAttribute({
+          name: "APPLICATIONS", lName: {ru: {name: "Приложения"}}, entities: [appEntity],
+          adapter: {crossRelation: "APP_USER_APPLICATIONS"}
+        });
+        appSet.add(new StringAttribute({
+          name: "ALIAS", lName: {ru: {name: "Название приложения"}}, required: true, minLength: 1, maxLength: 120
+        }));
 
-          await builder.entityBuilder.addAttribute(userEntity, appSet);
+        await builder.entityBuilder.addAttribute(userEntity, appSet);
 
-          // APPLICATION_BACKUPS
-          const backupEntity = await builder.addEntity(erModel, new Entity({
-            name: "APPLICATION_BACKUPS", lName: {ru: {name: "Резервная копия"}}
-          }));
-          const backupUid = new StringAttribute({
-            name: "UID", lName: {ru: {name: "Идентификатор бэкапа"}}, required: true, minLength: 1, maxLength: 36
-          });
-          await builder.entityBuilder.addAttribute(backupEntity, backupUid);
-          await builder.entityBuilder.addUnique(backupEntity, [backupUid]);
-          await builder.entityBuilder.addAttribute(backupEntity, new EntityAttribute({
-            name: "APP", lName: {ru: {name: "Приложение"}}, required: true, entities: [appEntity]
-          }));
-          await builder.entityBuilder.addAttribute(backupEntity, new TimeStampAttribute({
-            name: "CREATIONDATE", lName: {ru: {name: "Дата создания"}}, required: true,
-            defaultValue: "CURRENT_TIMESTAMP"
-          }));
-          await builder.entityBuilder.addAttribute(backupEntity, new StringAttribute({
-            name: "ALIAS", lName: {ru: {name: "Название бэкапа"}}, required: true, minLength: 1, maxLength: 120
-          }));
-        } finally {
-          if (builder.prepared) {
-            await builder.dispose();
-          }
-        }
-      }
+        // APPLICATION_BACKUPS
+        const backupEntity = await builder.addEntity(erModel, new Entity({
+          name: "APPLICATION_BACKUPS", lName: {ru: {name: "Резервная копия"}}
+        }));
+        const backupUid = new StringAttribute({
+          name: "UID", lName: {ru: {name: "Идентификатор бэкапа"}}, required: true, minLength: 1, maxLength: 36
+        });
+        await builder.entityBuilder.addAttribute(backupEntity, backupUid);
+        await builder.entityBuilder.addUnique(backupEntity, [backupUid]);
+        await builder.entityBuilder.addAttribute(backupEntity, new EntityAttribute({
+          name: "APP", lName: {ru: {name: "Приложение"}}, required: true, entities: [appEntity]
+        }));
+        await builder.entityBuilder.addAttribute(backupEntity, new TimeStampAttribute({
+          name: "CREATIONDATE", lName: {ru: {name: "Дата создания"}}, required: true,
+          defaultValue: "CURRENT_TIMESTAMP"
+        }));
+        await builder.entityBuilder.addAttribute(backupEntity, new StringAttribute({
+          name: "ALIAS", lName: {ru: {name: "Название бэкапа"}}, required: true, minLength: 1, maxLength: 120
+        }));
+      })
     });
 
-    await this._addUserInternal(_connection, {login: "Administrator", password: "Administrator", admin: true});
+    await this._addUserInternal(connection, {login: "Administrator", password: "Administrator", admin: true});
   }
 
   private async _addUserInternal(connection: AConnection, user: IUserInput): Promise<IUserOutput> {
