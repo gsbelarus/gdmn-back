@@ -198,7 +198,7 @@ export class ApplicationManager {
     }
     const apps = await this._mainApplication.getApplicationsInfo(userKey);
     return apps.map((appInfo) => {
-      if (appInfo.alias !== databases.test.alias) {
+      if (!databases.test || databases.test.alias !== appInfo.alias) {
         const appPath = ApplicationManager._getAppPath(appInfo.uid);
         const size = fs.statSync(appPath).size;
         return {...appInfo, size};
