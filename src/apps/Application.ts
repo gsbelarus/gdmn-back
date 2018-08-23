@@ -1,5 +1,5 @@
 import {AccessMode, AConnection, DBStructure} from "gdmn-db";
-import {ERBridge, IQueryResponse} from "gdmn-er-bridge";
+import {DataSource, ERBridge, IQueryResponse} from "gdmn-er-bridge";
 import {ERModel, IEntityQueryInspector} from "gdmn-orm";
 import {Database, IDBDetail} from "../db/Database";
 
@@ -36,8 +36,7 @@ export abstract class Application extends Database {
 
   protected async _reload(): Promise<void> {
     await this._executeConnection(async (connection) => {
-      const erBridge = new ERBridge(connection);
-      await erBridge.initDatabase();
+      await new ERModel().initDataSource(new DataSource(connection));
 
       await AConnection.executeTransaction({
         connection,
@@ -50,6 +49,7 @@ export abstract class Application extends Database {
           console.timeEnd("DBStructure load time");
 
           console.time("erModel load time");
+          const erBridge = new ERBridge(connection);
           await erBridge.exportFromDatabase(this._dbStructure, transaction, this._erModel = new ERModel());
           console.log(`erModel: loaded ${Object.entries(this._erModel.entities).length} entities`);
           console.timeEnd("erModel load time");
@@ -60,8 +60,8 @@ export abstract class Application extends Database {
 
   protected async _onCreate(_connection: AConnection): Promise<void> {
     await super._onCreate(_connection);
-    const erBridge = new ERBridge(_connection);
-    await erBridge.initDatabase();
+
+    await this._erModel.initDataSource(new DataSource(_connection));
   }
 
   protected async _onConnect(): Promise<void> {

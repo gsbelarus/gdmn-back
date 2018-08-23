@@ -1,5 +1,5 @@
 import {AConnection} from "gdmn-db";
-import {ERBridge} from "gdmn-er-bridge";
+import {DataSource} from "gdmn-er-bridge";
 import {Entity, StringAttribute} from "gdmn-orm";
 import {IDBDetail} from "../db/Database";
 import {Application} from "./Application";
@@ -13,19 +13,22 @@ export class GDMNApplication extends Application {
   protected async _onCreate(connection: AConnection): Promise<void> {
     await super._onCreate(connection);
 
-    await AConnection.executeTransaction({
-      connection,
-      callback: (transaction) => new ERBridge(connection).executeERModelBuilder(transaction, async (builder) => {
-        const erModel = await builder.initERModel();
+    this.erModel.initDataSource(new DataSource(connection));
 
-        const entity = await builder.addEntity(erModel, new Entity({
-          name: "TEST", lName: {ru: {name: "Тестовая сущность"}}
-        }));
+    const transaction = await this.erModel.startTransaction();
+    try {
 
-        await builder.entityBuilder.addAttribute(entity, new StringAttribute({
-          name: "TEST_FILED", lName: {ru: {name: "Тестовое поле"}}, required: true, maxLength: 150
-        }));
-      })
-    });
+      const entity = await this.erModel.create(transaction, new Entity({
+        name: "TEST", lName: {ru: {name: "Тестовая сущность"}}
+      }));
+
+      await entity.create(transaction, new StringAttribute({
+        name: "TEST_FILED", lName: {ru: {name: "Тестовое поле"}}, required: true, maxLength: 150
+      }));
+
+      await transaction.commit();
+    } catch (error) {
+      await transaction.rollback();
+    }
   }
 }

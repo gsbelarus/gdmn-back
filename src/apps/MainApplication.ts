@@ -1,6 +1,6 @@
 import crypto from "crypto";
 import {AccessMode, AConnection} from "gdmn-db";
-import {ERBridge} from "gdmn-er-bridge";
+import {DataSource} from "gdmn-er-bridge";
 import {
   BlobAttribute,
   BooleanAttribute,
@@ -261,72 +261,76 @@ export class MainApplication extends Application {
   protected async _onCreate(connection: AConnection): Promise<void> {
     await super._onCreate(connection);
 
-    await AConnection.executeTransaction({
-      connection,
-      callback: (transaction) => new ERBridge(connection).executeERModelBuilder(transaction, async (builder) => {
-        const erModel = await builder.initERModel();
+    await this.erModel.initDataSource(new DataSource(connection));
 
-        // APP_USER
-        const userEntity = await builder.addEntity(erModel, new Entity({
-          name: "APP_USER", lName: {ru: {name: "Пользователь"}}
-        }));
-        await builder.entityBuilder.addAttribute(userEntity, new StringAttribute({
-          name: "LOGIN", lName: {ru: {name: "Логин"}}, required: true, minLength: 1, maxLength: 32
-        }));
-        await builder.entityBuilder.addAttribute(userEntity, new BlobAttribute({
-          name: "PASSWORD_HASH", lName: {ru: {name: "Хешированный пароль"}}, required: true
-        }));
-        await builder.entityBuilder.addAttribute(userEntity, new BlobAttribute({
-          name: "SALT", lName: {ru: {name: "Примесь"}}, required: true
-        }));
-        await builder.entityBuilder.addAttribute(userEntity, new BooleanAttribute({
-          name: "IS_ADMIN", lName: {ru: {name: "Флаг администратора"}}
-        }));
+    const transaction = await this.erModel.startTransaction();
+    try {
 
-        // APPLICATION
-        const appEntity = await builder.addEntity(erModel, new Entity({
-          name: "APPLICATION", lName: {ru: {name: "Приложение"}}
-        }));
-        const appUid = new StringAttribute({
-          name: "UID", lName: {ru: {name: "Идентификатор приложения"}}, required: true, minLength: 1, maxLength: 36
-        });
-        await builder.entityBuilder.addAttribute(appEntity, appUid);
-        await builder.entityBuilder.addUnique(appEntity, [appUid]);
-        await builder.entityBuilder.addAttribute(appEntity, new TimeStampAttribute({
-          name: "CREATIONDATE", lName: {ru: {name: "Дата создания"}}, required: true,
-          defaultValue: "CURRENT_TIMESTAMP"
-        }));
-        const appSet = new SetAttribute({
-          name: "APPLICATIONS", lName: {ru: {name: "Приложения"}}, entities: [appEntity],
-          adapter: {crossRelation: "APP_USER_APPLICATIONS"}
-        });
-        appSet.add(new StringAttribute({
-          name: "ALIAS", lName: {ru: {name: "Название приложения"}}, required: true, minLength: 1, maxLength: 120
-        }));
+      // APP_USER
+      const userEntity = await this.erModel.create(transaction, new Entity({
+        name: "APP_USER", lName: {ru: {name: "Пользователь"}}
+      }));
+      await userEntity.create(transaction, new StringAttribute({
+        name: "LOGIN", lName: {ru: {name: "Логин"}}, required: true, minLength: 1, maxLength: 32
+      }));
+      await userEntity.create(transaction, new BlobAttribute({
+        name: "PASSWORD_HASH", lName: {ru: {name: "Хешированный пароль"}}, required: true
+      }));
+      await userEntity.create(transaction, new BlobAttribute({
+        name: "SALT", lName: {ru: {name: "Примесь"}}, required: true
+      }));
+      await userEntity.create(transaction, new BooleanAttribute({
+        name: "IS_ADMIN", lName: {ru: {name: "Флаг администратора"}}
+      }));
 
-        await builder.entityBuilder.addAttribute(userEntity, appSet);
+      // APPLICATION
+      const appEntity = await this.erModel.create(transaction, new Entity({
+        name: "APPLICATION", lName: {ru: {name: "Приложение"}}
+      }));
+      const appUid = new StringAttribute({
+        name: "UID", lName: {ru: {name: "Идентификатор приложения"}}, required: true, minLength: 1, maxLength: 36
+      });
+      await appEntity.create(transaction, appUid);
+      await appEntity.addAttrUnique(transaction, [appUid]);
+      await appEntity.create(transaction, new TimeStampAttribute({
+        name: "CREATIONDATE", lName: {ru: {name: "Дата создания"}}, required: true,
+        defaultValue: "CURRENT_TIMESTAMP"
+      }));
+      const appSet = new SetAttribute({
+        name: "APPLICATIONS", lName: {ru: {name: "Приложения"}}, entities: [appEntity],
+        adapter: {crossRelation: "APP_USER_APPLICATIONS"}
+      });
+      appSet.add(new StringAttribute({
+        name: "ALIAS", lName: {ru: {name: "Название приложения"}}, required: true, minLength: 1, maxLength: 120
+      }));
 
-        // APPLICATION_BACKUPS
-        const backupEntity = await builder.addEntity(erModel, new Entity({
-          name: "APPLICATION_BACKUPS", lName: {ru: {name: "Резервная копия"}}
-        }));
-        const backupUid = new StringAttribute({
-          name: "UID", lName: {ru: {name: "Идентификатор бэкапа"}}, required: true, minLength: 1, maxLength: 36
-        });
-        await builder.entityBuilder.addAttribute(backupEntity, backupUid);
-        await builder.entityBuilder.addUnique(backupEntity, [backupUid]);
-        await builder.entityBuilder.addAttribute(backupEntity, new EntityAttribute({
-          name: "APP", lName: {ru: {name: "Приложение"}}, required: true, entities: [appEntity]
-        }));
-        await builder.entityBuilder.addAttribute(backupEntity, new TimeStampAttribute({
-          name: "CREATIONDATE", lName: {ru: {name: "Дата создания"}}, required: true,
-          defaultValue: "CURRENT_TIMESTAMP"
-        }));
-        await builder.entityBuilder.addAttribute(backupEntity, new StringAttribute({
-          name: "ALIAS", lName: {ru: {name: "Название бэкапа"}}, required: true, minLength: 1, maxLength: 120
-        }));
-      })
-    });
+      await userEntity.create(transaction, appSet);
+
+      // APPLICATION_BACKUPS
+      const backupEntity = await this.erModel.create(transaction, new Entity({
+        name: "APPLICATION_BACKUPS", lName: {ru: {name: "Резервная копия"}}
+      }));
+      const backupUid = new StringAttribute({
+        name: "UID", lName: {ru: {name: "Идентификатор бэкапа"}}, required: true, minLength: 1, maxLength: 36
+      });
+      await backupEntity.create(transaction, backupUid);
+      await backupEntity.addAttrUnique(transaction, [backupUid]);
+
+      await backupEntity.create(transaction, new EntityAttribute({
+        name: "APP", lName: {ru: {name: "Приложение"}}, required: true, entities: [appEntity]
+      }));
+      await backupEntity.create(transaction, new TimeStampAttribute({
+        name: "CREATIONDATE", lName: {ru: {name: "Дата создания"}}, required: true,
+        defaultValue: "CURRENT_TIMESTAMP"
+      }));
+      await backupEntity.create(transaction, new StringAttribute({
+        name: "ALIAS", lName: {ru: {name: "Название бэкапа"}}, required: true, minLength: 1, maxLength: 120
+      }));
+
+      await transaction.commit();
+    } catch (error) {
+      await transaction.rollback();
+    }
 
     await this._addUserInternal(connection, {login: "Administrator", password: "Administrator", admin: true});
   }
