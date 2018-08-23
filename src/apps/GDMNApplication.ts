@@ -13,7 +13,7 @@ export class GDMNApplication extends Application {
   protected async _onCreate(connection: AConnection): Promise<void> {
     await super._onCreate(connection);
 
-    this.erModel.initDataSource(new DataSource(connection));
+    await this.erModel.initDataSource(new DataSource(connection));
 
     const transaction = await this.erModel.startTransaction();
     try {
