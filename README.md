@@ -1,35 +1,145 @@
-# gdmn-back (DEV)
+# gdmn-back
 
-## Install
+> not production-ready
 
-### Windows
-1. Install Git.
-2. Install [Firebird](https://www.firebirdsql.org/en/firebird-3-0/) version greater than or equal to 3.0.
-3. Add `fbclient.dll` directory to the PATH.
-4. Run next commands
+## Getting Started
 
+### Install
+
+Pre-requirements: Xcode Command Line Tools (macOS), Node.js, npm, git.
+
+#### - macOS
+
+<details>
+  <summary>expand me</summary>
+  
+1. Install [firebird](https://www.firebirdsql.org/en/firebird-3-0/) (version >= 3):
     ```bash
-    $ npm install --global --production windows-build-tools
-    $ npm install --global node-gyp
-    $ npm install
+    $ curl -LO https://github.com/FirebirdSQL/firebird/releases/download/R3_0_3/Firebird-3.0.3-32900-x86_64.pkg
+    $ open ./Firebird-3.0.3-32900-x86_64.pkg
     ```
-
-### Mac OS X
-1. Install Git.
-2. Install [Firebird](https://www.firebirdsql.org/en/firebird-3-0/), [see also](https://www.firebirdsql.org/file/documentation/papers_presentations/html/paper-fb-macosx-install.html)
-3. Install Xcode Command Line Tools
-4. Run next commands
-    ```bash 
+    
+2. Setup firebird:
+    ```bash
+    $ firebirdHome='export FIREBIRD_HOME="/Library/Frameworks/Firebird.framework/Resources"'
+    $ grep -q -F "$firebirdHome" ~/.bash_profile || echo "$firebirdHome" >> ~/.bash_profile
+        
+    $ firebirdBin='export PATH=$PATH:$FIREBIRD_HOME/bin'
+    $ grep -q -F "$firebirdBin" ~/.bash_profile || echo "$firebirdBin" >> ~/.bash_profile
+       
+    $ mkdir -p /usr/local/lib 
     $ ln -s /Library/Frameworks/Firebird.framework/Versions/A/Firebird /usr/local/lib/libfbclient.dylib
-    $ npm install
+    
+    # troubleshooting: Can not access lock files directory /tmp/firebird/
+    $ sudo dseditgroup -o edit -a $(whoami) -t user firebird
+ 
+    # troubleshooting: I/O error during "open O_CREAT" operation. Error while trying to create file. Permission denied
+    $ chgrp -R firebird /Library/Frameworks/Firebird.framework
+    $ sudo chmod -R g+rwx /Library/Frameworks/Firebird.framework
+    ```
+   See: [advanced configuration](http://gedemin.blogspot.com/2016/11/firebird-3.html) (optional).
+
+3. Install repository: 
+    ```bash
+    $ git clone https://github.com/gsbelarus/gdmn-back.git
+    $ cd gdmn-back
+    $ npm i
+    $ npm i
+    ```
+       
+4. Troubleshooting
+    >How do i check firebird server is running?
+    ```bash
+    $ netstat -an | grep 3050 
+    ```
+    If something is listening on port 3050 then the server is running.
+    
+    >How do i restart firebird server?
+    ```bash
+    $ ps -ef | grep xinetd
+    $ kill -USR2 <pid>
     ```
 
-### Linux
-...
+</details>
 
-## Usage
+#### - windows
 
-### Startup
+<details>
+  <summary>expand me</summary>
+  
+1. Install build tools:
+    ```bash
+    $ npm i --global --production windows-build-tools
+    $ npm i --global node-gyp
+    ```
+   
+2. Install [firebird](https://www.firebirdsql.org/en/firebird-3-0/) (version >= 3.0):
+    ```bash
+    $ curl -LO https://github.com/FirebirdSQL/firebird/releases/download/R3_0_3/Firebird-3.0.3.32900_0_x64.exe
+    $ cmd /K ./Firebird-3.0.3.32900_0_x64.exe
+    ```
+    
+3. Setup firebird:
+    - ```$ copy <fb_dir>/fbclient.dll <win_dir>/SysWOW64``` (System32)
+    
+        > There's no need if firebird directory(<fb_dir>) in $PATH
+        
+    - apply [configuration](http://gedemin.blogspot.com/2016/11/firebird-3.html) patch to <fb_dir>/firebird.conf:
+        ```diff
+        @@ -405,11 +405,11 @@
+         #
+         # Per-database configurable.
+         #
+        -#AuthServer = Srp
+        +AuthServer = Legacy_Auth
+         #
+         # Per-connection and per-database configurable.
+         #
+        -#AuthClient = Srp, Win_Sspi, Legacy_Auth
+        +AuthClient = Legacy_Auth
+         #
+         # If you need to use server plugins that do not provide encryption key (both Legacy_Auth
+         # & Win_Sspi) you should also turn off required encryption on the wire with WireCrypt
+        @@ -423,7 +423,7 @@
+         #
+         # Per-database configurable.
+         #
+        -#UserManager = Srp
+        +UserManager = Legacy_UserManager
+         
+         # TracePlugin is used by firebird trace facility to send trace data to the user
+         # or log file in audit case.
+        @@ -599,7 +599,7 @@
+         #
+         # Type: string (predefined values)
+         #
+        -#WireCrypt = Enabled (for client) / Required (for server)
+        +WireCrypt = Disabled
+         
+         #
+         # Should connection over the wire be compressed?
+        @@ -610,7 +610,7 @@
+         #
+         # Type: boolean
+         #
+        -#WireCompression = false
+        +WireCompression = false
+        ```    
+        
+        > Troubleshooting: Create 'localhost:3050/c:\gdmn-back\databases\MAIN.FDB' (node:2308) UnhandledPromiseRejectionWarning: Error: Install incomplete, please read the Compatibility chapter in the release notes for this version
+
+4. Install repository: 
+    ```bash
+    $ git clone https://github.com/gsbelarus/gdmn-back.git
+    $ cd gdmn-back
+    $ npm i
+    $ npm i
+    ```
+    
+</details>
+
+### Run
+
 1. Verify the configuration is correct (`./config/development.json`).
 2. Run command.
     ```bash 
@@ -37,13 +147,17 @@
     ```
 3. Wait for initialization and startup
 
-##### For old verison of gdmn-front:
+#### old verison of gdmn-front:
 1. Clone config file `./db/database.ts.sample` to the same directory and rename it to `./db/database.ts`
 2. Fill this config file
 
-### Endpoints
 
-HEADERS:  
+## API
+<details>
+  <summary>expand me</summary>
+
+##### HEADERS:  
+
 `Authorization: Bearer accessJWTToken/refreshJWTToken` - for authorization or refresh token
 `Accept: text/plan` - for errors in the response as text  
 `Accept: text/html` - for errors in the response as html  
@@ -233,4 +347,9 @@ For backup and restore you need connect to server's socket (on client) and subsc
       ```
     - Response: 200 OK
 
+</details>
 
+
+## Related projects
+
+- [`gdmn-front`](https://github.com/gsbelarus/gdmn-front) - web client
