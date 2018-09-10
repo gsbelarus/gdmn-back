@@ -1,29 +1,30 @@
 {
-  "extends": "tslint:recommended",
+  "extends": ["tslint:latest", "tslint-config-prettier"],
   "rules": {
-    "trailing-comma": false,
-    "object-literal-sort-keys": false,
-    "ordered-imports": false,
-    "member-ordering": [
-      true,
-      {
-        "order": "fields-first"
-      }
-    ],
-    "variable-name": [
-      true,
-      "ban-keywords",
-      "check-format",
-      "allow-leading-underscore"
-    ],
     "unified-signatures": false,
-    "no-console": false,
     "typedef": [
       true,
       "call-signature",
       "parameter",
       "property-declaration",
       "array-destructuring"
-    ]
+    ],
+
+    "ban": false,
+    "ban-types": false,
+    "class-name": false,
+    "curly": [
+      true,
+      "ignore-same-line"
+    ],
+    "member-ordering": false,
+    "no-angle-bracket-type-assertion": false,
+    "no-console": false,
+    "no-default-export": true,
+    "no-implicit-dependencies": false,
+    "no-unused-expression": true,
+    "no-var-requires": false,
+    "object-literal-sort-keys": false,
+    "ordered-imports": false
   }
 }

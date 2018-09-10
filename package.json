@@ -1,19 +1,24 @@
 {
   "name": "gdmn-back",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "tsc",
     "tslint": "tslint --project .",
     "start": "tsc && nodemon",
-    "debug": "tsc && nodemon --inspect --inspect-port=9229"
+    "debug": "tsc && nodemon --inspect --inspect-port=9229",
+    "fix:ts": "npm run tslint:fix && npm run prettier:fix",
+    "lint:ts": "npm run tslint:lint && npm run prettier:lint",
+    "tslint:cli": "tslint --project tsconfig.json",
+    "tslint:fix": "npm run tslint:cli -- --fix",
+    "tslint:lint": "npm run tslint:cli",
+    "prettier:cli": "prettier \"**/*.@(ts|js)\"",
+    "prettier:fix": "npm run prettier:cli -- --write",
+    "prettier:lint": "npm run prettier:cli -- -l"
   },
-  "keywords": [],
-  "author": "",
   "license": "ISC",
   "dependencies": {
+    "bull": "^3.4.8",
     "config": "^2.0.1",
     "gdmn-er-bridge": "git://github.com/gsbelarus/gdmn-er-bridge.git",
     "graphql": "^0.13.2",
@@ -35,6 +40,7 @@
     "uuid": "^3.3.2"
   },
   "devDependencies": {
+    "@types/bull": "^3.3.20",
     "@types/config": "^0.0.34",
     "@types/graphql": "^0.13.4",
     "@types/jsonwebtoken": "^7.2.8",
@@ -52,6 +58,8 @@
     "nodemon": "^1.18.4",
     "ts-node": "^7.0.1",
     "tslint": "^5.11.0",
+    "tslint-config-prettier": "^1.15.0",
+    "prettier": "^1.14.2",
     "typescript": "^3.0.3"
   }
 }
