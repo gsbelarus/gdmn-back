@@ -2,8 +2,11 @@ import {AccessMode, AConnection, DBStructure} from "gdmn-db";
 import {DataSource, ERBridge, IQueryResponse} from "gdmn-er-bridge";
 import {ERModel, IEntityQueryInspector} from "gdmn-orm";
 import {Database, IDBDetail} from "../db/Database";
+import {SessionManager} from "./SessionManager";
 
 export abstract class Application extends Database {
+
+  private readonly _sessionManager = new SessionManager(this.connectionPool);
 
   private _dbStructure: DBStructure = new DBStructure();
   private _erModel: ERModel = new ERModel();
@@ -18,6 +21,10 @@ export abstract class Application extends Database {
 
   get erModel(): ERModel {
     return this._erModel;
+  }
+
+  get sessionManager(): SessionManager {
+    return this._sessionManager;
   }
 
   public async query(query: IEntityQueryInspector): Promise<IQueryResponse> {
@@ -68,5 +75,11 @@ export abstract class Application extends Database {
     await super._onConnect();
 
     await this._reload();
+  }
+
+  protected async _onDisconnect(): Promise<void> {
+    await super._onDisconnect();
+
+    await this._sessionManager.closeAll();
   }
 }

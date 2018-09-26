@@ -9,24 +9,24 @@ import send from "koa-send";
 import serve from "koa-static";
 import cors from "koa2-cors";
 import path from "path";
-import io, {Socket} from "socket.io";
-import {ApplicationManager} from "./ApplicationManager";
+import WebSocket from "ws";
 import {checkHandledError, ErrorCodes, throwCtx} from "./ErrorCodes";
-import passport, {getAuthMiddleware, getPayloadFromJwtToken} from "./passport";
+import passport, {getAuthMiddleware} from "./passport";
 import account from "./router/account";
 import app from "./router/app";
+import {StompManager} from "./stomp/StompManager";
 
 interface IServer {
-  appManager: ApplicationManager;
+  stompManager: StompManager;
   httpServer?: HttpServer;
-  sio: io.Server;
+  wsServer: WebSocket.Server;
 }
 
 process.env.NODE_ENV = process.env.NODE_ENV || "development";
 
 async function create(): Promise<IServer> {
-  const appManager = new ApplicationManager();
-  await appManager.create();
+  const stompManager = new StompManager();
+  await stompManager.create();
 
   const serverApp = new Koa()
     .use(logger())
@@ -47,21 +47,13 @@ async function create(): Promise<IServer> {
     });
 
   serverApp.use(async (ctx, next) => {
-    ctx.state.appManager = appManager;
+    ctx.state.mainApplication = stompManager.mainApplication;
     await next();
   });
 
-  const usersToSockets = new Map<number, Socket>();
-
-  const extractSocket = async (ctx: Router.IRouterContext, next: () => Promise<any>) => {
-    const userId = ctx.state.user.id;
-    ctx.state.socket = usersToSockets.get(userId);
-    await next();
-  };
-
   const router = new Router()
     .use("/account", account.routes(), account.allowedMethods())
-    .use("/app", getAuthMiddleware("jwt", passport), extractSocket, app.routes(), app.allowedMethods())
+    .use("/app", getAuthMiddleware("jwt", passport), app.routes(), app.allowedMethods())
 
     // TODO temp
     .get("/", (ctx) => ctx.redirect("/spa"))
@@ -81,36 +73,21 @@ async function create(): Promise<IServer> {
 
   const httpServer = startHttpServer(serverApp);
 
-  const sio = io(httpServer);
-
-  sio.use((socket: Socket, next) => {
-    const token = socket.handshake.query.token;
-    try {
-      const payload = getPayloadFromJwtToken(token);
-      const userId = payload.id;
-      usersToSockets.set(userId, socket);
-      next();
-    } catch (error) {
-      next(error);
+  const wsServer = new WebSocket.Server({server: httpServer});
+  wsServer.on("connection", (webSocket, req) => {
+    console.log("webSocket connection");
+    if (stompManager.add(webSocket, req)) {
+      webSocket.on("close", () => {
+        console.log("webSocket close");
+        stompManager.delete(webSocket);
+      });
     }
   });
 
-  sio.on("connection", (socket: Socket) => {
-    socket.on("disconnect", async () => {
-      const sockets = Array.from(usersToSockets.entries());
-      const pair = sockets.find(([_, s]) => socket.id === s.id);
-      if (!pair) {
-        throw new Error("Such socket not found");
-      }
-      const [userId]: [number, Socket] = pair;
-      usersToSockets.delete(userId);
-    });
-  });
-
   return {
-    appManager,
+    stompManager,
     httpServer,
-    sio
+    wsServer
   };
 }
 
@@ -135,15 +112,15 @@ process.on("SIGTERM", exit);
 
 async function exit(): Promise<void> {
   try {
-    const {appManager, httpServer, sio} = await creating;
+    const {stompManager, httpServer, wsServer} = await creating;
 
-    await sio.close();
+    await new Promise((resolve) => wsServer.close(resolve));
 
     if (httpServer) {
       httpServer.removeAllListeners();
       await new Promise((resolve) => httpServer.close(resolve));
     }
-    await appManager.destroy();
+    await stompManager.destroy();
 
   } catch (error) {
     switch (error.message) {

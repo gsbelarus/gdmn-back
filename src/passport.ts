@@ -4,7 +4,7 @@ import {Middleware} from "koa";
 import passport from "koa-passport";
 import {ExtractJwt, Strategy as JWTStrategy} from "passport-jwt";
 import {Strategy as LocalStrategy} from "passport-local";
-import {IUserOutput} from "./apps/MainApplication";
+import {IUserOutput, MainApplication} from "./apps/MainApplication";
 import {ErrorCodes, throwCtx} from "./ErrorCodes";
 
 const USERNAME_FIELD = "login";
@@ -55,8 +55,9 @@ passport.use(new LocalStrategy({
   session: false
 }, async (req: any, login, password, done) => {
   try {
-    if (req.ctx.state.appManager) {
-      const user = await req.ctx.state.appManager.mainApplication.checkUserPassword(login, password);
+    const mainApplication = req.ctx.state.mainApplication as MainApplication;
+    if (mainApplication) {
+      const user = await mainApplication.checkUserPassword(login, password);
       if (user) {
         return done(null, user);
       }
@@ -76,9 +77,10 @@ passport.use("jwt", new JWTStrategy({
   },
   async (req: any, payload: any, done: any) => {
     try {
-      if (req.ctx.state.appManager) {
+      const mainApplication = req.ctx.state.mainApplication as MainApplication;
+      if (mainApplication) {
         if (!payload.isRefresh) {
-          const user = await req.ctx.state.appManager.mainApplication.findUser({id: payload.id});
+          const user = await mainApplication.findUser({id: payload.id});
           if (user) {
             return done(null, user);
           }

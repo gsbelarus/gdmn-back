@@ -42,6 +42,14 @@ export abstract class Database {
     return this._connectionPool.created;
   }
 
+  public async createOrConnect(): Promise<void> {
+    try {
+      await this.create();
+    } catch (error) {
+      await this.connect();
+    }
+  }
+
   public async create(): Promise<void> {
     this._checkBusy();
 

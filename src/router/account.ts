@@ -1,5 +1,5 @@
 import Router from "koa-router";
-import {ApplicationManager} from "../ApplicationManager";
+import {MainApplication} from "../apps/MainApplication";
 import {assertCtx, ErrorCodes, throwCtx} from "../ErrorCodes";
 import passport, {createAccessJwtToken, createRefreshJwtToken, getAuthMiddleware} from "../passport";
 
@@ -10,11 +10,11 @@ function isAuthExists(obj: any): obj is { login: string, password: string } {
 export default new Router()
   .post("/", async (ctx) => {
     if (isAuthExists(ctx.request.body)) {
-      const appManager = ctx.state.appManager as ApplicationManager;
-      const duplicate = await appManager.mainApplication!.findUser({login: ctx.request.body.login});
+      const mainApplication = ctx.state.mainApplication as MainApplication;
+      const duplicate = await mainApplication.findUser({login: ctx.request.body.login});
       assertCtx(!duplicate, ctx, 401, "Login already exists", ErrorCodes.NOT_UNIQUE, ["login"]);
 
-      const user = await appManager.mainApplication!.addUser({
+      const user = await mainApplication.addUser({
         login: ctx.request.body.login,
         password: ctx.request.body.password,
         admin: false
