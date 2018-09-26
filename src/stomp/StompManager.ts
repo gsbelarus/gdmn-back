@@ -21,14 +21,14 @@ export class StompManager {
     let session;
 
     const query = parse(req.url!).query || "";
-    const paramsGroup = query.split("&").map((group) => group.split("="));
-    const uidGroup = paramsGroup.find((group) => group[0] === "uid");
+    const groupParams = query.split("&").map((group) => group.split("="));
+    const groupUid = groupParams.find((group) => group[0] === "uid");
 
-    if (uidGroup) {
+    if (groupUid) {
       try {
         stomp = createStompServerSession(webSocket, StompSession);
         session = stomp.listener as StompSession;
-        session.application = this._mainApplication.getApplicationSync(uidGroup[1]);
+        session.application = this._mainApplication.getApplicationSync(groupUid[1]);
         if (!session.application.connected) {
           throw new Error("Application is not connected");
         }

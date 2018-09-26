@@ -101,9 +101,9 @@ passport.use("refresh_jwt", new JWTStrategy({
   },
   async (req: any, payload: any, done: any) => {
     try {
-      if (req.ctx.state.appManager) {
+      if (req.ctx.state.mainApplication) {
         if (payload.isRefresh) {
-          const user = await req.ctx.state.appManager.mainApplication.findUser({id: payload.id});
+          const user = await req.ctx.state.mainApplication.findUser({id: payload.id});
           if (user) {
             return done(null, user);
           }
