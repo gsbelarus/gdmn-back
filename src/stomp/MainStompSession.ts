@@ -1,14 +1,16 @@
 import {StompHeaders} from "node-stomp-protocol";
 import {MainApplication} from "../apps/MainApplication";
-import {ICommand, StompSession} from "./StompSession";
+import {ICommand} from "../apps/task/Task";
+import {StompSession} from "./StompSession";
 
-type Action = "INIT_APP" | "DELETE_APP" | "CREATE_APP";
+type Action = "INIT_APP" | "DELETE_APP" | "CREATE_APP" | "GET_APPS";
 
 type Command<A extends Action, P> = ICommand<A, P>;
 
 type InitAppCommand = Command<"INIT_APP", { uid: string }>;
 type DeleteAppCommand = Command<"DELETE_APP", { uid: string }>;
 type CreateAppCommand = Command<"CREATE_APP", { alias: string }>;
+type GetAppsCommand = Command<"GET_APPS", undefined>;
 
 export class MainStompSession extends StompSession {
 
@@ -21,55 +23,76 @@ export class MainStompSession extends StompSession {
   }
 
   public send(headers?: StompHeaders, body?: string): void {
-    console.log("Send!", body, headers);
-    const action = headers!.action as Action;
-    switch (action) {
-      case "INIT_APP": {
-        this._checkDestination(headers!.destination, StompSession.TOPIC_TASK);
-        const initAppCommand: InitAppCommand = {action, payload: JSON.parse(body!)};
-        const {uid} = initAppCommand.payload;
+    const destination = headers!.destination;
 
-        this.session.taskManager.add({
-          action: initAppCommand.action,
-          destination: headers!.destination,
-          worker: async (checkStatus) => {
-            const application = await this.application.getApplication(uid, this.session);
-            if (!application.connected) {
-              await application.connect();
-            }
-            await checkStatus();
-          }
-        });
-        break;
-      }
-      case "DELETE_APP": {
-        this._checkDestination(headers!.destination, StompSession.TOPIC_TASK);
-        const deleteAppCommand: DeleteAppCommand = {action, payload: JSON.parse(body!)};
-        const {uid} = deleteAppCommand.payload;
+    switch (destination) {
+      case StompSession.DESTINATION_TASK:
+        this._checkContentType(headers);
 
-        this.session.taskManager.add({
-          action: deleteAppCommand.action,
-          destination: headers!.destination,
-          worker: async () => {
-            await this.application.deleteApplication(uid, this.session);
-          }
-        });
-        break;
-      }
-      case "CREATE_APP": {
-        this._checkDestination(headers!.destination, StompSession.TOPIC_TASK);
-        const createAppCommand: CreateAppCommand = {action, payload: JSON.parse(body!)};
-        const {alias} = createAppCommand.payload;
+        const action = headers!.action as Action;
+        const bodyObj = JSON.parse(body!);
 
-        this.session.taskManager.add({
-          action: createAppCommand.action,
-          destination: headers!.destination,
-          worker: async () => {
-            return await this.application.createApplication(alias, this.session);
+        switch (action) {
+          case "INIT_APP": {
+            const command: InitAppCommand = {action, ...bodyObj};
+            const {uid} = command.payload;
+
+            this.session.taskManager.add({
+              command,
+              destination,
+              worker: async () => {
+                const application = await this.application.getApplication(uid, this.session);
+                if (!application.connected) {
+                  await application.connect();
+                }
+                return await this.application.getApplicationInfo(uid, this.session);
+              }
+            });
+            break;
           }
-        });
+          case "DELETE_APP": {  // TODO tmp
+            const command: DeleteAppCommand = {action, ...bodyObj};
+            const {uid} = command.payload;
+
+            this.session.taskManager.add({
+              command,
+              destination,
+              worker: async () => {
+                await this.application.deleteApplication(uid, this.session);
+              }
+            });
+            break;
+          }
+          case "CREATE_APP": {  // TODO tmp
+            const command: CreateAppCommand = {action, ...bodyObj};
+            const {alias} = command.payload;
+
+            this.session.taskManager.add({
+              command,
+              destination,
+              worker: async () => {
+                const uid = await this.application.createApplication(alias, this.session);
+                return await this.application.getApplicationInfo(uid, this.session);
+              }
+            });
+            break;
+          }
+          case "GET_APPS": {  // TODO tmp
+            const command: GetAppsCommand = {action, payload: undefined};
+
+            this.session.taskManager.add({
+              command,
+              destination,
+              worker: async () => {
+                return await this.application.getApplicationsInfo(this.session);
+              }
+            });
+            break;
+          }
+          default:
+            super.send(headers, body);
+        }
         break;
-      }
       default:
         super.send(headers, body);
     }

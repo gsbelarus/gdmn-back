@@ -11,9 +11,8 @@ import cors from "koa2-cors";
 import path from "path";
 import WebSocket from "ws";
 import {checkHandledError, ErrorCodes, throwCtx} from "./ErrorCodes";
-import passport, {getAuthMiddleware} from "./passport";
+import passport from "./passport";
 import account from "./router/account";
-import app from "./router/app";
 import {StompManager} from "./stomp/StompManager";
 
 interface IServer {
@@ -53,7 +52,6 @@ async function create(): Promise<IServer> {
 
   const router = new Router()
     .use("/account", account.routes(), account.allowedMethods())
-    .use("/app", getAuthMiddleware("jwt", passport), app.routes(), app.allowedMethods())
 
     // TODO temp
     .get("/", (ctx) => ctx.redirect("/spa"))

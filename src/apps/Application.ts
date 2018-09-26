@@ -2,6 +2,7 @@ import {AccessMode, AConnection, DBStructure} from "gdmn-db";
 import {DataSource, ERBridge, IQueryResponse} from "gdmn-er-bridge";
 import {ERModel, IEntityQueryInspector} from "gdmn-orm";
 import {Database, IDBDetail} from "../db/Database";
+import {Session} from "./Session";
 import {SessionManager} from "./SessionManager";
 
 export abstract class Application extends Database {
@@ -27,12 +28,10 @@ export abstract class Application extends Database {
     return this._sessionManager;
   }
 
-  public async query(query: IEntityQueryInspector): Promise<IQueryResponse> {
+  public async query(query: IEntityQueryInspector, session: Session): Promise<IQueryResponse> {
     this._checkBusy();
 
-    return await this._executeConnection(async (connection) => {
-      return await new ERBridge(connection).query(this._erModel, this._dbStructure, query);
-    });
+    return await new ERBridge(session.connection).query(this._erModel, this._dbStructure, query);
   }
 
   public async reload(): Promise<void> {

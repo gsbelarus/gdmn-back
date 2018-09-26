@@ -1,10 +1,27 @@
 import http from "http";
-import {createStompServerSession} from "node-stomp-protocol";
+import {createStompServerSession, setLoggingListeners} from "node-stomp-protocol";
 import {parse} from "url";
 import WebSocket from "ws";
 import {MainApplication} from "../apps/MainApplication";
 import {MainStompSession} from "./MainStompSession";
 import {StompSession} from "./StompSession";
+
+setLoggingListeners({
+  error: console.log,
+  info: console.log,
+  silly: (message, args) => {
+    const receiverDataTemplate = /^StompWebSocketStreamLayer: received data %.$/g;
+    if (receiverDataTemplate.test(message)) {
+      console.log(`>>> ${args}`);
+    }
+    const sendingDataTemplate = /^StompFrameLayer: sending frame data %.$/g;
+    if (sendingDataTemplate.test(message)) {
+      console.log(`<<< ${args}`);
+    }
+  },
+  warn: console.log,
+  debug: () => ({})
+});
 
 export class StompManager {
 

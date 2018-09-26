@@ -8,31 +8,36 @@ export enum TaskStatus {
   DONE
 }
 
-export type ChangeStatusListener<Result> = (task: Task<Result>) => void;
+export type ChangeStatusListener<Action, Payload, Result> = (task: Task<Action, Payload, Result>) => void;
 
 export type StatusChecker = () => Promise<void | never>;
 
 export type TaskWorker<Result> = (checkStatus: StatusChecker) => Promise<Result>;
 
-export interface IOptions<Result> {
-  readonly action: string;
+export interface ICommand<A, P = any> {
+  readonly action: A;
+  readonly payload: P;
+}
+
+export interface IOptions<Action, Payload, Result> {
+  readonly command: ICommand<Action, Payload>;
   readonly destination: string;
   readonly worker: TaskWorker<Result>;
 }
 
-export class Task<Result> {
+export class Task<Action, Payload, Result> {
 
   private readonly _id: string;
-  private readonly _options: IOptions<Result>;
-  private readonly _changeStatusListener?: ChangeStatusListener<Result>;
+  private readonly _options: IOptions<Action, Payload, Result>;
+  private readonly _changeStatusListener?: ChangeStatusListener<Action, Payload, Result>;
   private readonly _log: any[] = [];
   private _status: TaskStatus = TaskStatus.IDLE;
   private _result?: Result;
   private _error?: Error;
 
-  private _sending: boolean = false;
-
-  constructor(id: string, options: IOptions<Result>, changeStatusListener?: ChangeStatusListener<Result>) {
+  constructor(id: string,
+              options: IOptions<Action, Payload, Result>,
+              changeStatusListener?: ChangeStatusListener<Action, Payload, Result>) {
     this._id = id;
     this._options = options;
     this._changeStatusListener = changeStatusListener;
@@ -43,8 +48,8 @@ export class Task<Result> {
     return this._id;
   }
 
-  get action(): string {
-    return this._options.action;
+  get command(): ICommand<Action, Payload> {
+    return this._options.command;
   }
 
   get destination(): string {
@@ -65,14 +70,6 @@ export class Task<Result> {
 
   get error(): Error | undefined {
     return this._error;
-  }
-
-  get sending(): boolean {
-    return this._sending;
-  }
-
-  set sending(value: boolean) {
-    this._sending = value;
   }
 
   public interrupt(): void {

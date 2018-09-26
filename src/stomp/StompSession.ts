@@ -1,20 +1,18 @@
+import {IEntityQueryInspector} from "gdmn-orm";
 import {StompClientCommandListener, StompError, StompHeaders, StompServerSessionLayer} from "node-stomp-protocol";
 import {Application} from "../apps/Application";
 import {Session} from "../apps/Session";
-import {Task, TaskStatus} from "../apps/task/Task";
+import {ICommand, Task, TaskStatus} from "../apps/task/Task";
 import {IChangeStatusListener} from "../apps/task/TaskManager";
 import {getPayloadFromJwtToken} from "../passport";
 
-export interface ICommand<A, P> {
-  readonly action: A;
-  readonly payload: P;
-}
-
-type Action = "PING";
+type Action = "PING" | "GET_SCHEMA" | "QUERY";
 
 type Command<A extends Action, P> = ICommand<A, P>;
 
 type PingCommand = Command<"PING", { delay: number }>;
+type GetSchemaCommand = Command<"GET_SCHEMA", undefined>;
+type QueryCommand = Command<"QUERY", IEntityQueryInspector>;
 
 export type Ack = "auto" | "client" | "client-individual";
 
@@ -24,9 +22,9 @@ export interface ISubscription {
   ack: Ack;
 }
 
-export class StompSession implements StompClientCommandListener, IChangeStatusListener<any> {
+export class StompSession implements StompClientCommandListener, IChangeStatusListener<any, any, any> {
 
-  public static readonly TOPIC_TASK = "/task";
+  public static readonly DESTINATION_TASK = "/task";
 
   private readonly _stomp: StompServerSessionLayer;
   private readonly _subscriptions: ISubscription[] = [];
@@ -71,36 +69,34 @@ export class StompSession implements StompClientCommandListener, IChangeStatusLi
     return getPayloadFromJwtToken(headers.access_token).id;
   }
 
-  public onChange(task: Task<any>): void {
+  public onChange(task: Task<any, any, any>): void {
     switch (task.status) {
       case TaskStatus.DONE:
       case TaskStatus.ERROR:
       case TaskStatus.INTERRUPTED:
         if (this._subscriptions.find((sub) => sub.destination === task.destination)) {
-          this._internalMessage(task).catch(console.error);
+          this._sendTaskMessage(task).catch(console.error);
         }
         break;
     }
   }
 
   public onProtocolError(error: StompError): void {
-    console.log("Protocol error!", error);
+    console.log("protocol error", error);
   }
 
   public connect(headers?: StompHeaders): void {
-    console.log("Connect!", headers);
     this._internalConnect(headers)
       .catch((error) => {
-        this.sendError(error).catch(console.error);
+        this._sendError(error).catch(console.error);
       });
   }
 
-  public disconnect(headers?: StompHeaders): void {
-    console.log("Disconnect!", headers);
+  public disconnect(): void {
+    // empty
   }
 
   public onEnd(): void {
-    console.log("End!");
     if (this._session) {
       this._session.taskManager.removeChangeStatusListener(this);
       this._session.release();
@@ -108,23 +104,30 @@ export class StompSession implements StompClientCommandListener, IChangeStatusLi
   }
 
   public subscribe(headers?: StompHeaders): void {
-    console.log("subscription done", headers);
-    this._checkDestination(headers!.destination, StompSession.TOPIC_TASK);
-    if (this._subscriptions.some((sub) => sub.id === headers!.id)) {
-      throw new Error("Subscriptions with same id exists");
+    switch (headers!.destination) {
+      case StompSession.DESTINATION_TASK:
+        if (this._subscriptions.some((sub) => sub.id === headers!.id)) {
+          throw new Error("Subscriptions with same id exists");
+        }
+        if (this._subscriptions.some((sub) => sub.destination === headers!.destination)) {
+          throw new Error("Subscriptions with same destination exists");
+        }
+        this._subscriptions.push({
+          id: headers!.id,
+          destination: headers!.destination,
+          ack: headers!.ack as Ack || "auto"
+        });
+
+        // notify about tasks
+        const tasks = this.session.taskManager.getAll();
+        tasks.forEach((task) => this._sendTaskMessage(task).catch(console.error));
+        break;
+      default:
+        throw new Error(`Unsupported destination '${headers!.destination}'`);
     }
-    if (this._subscriptions.some((sub) => sub.destination === headers!.destination)) {
-      throw new Error("Subscriptions with same destination exists");
-    }
-    this._subscriptions.push({
-      id: headers!.id,
-      destination: headers!.destination,
-      ack: headers!.ack as Ack || "auto"
-    });
   }
 
   public unsubscribe(headers?: StompHeaders): void {
-    console.log("unsubscribe", headers);
     const subscriptionIndex = this._subscriptions.findIndex((sub) => sub.id === headers!.id);
     if (subscriptionIndex === -1) {
       throw new Error("Subscription is not found");
@@ -133,50 +136,86 @@ export class StompSession implements StompClientCommandListener, IChangeStatusLi
   }
 
   public send(headers?: StompHeaders, body?: string): void {
-    console.log("Send!", body, headers);
-    const action = headers!.action as Action;
-    switch (action) {
-      case "PING": {
-        this._checkDestination(headers!.destination, StompSession.TOPIC_TASK);
-        const command: PingCommand = {action, payload: JSON.parse(body!)};
-        const {delay} = command.payload;
+    const destination = headers!.destination;
 
-        this.session.taskManager.add({
-          action: command.action,
-          destination: headers!.destination,
-          worker: async () => {
-            await new Promise((resolve) => setTimeout(resolve, delay));
+    switch (destination) {
+      case StompSession.DESTINATION_TASK:
+        this._checkContentType(headers);
+
+        const action = headers!.action as Action;
+        const bodyObj = JSON.parse(body!);
+
+        switch (action) {
+          case "PING": {
+            const command: PingCommand = {action, ...bodyObj};
+            const {delay} = command.payload || {delay: 0};
+
+            this.session.taskManager.add({
+              command,
+              destination,
+              worker: async (checkStatus) => {
+                await new Promise((resolve) => setTimeout(resolve, delay));
+                await checkStatus();
+                if (!this.application.connected) {
+                  throw new Error("Application is not connected");
+                }
+              }
+            });
+            break;
           }
-        });
+          case "GET_SCHEMA": {
+            const command: GetSchemaCommand = {action, payload: undefined};
+
+            this.session.taskManager.add({
+              command,
+              destination,
+              worker: async () => this.application.erModel.serialize()
+            });
+            break;
+          }
+          case "QUERY": {
+            const command: QueryCommand = {action, ...bodyObj};
+
+            this.session.taskManager.add({
+              command,
+              destination,
+              worker: async (checkStatus) => {
+                const result = this.application.query(command.payload, this.session);
+                await checkStatus();
+                return result;
+              }
+            });
+            break;
+          }
+          default:
+            throw new Error("Unsupported action");
+        }
         break;
-      }
       default:
-        throw new Error("Unsupported action");
+        throw new Error(`Unsupported destination '${destination}'`);
     }
   }
 
   public ack(headers?: StompHeaders): void {
-    console.log("ack", headers);
+    const task = this.session.taskManager.find(headers!.id);
+    if (task) {
+      this.session.taskManager.delete(task);
+    }
+  }
+
+  public nack(): void {
     throw new Error("Unsupported yet");
   }
 
-  public nack(headers?: StompHeaders): void {
-    console.log("nack", headers);
+  public begin(): void {
     throw new Error("Unsupported yet");
   }
 
-  public begin(headers?: StompHeaders): void {
-    console.log("begin", headers);
+  public commit(): void {
     throw new Error("Unsupported yet");
   }
 
-  public commit(headers?: StompHeaders): void {
-    console.log("commit", headers);
-    throw new Error("Unsupported yet");
-  }
-
-  public abort(headers?: StompHeaders): void {
-    console.log("abort", headers);
+  public abort(): void {
     throw new Error("Unsupported yet");
   }
 
@@ -189,46 +228,43 @@ export class StompSession implements StompClientCommandListener, IChangeStatusLi
     }
     this._session.borrow();
     this._session.taskManager.addChangeStatusListener(this);
-    await this._stomp.connected({server: `${pack.name}/${pack.version}`, session: this._session.id});
+    const resHeaders: StompHeaders = {server: `${pack.name}/${pack.version}`, session: this._session.id};
+    await this._stomp.connected(resHeaders);
   }
 
-  protected async _internalMessage(task: Task<any>): Promise<void> {
+  protected async _sendTaskMessage(task: Task<any, any, any>): Promise<void> {
     const subscription = this._subscriptions.find((sub) => sub.destination === task.destination);
     if (subscription) {
-      try {
-        task.sending = true;
-        await this._stomp.message({
-          "destination": task.destination,
-          "action": task.action,
-          "subscription": subscription.id,
-          "message-id": task.id
-        }, JSON.stringify({
-          status: task.status,
-          result: task.result ? task.result : undefined,
-          errorMessage: task.error ? task.error.message : undefined
-        }));
-        console.log(task.log);
-        this.session.taskManager.delete(task); // TODO move to ack handler
-
-      } catch (error) {
-        console.error(error);
-        task.sending = false;
-      }
+      const headers: StompHeaders = {
+        "content-type": "application/json;charset=utf-8",
+        "destination": task.destination,
+        "action": task.command.action,
+        "subscription": subscription.id,
+        "message-id": task.id,
+        "ack": task.id
+      };
+      const body = JSON.stringify({
+        status: task.status,
+        payload: task.command.payload,
+        result: task.result ? task.result : undefined,
+        errorMessage: task.error ? task.error.message : undefined
+      });
+      await this._stomp.message(headers, body);
     }
   }
 
-  protected _checkDestination(destination: string, ...destinations: string[]): void | never {
-    if (!destinations.some((d) => d === destination)) {
-      throw new Error(`Unsupported destination '${destination}',`
-        + ` supported  ${destinations.map((d) => `'${d}'`).join(", ")};`);
-    }
-  }
-
-  protected async sendError(error: Error, headers?: StompHeaders): Promise<void> {
+  protected async _sendError(error: Error, headers?: StompHeaders): Promise<void> {
     const errorHeaders: StompHeaders = {message: error.message};
     if (headers && headers.receipt) {
       errorHeaders["receipt-id"] = headers.receipt;
     }
     await this._stomp.error(errorHeaders);
+  }
+
+  protected _checkContentType(headers?: StompHeaders): void | never {
+    const contentType = headers!["content-type"];
+    if (contentType !== "application/json;charset=utf-8") {
+      throw new Error(`Unsupported content-type '${contentType}'; supported - 'application/json;charset=utf-8'`);
+    }
   }
 }

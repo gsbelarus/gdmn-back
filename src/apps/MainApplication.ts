@@ -112,28 +112,58 @@ export class MainApplication extends Application {
     return application;
   }
 
+  public async getApplicationInfo(uid: string, session: Session): Promise<IApplicationInfoOutput> {
+    return await AConnection.executeTransaction({
+      connection: session.connection,
+      callback: async (transaction) => {
+        const result = await session.connection.executeReturning(transaction, `
+          SELECT FIRST 1
+            apps.ALIAS,
+            app.UID,
+            app.CREATIONDATE
+          FROM APP_USER_APPLICATIONS apps
+            LEFT JOIN APPLICATION app ON app.ID = apps.KEY2
+          WHERE apps.KEY1 = :userKey
+            AND app.UID = :uid
+        `, {
+          uid,
+          userKey: session.userKey
+        });
+        return {
+          alias: result.getString("ALIAS"),
+          uid: result.getString("UID"),
+          creationDate: result.getDate("CREATIONDATE")!
+        };
+      }
+    });
+  }
+
+  public async getApplicationsInfo(session: Session): Promise<IApplicationInfoOutput[]> {
+    return await this._getApplicationsInfo(session.connection, session.userKey);
+  }
+
   public async getApplication(uid: string, session: Session): Promise<Application> {
     if (!this.connected) {
       throw new Error("MainApplication is not created");
     }
     const application = this._applications.get(uid);
-    const applications = await this._getApplicationsInfo(session.connection, session.userKey);
-    if (!application || !applications.some((app) => app.uid === uid)) {
+    if (!application) {
       throw new Error("Application not found");
     }
+    await this.getApplicationInfo(uid, session);
     return application;
   }
 
-  public async createApplication(alias: string, session: Session): Promise<IApplicationInfoOutput> {
+  public async createApplication(alias: string, session: Session): Promise<string> {
     if (!this.connected) {
       throw new Error("ApplicationManager is not created");
     }
     const uid = uuidV1().toUpperCase();
-    const appInfo = await this._addApplicationInfo(session.connection, session.userKey, {alias, uid});
+    await this._addApplicationInfo(session.connection, session.userKey, {alias, uid});
     const application = new GDMNApplication(MainApplication._createDBDetail(alias, MainApplication.getAppPath(uid)));
     await application.create();
     this._applications.set(uid, application);
-    return appInfo;
+    return uid;
   }
 
   public async deleteApplication(uid: string, session: Session): Promise<void> {
@@ -147,7 +177,6 @@ export class MainApplication extends Application {
     if (application.dbDetail.alias !== databases.test.alias) {
       await this._deleteApplicationInfo(session.connection, session.userKey, uid);
       await application.delete();
-      // TODO delete backups
     }
   }
 
@@ -167,10 +196,6 @@ export class MainApplication extends Application {
 
   public async findUser(user: { id?: number, login?: string }): Promise<IUserOutput | undefined> {
     return await this.executeConnection((connection) => this._findUser(connection, user));
-  }
-
-  public async getApplicationsInfo(userKey?: number): Promise<IApplicationInfoOutput[]> {
-    return await this.executeConnection((connection) => this._getApplicationsInfo(connection, userKey));
   }
 
   // public async getAppKey(appUid: string): Promise<number> {
