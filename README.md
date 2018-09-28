@@ -152,200 +152,122 @@ Pre-requirements: Xcode Command Line Tools (macOS), Node.js, npm, git.
 2. Fill this config file
 
 
-## API
+## STOMP API (over WebSocket)
 <details>
   <summary>expand me</summary>
+  
+* To work with the auth database you need to connect to ws://address
+* To work with the user's databases you need to connect to ws://address/?uid=...
 
-##### HEADERS:  
 
-`Authorization: Bearer accessJWTToken/refreshJWTToken` - for authorization or refresh token
-`Accept: text/plan` - for errors in the response as text  
-`Accept: text/html` - for errors in the response as html  
-`Accept: application/json` - for errors in the response as json  
+#### Auth database
 
 ##### Create account
-Request: `POST` - `/account`  
-```json
-{
-  "login": "Login",
-  "password": "Password"
-}
 ```
-Response:
-```json
-{
-  "access_token": "JWTToken",
-  "refresh_token": "JWTToken",
-  "token_type": "type"
-}
+>>> CONNECT
+login:login
+passcode:password
+create-user:1
+
+<<< CONNECTED
+server:gdmn-back/1.0.0
+version:1.2
+access-token:token
+refresh-token:token
+
 ```
 
-##### Login
-Request: `POST` - `/account/login`
-```json
-{
-  "login": "Login",
-  "password": "Password"
-}
+#### All databases
+
+##### Login (auth base is used)
 ```
-Response:
-```json
-{
-  "access_token": "JWTToken",
-  "refresh_token": "JWTToken",
-  "token_type": "type"
-}
+>>> CONNECT
+login:login
+passcode:password
+create-user:0 (optional)
+
+<<< CONNECTED
+server:gdmn-back/1.0.0
+version:1.2
+access-token:access-token
+refresh-token:refresh-token
+
+```
+or
+```
+>>> CONNECT
+authorization:access-token
+
+<<< CONNECTED
+server:gdmn-back/1.0.0
+version:1.2
+
+```
+or
+```
+>>> CONNECT
+authorization:refresh-token
+
+<<< CONNECTED
+server:gdmn-back/1.0.0
+version:1.2
+access-token:access-token
+refresh-token:refresh-token
+
 ```
 
-##### Refresh token
-Request: `POST` - `/account/refresh`
-Response:
-```json
-{
-  "access_token": "JWTToken",
-  "refresh_token": "JWTToken",
-  "token_type": "type"
-}
+##### Refresh token (auth base is used)
+```
+>>> CONNECT
+authorization:refresh-token
+
+<<< CONNECTED
+server:gdmn-back/1.0.0
+version:1.2
+access-token:access-token
+refresh-token:refresh-token
+
+```
+or
+```
+>>> CONNECT
+login:login
+passcode:password
+create-user:0 (optional)
+
+<<< CONNECTED
+server:gdmn-back/1.0.0
+version:1.2
+access-token:access-token
+refresh-token:refresh-token
+
 ```
 
-##### Create application
-Request: `POST` - `/app`   
-```json
-{
-  "alias": "Alias"
-}
+##### PING
 ```
-Response:
-```json
-{
-  "alias": "Alias",
-  "uid": "Application-UID",
-  "creationDate": "2018-01-01T00:00:00.000Z"
-}
-```
+>>> SEND
+destination:/task
+action:PING
+content-type:application/json;charset=utf-8
+content-length:26
 
-##### Delete application
-Request: `DELETE` - `/app/:uid`  
-Response:
-```json
-{
-  "uid": "Application-UID"
-}
+{"payload":{"delay":1000}}
 ```
-
-##### Get applications
-Request: `GET` - `/app`  
-Response:
-```json
-[{
-  "alias": "Alias",
-  "uid": "Application-UID",
-  "creationDate": "2018-01-01T00:00:00.000Z",
-  "size": 123123123
-}]
 ```
+<<< MESSAGE
+destination:/task
+action:PING
+message-id:msg-0
+ack:ack-0
+subscription:sub-0
+content-type:application/json;charset=utf-8
 
-##### Application endpoints
-Request: `GET` - `/app/:uid/er`  
-Request: `POST` - `/app/:uid/data`  
+{"status":5}
+```
 
 ##### Default user
 login: `Administrator`  
 password: `Administrator`
-
-
-#### Backup/Restore
-
-For backup and restore you need connect to server's socket (on client) and subscribe on events (backupFinished, restoreFinished):
-```
-<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.0.3/socket.io.js"></script>>
-<script>
-  var socket = io('http://localhost:4000', {
-    query: {
-      token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwiaWF0IjoxNTMzODI0NDY1LCJleHAiOjE1MzM4MzUyNjV9.wb8Fh4OCZksz4GoG7HJIWGsNqxFVuA7sKqkNoviHcSk'
-    }
-  });
-
-  socket.on('backupFinished', function (data) {
-    console.log('on backup finish');
-  });
-
-  socket.on('restoreFinished', function (data) {
-    console.log('on restore finish');
-  })
-</script>
-```
-
-1. Make backup
-
-    - Request:  POST /app/:uid/backup
-    - Response: 200 OK
-
-2. Make restore
-    - Request: POST /app/:uid/backup/:backupUid/restore
-    ```json
-    {
-      "alias": "Alias"
-    }
-    ```
-    
-3. Delete backup
-
-    - Request: DELETE /app/:uid/backup/:backupUid
-    - Response: 200 OK
-    
-3. Get all backups for application with UID `:uid`
-
-    - Request: GET /app/:uid/backup
-    - Response: 200 OK
-
-      ```
-      [
-        {
-            "uid": "91A13180-9BE0-11E8-87E7-7702BC65EB93",
-            "alias": "bkpAlias",
-            "creationDate": "2018-08-09T14:29:05.897Z",
-            "size": 123123123
-        },
-        {
-            "uid": "64CC1290-9BE2-11E8-A2D3-45848C52A2D6",
-            "alias": "bkpAlias2",
-            "creationDate": "2018-08-09T14:42:09.437Z",
-            "size": 123123123
-        }
-      ]
-      ```
-
-4. Download one backup file
-    - Request: GET /app/:uid/backup/:backupUid/download
-    - Response: File downloading...
-
-5. Upload one backup file
-    - Request: 
-      ```
-      curl \
-      -X POST -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwiaWF0IjoxNTMzODI0NDY1LCJleHAiOjE1MzM4MzUyNjV9.wb8Fh4OCZksz4GoG7HJIWGsNqxFVuA7sKqkNoviHcSk" \ 
-      -F 'bkpFile=/Users/antonshwab/source/gdmn/gdmn-back/databases/backup/64CC1290-9BE2-11E8-A2D3-45848C52A2D6.fbk' \
-      -F 'alias=bkpALIAS' localhost:4000/app/C95519D0-9BDF-11E8-A31C-99F0847D6DDA/backup/upload
-
-      // how such request looks like in koa ctx:
-      { request:
-        { method: 'POST',
-          url: '/app/C95519D0-9BDF-11E8-A31C-99F0847D6DDA/backup/upload',
-          header:
-            { host: 'localhost:4000',
-              'user-agent': 'curl/7.54.0',
-              accept: '*/*',
-              authorization:
-              'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwiaWF0IjoxNTMzODI0NDY1LCJleHAiOjE1MzM4MzUyNjV9.wb8Fh4OCZksz4GoG7HJIWGsNqxFVuA7sKqkNoviHcSk',
-              'content-length': '341',
-              expect: '100-continue',
-              'content-type': 'multipart/form-data; boundary=------------------------8374df0255da9cd9' 
-            } 
-          }
-      }
-      ```
-    - Response: 200 OK
 
 </details>
 

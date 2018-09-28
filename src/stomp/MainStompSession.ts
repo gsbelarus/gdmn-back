@@ -91,9 +91,9 @@ export class MainStompSession extends StompSession {
   }
 
   protected async _internalConnect(headers?: StompHeaders): Promise<void> {
-    const {login, passcode, create_user} = headers!;
+    const {login, passcode, "create-user": isCreateUser} = headers!;
 
-    if (login && passcode && create_user) {
+    if (login && passcode && isCreateUser) {
       const duplicate = await this.mainApplication.findUser({login});
       if (duplicate) {
         throw new Error("Login already exists");

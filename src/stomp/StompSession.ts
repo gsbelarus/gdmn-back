@@ -229,7 +229,7 @@ export class StompSession implements StompClientCommandListener, IChangeStatusLi
     const {login, passcode, access_token, authorization} = headers!;
 
     let userKey: number;
-    let newTokens: { access_token: string, refresh_token: string } | undefined;
+    let newTokens: { "access-token": string, "refresh-token": string } | undefined;
 
     // TODO remove access_token
     if (authorization || access_token) {
@@ -241,8 +241,8 @@ export class StompSession implements StompClientCommandListener, IChangeStatusLi
       userKey = user.id;
       if (payload.isRefresh) {
         newTokens = {
-          access_token: createAccessJwtToken(user),
-          refresh_token: createRefreshJwtToken(user)
+          "access-token": createAccessJwtToken(user),
+          "refresh-token": createRefreshJwtToken(user)
         };
       }
     } else if (login && passcode) {
@@ -252,8 +252,8 @@ export class StompSession implements StompClientCommandListener, IChangeStatusLi
       }
       userKey = user.id;
       newTokens = {
-        access_token: createAccessJwtToken(user),
-        refresh_token: createRefreshJwtToken(user)
+        "access-token": createAccessJwtToken(user),
+        "refresh-token": createRefreshJwtToken(user)
       };
 
     } else {
