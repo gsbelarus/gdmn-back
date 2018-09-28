@@ -1,10 +1,11 @@
 import {IEntityQueryInspector} from "gdmn-orm";
 import {StompClientCommandListener, StompError, StompHeaders, StompServerSessionLayer} from "node-stomp-protocol";
 import {Application} from "../apps/Application";
+import {MainApplication} from "../apps/MainApplication";
 import {Session} from "../apps/Session";
 import {ICommand, Task, TaskStatus} from "../apps/task/Task";
 import {IChangeStatusListener} from "../apps/task/TaskManager";
-import {getPayloadFromJwtToken} from "../passport";
+import {createAccessJwtToken, createRefreshJwtToken, getPayloadFromJwtToken} from "../passport";
 
 type Action = "PING" | "GET_SCHEMA" | "QUERY";
 
@@ -31,6 +32,7 @@ export class StompSession implements StompClientCommandListener, IChangeStatusLi
 
   private _session?: Session;
   private _application?: Application;
+  private _mainApplication?: MainApplication;
 
   constructor(session: StompServerSessionLayer) {
     this._stomp = session;
@@ -47,6 +49,17 @@ export class StompSession implements StompClientCommandListener, IChangeStatusLi
     this._application = value;
   }
 
+  get mainApplication(): MainApplication {
+    if (!this._mainApplication) {
+      throw new Error("MainApplication is not found");
+    }
+    return this._mainApplication;
+  }
+
+  set mainApplication(value: MainApplication) {
+    this._mainApplication = value;
+  }
+
   get session(): Session {
     if (!this._session) {
       throw new Error("Unauthorized");
@@ -60,13 +73,6 @@ export class StompSession implements StompClientCommandListener, IChangeStatusLi
 
   get subscriptions(): ISubscription[] {
     return this._subscriptions;
-  }
-
-  protected static _getUserKey(headers?: StompHeaders): number {
-    if (!headers || !headers!.access_token) {
-      throw new Error("access_token is not found");
-    }
-    return getPayloadFromJwtToken(headers.access_token).id;
   }
 
   public onChange(task: Task<any, any, any>): void {
@@ -220,37 +226,76 @@ export class StompSession implements StompClientCommandListener, IChangeStatusLi
   }
 
   protected async _internalConnect(headers?: StompHeaders): Promise<void> {
-    const pack = require("../../package.json");
-    const userKey = StompSession._getUserKey(headers);
+    const {login, passcode, access_token, authorization} = headers!;
+
+    let userKey: number;
+    let newTokens: { access_token: string, refresh_token: string } | undefined;
+
+    // TODO remove access_token
+    if (authorization || access_token) {
+      const payload = getPayloadFromJwtToken(authorization || access_token);
+      const user = await this.mainApplication.findUser({id: payload.id});
+      if (!user) {
+        throw new Error("No users for token");
+      }
+      userKey = user.id;
+      if (payload.isRefresh) {
+        newTokens = {
+          access_token: createAccessJwtToken(user),
+          refresh_token: createRefreshJwtToken(user)
+        };
+      }
+    } else if (login && passcode) {
+      const user = await this.mainApplication.checkUserPassword(login, passcode);
+      if (!user) {
+        throw new Error("Incorrect login or password");
+      }
+      userKey = user.id;
+      newTokens = {
+        access_token: createAccessJwtToken(user),
+        refresh_token: createRefreshJwtToken(user)
+      };
+
+    } else {
+      throw new Error("Unauthorized");
+    }
+
     this._session = await this._application!.sessionManager.get(userKey);
     if (!this._session) {
       this._session = await this._application!.sessionManager.open(userKey);
     }
     this._session.borrow();
     this._session.taskManager.addChangeStatusListener(this);
-    const resHeaders: StompHeaders = {server: `${pack.name}/${pack.version}`, session: this._session.id};
-    await this._stomp.connected(resHeaders);
+
+    await this._sendConnected(newTokens);
   }
 
   protected async _sendTaskMessage(task: Task<any, any, any>): Promise<void> {
     const subscription = this._subscriptions.find((sub) => sub.destination === task.destination);
     if (subscription) {
-      const headers: StompHeaders = {
+      await this._stomp.message({
         "content-type": "application/json;charset=utf-8",
         "destination": task.destination,
         "action": task.command.action,
         "subscription": subscription.id,
         "message-id": task.id,
         "ack": task.id
-      };
-      const body = JSON.stringify({
+      }, JSON.stringify({
         status: task.status,
         payload: task.command.payload,
         result: task.result ? task.result : undefined,
         errorMessage: task.error ? task.error.message : undefined
-      });
-      await this._stomp.message(headers, body);
+      }));
     }
+  }
+
+  protected async _sendConnected(headers?: StompHeaders): Promise<void> {
+    const pack = require("../../package.json");
+    await this._stomp.connected({
+      server: `${pack.name}/${pack.version}`,
+      session: this.session.id,
+      ...headers
+    });
   }
 
   protected async _sendError(error: Error, headers?: StompHeaders): Promise<void> {

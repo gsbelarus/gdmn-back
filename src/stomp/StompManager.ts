@@ -58,6 +58,7 @@ export class StompManager {
       session = stomp.listener as MainStompSession;
       session.application = this._mainApplication;
     }
+    session.mainApplication = this._mainApplication;
     this._sessions.set(webSocket, session);
     return true;
   }
@@ -67,7 +68,6 @@ export class StompManager {
     if (!session) {
       throw new Error("WebSocket not found");
     }
-    session.application = this._mainApplication;
     this._sessions.delete(webSocket);
   }
 
