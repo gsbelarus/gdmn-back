@@ -1,4 +1,5 @@
 import {AConnection} from "gdmn-db";
+import {TaskStatus} from "./task/Task";
 import {TaskManager} from "./task/TaskManager";
 
 export type CloseListener = (session: Session) => void;
@@ -53,6 +54,7 @@ export class Session {
 
   public borrow(): void {
     this._holdings++;
+    this.clearTimer();
   }
 
   public release(): void {
@@ -60,7 +62,9 @@ export class Session {
       throw new Error("Session is not using");
     }
     this._holdings--;
-    this.updateTimer();
+    if (this._holdings === 0) {
+      this.updateTimer();
+    }
   }
 
   public async close(): Promise<void> {
@@ -73,11 +77,11 @@ export class Session {
   private updateTimer(): void {
     this.clearTimer();
     this._timer = setTimeout(() => {
-      if (this._holdings === 0) {
+      if (this._taskManager.find(TaskStatus.IDLE, TaskStatus.RUNNING, TaskStatus.PAUSED).length) {
+        this.updateTimer();
+      } else {
         this.close().catch(console.error);
         this.clearTimer();
-      } else {
-        this.updateTimer();
       }
     }, Session.DEFAULT_TIMEOUT);
   }
