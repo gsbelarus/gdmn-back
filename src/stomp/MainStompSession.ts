@@ -32,11 +32,14 @@ export class MainStompSession extends StompSession {
             this.session.taskManager.add({
               command,
               destination,
-              worker: async () => {
+              worker: async (_, progress) => {
+                progress.increment(10, "Check application...");
                 const application = await this.mainApplication.getApplication(uid, this.session);
                 if (!application.connected) {
+                  progress.increment(20, "Connect to the application...");
                   await application.connect();
                 }
+                progress.increment(60, "Application is connected...");
                 return await this.mainApplication.getApplicationInfo(uid, this.session);
               }
             });

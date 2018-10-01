@@ -3,7 +3,7 @@ import {StompClientCommandListener, StompError, StompHeaders, StompServerSession
 import {Application} from "../apps/Application";
 import {MainApplication} from "../apps/MainApplication";
 import {Session} from "../apps/Session";
-import {ICommand, Task, TaskStatus} from "../apps/task/Task";
+import {endStatuses, ICommand, Task, TaskStatus} from "../apps/task/Task";
 import {IChangeStatusListener} from "../apps/task/TaskManager";
 import {createAccessJwtToken, createRefreshJwtToken, getPayloadFromJwtToken} from "../passport";
 
@@ -11,7 +11,7 @@ type Action = "PING" | "GET_SCHEMA" | "QUERY";
 
 type Command<A extends Action, P> = ICommand<A, P>;
 
-type PingCommand = Command<"PING", { delay: number }>;
+type PingCommand = Command<"PING", { steps: number, delay: number }>;
 type GetSchemaCommand = Command<"GET_SCHEMA", undefined>;
 type QueryCommand = Command<"QUERY", IEntityQueryInspector>;
 
@@ -26,6 +26,8 @@ export interface ISubscription {
 export class StompSession implements StompClientCommandListener, IChangeStatusListener<any, any, any> {
 
   public static readonly DESTINATION_TASK = "/task";
+
+  public static readonly IGNORED_ACK_ID = "ignored-id";
 
   private readonly _stomp: StompServerSessionLayer;
   private readonly _subscriptions: ISubscription[] = [];
@@ -76,14 +78,8 @@ export class StompSession implements StompClientCommandListener, IChangeStatusLi
   }
 
   public onChange(task: Task<any, any, any>): void {
-    switch (task.status) {
-      case TaskStatus.DONE:
-      case TaskStatus.ERROR:
-      case TaskStatus.INTERRUPTED:
-        if (this._subscriptions.find((sub) => sub.destination === task.destination)) {
-          this._sendTaskMessage(task).catch(console.error);
-        }
-        break;
+    if (this._subscriptions.find((sub) => sub.destination === task.options.destination)) {
+      this._sendTaskMessage(task).catch(console.error);
     }
   }
 
@@ -153,15 +149,25 @@ export class StompSession implements StompClientCommandListener, IChangeStatusLi
 
         switch (action) {
           case "PING": {
-            const command: PingCommand = {action, ...bodyObj};
-            const {delay} = command.payload || {delay: 0};
+            const defaultPayload: PingCommand["payload"] = {steps: 1, delay: 0};
+            const command: PingCommand = {action, payload: defaultPayload, ...bodyObj};
+            const steps = command.payload.steps || defaultPayload.steps;
+            const delay = command.payload.delay || defaultPayload.delay;
 
             this.session.taskManager.add({
               command,
               destination,
-              worker: async (checkStatus) => {
-                await new Promise((resolve) => setTimeout(resolve, delay));
-                await checkStatus();
+              worker: async (checkStatus, progress) => {
+                const timeout = delay / steps;
+                const step = (progress.max - progress.min) / steps;
+
+                console.log(timeout, step);
+                for (let i = 0; i < steps; i++) {
+                  await new Promise((resolve) => setTimeout(resolve, timeout));
+                  progress.increment(step, `Process ping... Complete step: ${i + 1}`);
+                  await checkStatus();
+                }
+
                 if (!this.application.connected) {
                   throw new Error("Application is not connected");
                 }
@@ -203,9 +209,11 @@ export class StompSession implements StompClientCommandListener, IChangeStatusLi
   }
 
   public ack(headers?: StompHeaders): void {
-    const task = this.session.taskManager.find(headers!.id);
-    if (task) {
-      this.session.taskManager.delete(task);
+    if (headers!.id !== StompSession.IGNORED_ACK_ID) {
+      const task = this.session.taskManager.find(headers!.id);
+      if (task) {
+        this.session.taskManager.delete(task);
+      }
     }
   }
 
@@ -271,18 +279,24 @@ export class StompSession implements StompClientCommandListener, IChangeStatusLi
   }
 
   protected async _sendTaskMessage(task: Task<any, any, any>): Promise<void> {
-    const subscription = this._subscriptions.find((sub) => sub.destination === task.destination);
+    const subscription = this._subscriptions.find((sub) => sub.destination === task.options.destination);
     if (subscription) {
+      const ack = endStatuses.includes(task.status) ? task.id : StompSession.IGNORED_ACK_ID;
+
       await this._stomp.message({
         "content-type": "application/json;charset=utf-8",
-        "destination": task.destination,
-        "action": task.command.action,
+        "destination": task.options.destination,
+        "action": task.options.command.action,
         "subscription": subscription.id,
-        "message-id": task.id,
-        "ack": task.id
+        "message-id": ack,
+        "ack": ack
       }, JSON.stringify({
         status: task.status,
-        payload: task.command.payload,
+        progress: task.status === TaskStatus.RUNNING ? {
+          value: task.progress.value,
+          description: task.progress.description
+        } : undefined,
+        payload: task.options.command.payload,
         result: task.result ? task.result : undefined,
         errorMessage: task.error ? task.error.message : undefined
       }));

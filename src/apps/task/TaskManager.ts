@@ -1,8 +1,8 @@
 import {v1 as uuidV1} from "uuid";
-import {ChangeStatusListener, IOptions, Task, TaskStatus} from "./Task";
+import {ChangeListener, endStatuses, IOptions, Task, TaskStatus} from "./Task";
 
 export interface IChangeStatusListener<Action, Payload, Result> {
-  onChange: ChangeStatusListener<Action, Payload, Result>;
+  onChange: ChangeListener<Action, Payload, Result>;
 }
 
 export class TaskManager {
@@ -57,7 +57,11 @@ export class TaskManager {
   }
 
   public clear(): void {
-    this._list.forEach((task) => task.interrupt());
+    this._list.forEach((task) => {
+      if (!endStatuses.includes(task.status)) {
+        task.interrupt();
+      }
+    });
     this._list.splice(0, this._list.length);
   }
 }

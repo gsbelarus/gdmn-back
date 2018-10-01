@@ -1,3 +1,5 @@
+import {IProgressOptions, Progress} from "./Progress";
+
 export enum TaskStatus {
   IDLE,
   RUNNING,
@@ -8,11 +10,13 @@ export enum TaskStatus {
   DONE
 }
 
-export type ChangeStatusListener<Action, Payload, Result> = (task: Task<Action, Payload, Result>) => void;
+export const endStatuses = [TaskStatus.INTERRUPTED, TaskStatus.ERROR, TaskStatus.DONE];
+
+export type ChangeListener<Action, Payload, Result> = (task: Task<Action, Payload, Result>) => void;
 
 export type StatusChecker = () => Promise<void | never>;
 
-export type TaskWorker<Result> = (checkStatus: StatusChecker) => Promise<Result>;
+export type TaskWorker<Result> = (checkStatus: StatusChecker, progress: Progress) => Promise<Result>;
 
 export interface ICommand<A, P = any> {
   readonly action: A;
@@ -22,38 +26,47 @@ export interface ICommand<A, P = any> {
 export interface IOptions<Action, Payload, Result> {
   readonly command: ICommand<Action, Payload>;
   readonly destination: string;
+  readonly progress?: IProgressOptions;
+  readonly pauseCheckTimeout?: number;
   readonly worker: TaskWorker<Result>;
 }
 
 export class Task<Action, Payload, Result> {
 
+  public static readonly DEFAULT_PAUSE_CHECK_TIMEOUT = 5 * 1000;
+
   private readonly _id: string;
   private readonly _options: IOptions<Action, Payload, Result>;
-  private readonly _changeStatusListener?: ChangeStatusListener<Action, Payload, Result>;
+  private readonly _changeListener?: ChangeListener<Action, Payload, Result>;
+  private readonly _progress: Progress;
   private readonly _log: any[] = [];
+
   private _status: TaskStatus = TaskStatus.IDLE;
   private _result?: Result;
   private _error?: Error;
 
   constructor(id: string,
               options: IOptions<Action, Payload, Result>,
-              changeStatusListener?: ChangeStatusListener<Action, Payload, Result>) {
+              changeListener?: ChangeListener<Action, Payload, Result>) {
     this._id = id;
     this._options = options;
-    this._changeStatusListener = changeStatusListener;
-    this._notifyListener();
+    this._progress = new Progress(options.progress, () => {
+      this._updateStatus(this._status);
+    });
+    this._changeListener = changeListener;
+    this._updateStatus(TaskStatus.IDLE);
   }
 
   get id(): string {
     return this._id;
   }
 
-  get command(): ICommand<Action, Payload> {
-    return this._options.command;
+  get options(): IOptions<Action, Payload, Result> {
+    return this._options;
   }
 
-  get destination(): string {
-    return this._options.destination;
+  get progress(): Progress {
+    return this._progress;
   }
 
   get status(): TaskStatus {
@@ -73,53 +86,53 @@ export class Task<Action, Payload, Result> {
   }
 
   public interrupt(): void {
-    this.updateStatus(TaskStatus.INTERRUPTED);
+    this._updateStatus(TaskStatus.INTERRUPTED);
   }
 
   public pause(): void {
-    this.updateStatus(TaskStatus.PAUSED);
+    this._updateStatus(TaskStatus.PAUSED);
   }
 
   public resume(): void {
-    this.updateStatus(TaskStatus.RUNNING);
+    this._updateStatus(TaskStatus.RUNNING);
   }
 
   public async execute(): Promise<void> {
     if (this._status !== TaskStatus.IDLE) {
-      throw new Error(`Task mast has NOT_RUNNING status, but he has ${TaskStatus[this._status]}`);
+      throw new Error(`Task mast has ${TaskStatus[TaskStatus.IDLE]} status, but he has ${TaskStatus[this._status]}`);
     }
-    this.updateStatus(TaskStatus.RUNNING);
+    this._updateStatus(TaskStatus.RUNNING);
     try {
       await this._checkStatus();
-      this._result = await this._options.worker(this._checkStatus.bind(this));
-      this.updateStatus(TaskStatus.DONE);
+      this._result = await this._options.worker(this._checkStatus.bind(this), this._progress);
+      this._updateStatus(TaskStatus.DONE);
     } catch (error) {
       this._error = error;
-      this.updateStatus(TaskStatus.ERROR);
+      this._updateStatus(TaskStatus.ERROR);
     }
   }
 
-  private updateStatus(status: TaskStatus): void {
+  private _updateStatus(status: TaskStatus): void {
     if (this._status === TaskStatus.DONE
       || this._status === TaskStatus.ERROR
       || this._status === TaskStatus.INTERRUPTED) {
       throw new Error("Task was finished");
     }
     this._status = status;
-    this._log.push(TaskStatus[status]);
-    this._notifyListener();
-  }
 
-  private _notifyListener(): void {
-    if (this._changeStatusListener) {
-      this._changeStatusListener(this);
+    this._log.push(`Status: ${TaskStatus[status]}; Progress: ${this._progress.value};`);
+
+    if (this._changeListener) {
+      this._changeListener(this);
     }
   }
 
   private async _checkStatus(): Promise<void | never> {
     switch (this._status) {
       case TaskStatus.PAUSED:
-        await new Promise((resolve) => setTimeout(resolve, 5 * 1000));
+        await new Promise((resolve) => {
+          setTimeout(resolve, this._options.pauseCheckTimeout || Task.DEFAULT_PAUSE_CHECK_TIMEOUT);
+        });
         await this._checkStatus();
         break;
       case TaskStatus.INTERRUPTED:
