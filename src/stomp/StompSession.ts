@@ -95,13 +95,14 @@ export class StompSession implements StompClientCommandListener, IChangeStatusLi
   }
 
   public disconnect(): void {
-    // empty
+    this.onEnd();
   }
 
   public onEnd(): void {
     if (this._session) {
       this._session.taskManager.removeChangeStatusListener(this);
       this._session.release();
+      this._session = undefined;
     }
   }
 
@@ -161,7 +162,6 @@ export class StompSession implements StompClientCommandListener, IChangeStatusLi
                 const timeout = delay / steps;
                 const step = (progress.max - progress.min) / steps;
 
-                console.log(timeout, step);
                 for (let i = 0; i < steps; i++) {
                   await new Promise((resolve) => setTimeout(resolve, timeout));
                   progress.increment(step, `Process ping... Complete step: ${i + 1}`);
