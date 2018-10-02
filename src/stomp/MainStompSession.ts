@@ -67,6 +67,10 @@ export class MainStompSession extends StompSession {
               destination,
               worker: async () => {
                 const uid = await this.mainApplication.createApplication(alias, this.session);
+                const application = await this.mainApplication.getApplication(uid, this.session);
+                if (!application.connected) {
+                  await application.createOrConnect();
+                }
                 return await this.mainApplication.getApplicationInfo(uid, this.session);
               }
             });

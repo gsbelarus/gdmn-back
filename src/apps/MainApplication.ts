@@ -1,6 +1,6 @@
 import config from "config";
 import crypto from "crypto";
-import {existsSync, mkdirSync, readdirSync} from "fs";
+import {existsSync, mkdirSync} from "fs";
 import {AccessMode, AConnection, Factory} from "gdmn-db";
 import {DataSource} from "gdmn-er-bridge";
 import {
@@ -148,9 +148,13 @@ export class MainApplication extends Application {
     }
     const application = this._applications.get(uid);
     if (!application) {
-      throw new Error("Application not found");
+      const appInfo = await this.getApplicationInfo(uid, session);
+      const alias = appInfo ? appInfo.alias : "Unknown";
+      const dbDetail = MainApplication._createDBDetail(alias, MainApplication.getAppPath(uid));
+      this._applications.set(uid, new GDMNApplication(dbDetail));
+
+      return this.getApplication(uid, session);
     }
-    await this.getApplicationInfo(uid, session);
     return application;
   }
 
@@ -160,9 +164,6 @@ export class MainApplication extends Application {
     }
     const uid = uuidV1().toUpperCase();
     await this._addApplicationInfo(session.connection, session.userKey, {alias, uid});
-    const application = new GDMNApplication(MainApplication._createDBDetail(alias, MainApplication.getAppPath(uid)));
-    await application.create();
-    this._applications.set(uid, application);
     return uid;
   }
 
@@ -170,13 +171,12 @@ export class MainApplication extends Application {
     if (!this.connected) {
       throw new Error("MainApplication is not created");
     }
-    const application = this._applications.get(uid);
-    if (!application) {
-      throw new Error("Application not found");
-    }
+    const application = await this.getApplication(uid, session);
     if (application.dbDetail.alias !== databases.test.alias) {
       await this._deleteApplicationInfo(session.connection, session.userKey, uid);
-      await application.delete();
+      // TODO scheduled deletion
+      // await application.delete();
+      this._applications.delete(uid);
     }
   }
 
@@ -328,16 +328,10 @@ export class MainApplication extends Application {
     }
 
     const applicationsInfo = await this._executeConnection((connection) => this._getApplicationsInfo(connection));
-    for (const fileName of readdirSync(MainApplication.WORK_DIR)) {
-      const ext = path.extname(path.resolve(MainApplication.WORK_DIR, fileName));
-      if (ext === MainApplication.APP_EXT) {
-        const appInfo = applicationsInfo.find((info) => MainApplication._getAppName(info.uid) === fileName);
-        if (appInfo) {
-          const alias = appInfo ? appInfo.alias : "Unknown";
-          const dbDetail = MainApplication._createDBDetail(alias, MainApplication.getAppPath(appInfo.uid));
-          this._applications.set(appInfo.uid, new GDMNApplication(dbDetail));
-        }
-      }
+    for (const appInfo of applicationsInfo) {
+      const alias = appInfo ? appInfo.alias : "Unknown";
+      const dbDetail = MainApplication._createDBDetail(alias, MainApplication.getAppPath(appInfo.uid));
+      this._applications.set(appInfo.uid, new GDMNApplication(dbDetail));
     }
   }
 
