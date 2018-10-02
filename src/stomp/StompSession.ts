@@ -100,6 +100,7 @@ export class StompSession implements StompClientCommandListener, IChangeStatusLi
 
   public onEnd(): void {
     if (this._session) {
+      this._subscriptions.splice(0, this._subscriptions.length);
       this._session.taskManager.removeChangeStatusListener(this);
       this._session.release();
       this._session = undefined;
