@@ -243,27 +243,50 @@ refresh-token:refresh-token
 
 ```
 
-##### PING
+##### Creating tasks
 ```
 >>> SEND
 destination:/task
-action:PING
+action:...
 content-type:application/json;charset=utf-8
-content-length:26
+content-length:...
 
-{"payload":{"delay":1000}}
+{"payload":{...}}
 ```
+* `action`: 
+  * `PING` - `payload: {delay: number, steps: number}`
+  * `GET_SCHEMA` - `payload: undefined`
+  * `QUERY` - `payload: IEntityQueryInspector`
+
+###### Subscription response:
 ```
 <<< MESSAGE
 destination:/task
-action:PING
+action:...
 message-id:msg-0
 ack:ack-0
 subscription:sub-0
 content-type:application/json;charset=utf-8
+content-length:...
 
-{"status":5}
+{"status":1,"progress":{"value":50,"description":"progress"},payload":{...}}
 ```
+
+* `action`:
+  * `PING` - `result: undefined`
+  * `GET_SCHEMA` - `result: IERModel`
+  * `QUERY` - `result: IQueryResponse`
+* `payload` - is request payload
+* `status`:
+  * 0 - `IDLE`
+  * 1 - `RUNNING`
+  * 2 - `PAUSED`
+  * 3 - `INTERRUPTED`
+  * 4 - `ERROR`
+  * 5 - `DONE`
+* `progress` is sent only when the status is `RUNNING`
+* `error` is sent only when the status is `ERROR`
+* `result` is sent only when the status is `DONE`
 
 ##### Default user
 login: `Administrator`  

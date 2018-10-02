@@ -283,14 +283,18 @@ export class StompSession implements StompClientCommandListener, IChangeStatusLi
     if (subscription) {
       const ack = endStatuses.includes(task.status) ? task.id : StompSession.IGNORED_ACK_ID;
 
-      await this._stomp.message({
+      const headers: StompHeaders = {
         "content-type": "application/json;charset=utf-8",
         "destination": task.options.destination,
         "action": task.options.command.action,
         "subscription": subscription.id,
-        "message-id": ack,
-        "ack": ack
-      }, JSON.stringify({
+        "message-id": ack
+      };
+      if (subscription.ack !== "auto") {
+        headers.ack = ack;
+      }
+
+      await this._stomp.message(headers, JSON.stringify({
         status: task.status,
         progress: task.status === TaskStatus.RUNNING ? {
           value: task.progress.value,
@@ -300,6 +304,10 @@ export class StompSession implements StompClientCommandListener, IChangeStatusLi
         result: task.result ? task.result : undefined,
         errorMessage: task.error ? task.error.message : undefined
       }));
+
+      if (subscription.ack === "auto") {
+        this.session.taskManager.delete(task);
+      }
     }
   }
 
