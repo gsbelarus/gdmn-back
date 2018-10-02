@@ -37,12 +37,14 @@ export interface IUserOutput {
 export interface IApplicationInfoInput {
   uid: string;
   alias: string;
+  ownerKey?: number;
 }
 
 export interface IApplicationInfoOutput {
   uid: string;
   alias: string;
   creationDate: Date;
+  ownerKey?: number;
 }
 
 export interface IAppBackupInfoOutput {
@@ -120,7 +122,8 @@ export class MainApplication extends Application {
           SELECT FIRST 1
             apps.ALIAS,
             app.UID,
-            app.CREATIONDATE
+            app.CREATIONDATE,
+            app.OWNER
           FROM APP_USER_APPLICATIONS apps
             LEFT JOIN APPLICATION app ON app.ID = apps.KEY2
           WHERE apps.KEY1 = :userKey
@@ -132,7 +135,8 @@ export class MainApplication extends Application {
         return {
           alias: result.getString("ALIAS"),
           uid: result.getString("UID"),
-          creationDate: result.getDate("CREATIONDATE")!
+          creationDate: result.getDate("CREATIONDATE")!,
+          ownerKey: result.isNull("OWNER") ? result.getNumber("OWNER") : undefined
         };
       }
     });
@@ -163,7 +167,13 @@ export class MainApplication extends Application {
       throw new Error("ApplicationManager is not created");
     }
     const uid = uuidV1().toUpperCase();
-    await this._addApplicationInfo(session.connection, session.userKey, {alias, uid});
+    await this._addApplicationInfo(session.connection, session.userKey, {
+      ownerKey: session.userKey,
+      alias,
+      uid
+    });
+    const application = await this.getApplication(uid, session);
+    await application.create();
     return uid;
   }
 
@@ -171,11 +181,11 @@ export class MainApplication extends Application {
     if (!this.connected) {
       throw new Error("MainApplication is not created");
     }
+    const appInfo = await this.getApplicationInfo(uid, session);
     const application = await this.getApplication(uid, session);
-    if (application.dbDetail.alias !== databases.test.alias) {
-      await this._deleteApplicationInfo(session.connection, session.userKey, uid);
-      // TODO scheduled deletion
-      // await application.delete();
+    await this._deleteApplicationInfo(session.connection, session.userKey, uid);
+    if (appInfo.ownerKey !== undefined && appInfo.ownerKey === session.userKey) {
+      await application.delete();
       this._applications.delete(uid);
     }
   }
@@ -279,7 +289,8 @@ export class MainApplication extends Application {
           SELECT
             apps.ALIAS,
             app.UID,
-            app.CREATIONDATE
+            app.CREATIONDATE,
+            app.OWNER
           FROM APP_USER_APPLICATIONS apps
             LEFT JOIN APPLICATION app ON app.ID = apps.KEY2
           ${userKey !== undefined ? `WHERE apps.KEY1 = :userKey` : ""}
@@ -291,7 +302,8 @@ export class MainApplication extends Application {
             result.push({
               alias: resultSet.getString("ALIAS"),
               uid: resultSet.getString("UID"),
-              creationDate: resultSet.getDate("CREATIONDATE")!
+              creationDate: resultSet.getDate("CREATIONDATE")!,
+              ownerKey: resultSet.isNull("OWNER") ? resultSet.getNumber("OWNER") : undefined
             });
           }
           return result;
@@ -329,9 +341,11 @@ export class MainApplication extends Application {
 
     const applicationsInfo = await this._executeConnection((connection) => this._getApplicationsInfo(connection));
     for (const appInfo of applicationsInfo) {
-      const alias = appInfo ? appInfo.alias : "Unknown";
-      const dbDetail = MainApplication._createDBDetail(alias, MainApplication.getAppPath(appInfo.uid));
-      this._applications.set(appInfo.uid, new GDMNApplication(dbDetail));
+      if (!this._applications.has(appInfo.uid)) {
+        const alias = appInfo ? appInfo.alias : "Unknown";
+        const dbDetail = MainApplication._createDBDetail(alias, MainApplication.getAppPath(appInfo.uid));
+        this._applications.set(appInfo.uid, new GDMNApplication(dbDetail));
+      }
     }
   }
 
@@ -363,6 +377,9 @@ export class MainApplication extends Application {
       // APPLICATION
       const appEntity = await this.erModel.create(transaction, new Entity({
         name: "APPLICATION", lName: {ru: {name: "Приложение"}}
+      }));
+      await appEntity.create(transaction, new EntityAttribute({
+        name: "OWNER", lName: {ru: {name: "Создатель"}}, required: false, entities: [userEntity]
       }));
       const appUid = new StringAttribute({
         name: "UID", lName: {ru: {name: "Идентификатор приложения"}}, required: true, minLength: 1, maxLength: 36
@@ -419,10 +436,13 @@ export class MainApplication extends Application {
       connection,
       callback: async (transaction) => {
         const result = await connection.executeReturning(transaction, `
-          INSERT INTO APPLICATION (UID)
-          VALUES (:uid)
-          RETURNING ID, CREATIONDATE
-        `, {uid: application.uid});
+          INSERT INTO APPLICATION (UID, OWNER)
+          VALUES (:uid, :owner)
+          RETURNING ID, CREATIONDATE, OWNER
+        `, {
+          uid: application.uid,
+          owner: application.ownerKey
+        });
 
         await connection.execute(transaction, `
           INSERT INTO APP_USER_APPLICATIONS (KEY1, KEY2, ALIAS)
@@ -456,6 +476,15 @@ export class MainApplication extends Application {
               WHERE app.ID = KEY2
                 AND app.UID = :uid
             )
+        `, {
+          userKey,
+          uid
+        });
+
+        await connection.execute(transaction, `
+          DELETE FROM APPLICATION
+          WHERE UID = :uid
+            AND OWNER = :userKey
         `, {
           userKey,
           uid
