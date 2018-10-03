@@ -85,12 +85,14 @@ export class MainStompSession extends StompSession {
             break;
           }
           default:
-            super.send(headers, body);
+            return super.send(headers, body);
         }
         break;
       default:
-        super.send(headers, body);
+        return super.send(headers, body);
     }
+
+    this._sendReceipt(headers).catch(console.warn);
   }
 
   protected async _internalConnect(headers?: StompHeaders): Promise<void> {

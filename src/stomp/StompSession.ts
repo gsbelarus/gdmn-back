@@ -79,7 +79,7 @@ export class StompSession implements StompClientCommandListener, IChangeStatusLi
 
   public onChange(task: Task<any, any, any>): void {
     if (this._subscriptions.find((sub) => sub.destination === task.options.destination)) {
-      this._sendTaskMessage(task).catch(console.error);
+      this._sendTaskMessage(task).catch(console.warn);
     }
   }
 
@@ -90,12 +90,14 @@ export class StompSession implements StompClientCommandListener, IChangeStatusLi
   public connect(headers?: StompHeaders): void {
     this._internalConnect(headers)
       .catch((error) => {
-        this._sendError(error).catch(console.error);
+        this._sendError(error).catch(console.warn);
       });
   }
 
-  public disconnect(): void {
+  public disconnect(headers?: StompHeaders): void {
     this.onEnd();
+
+    this._sendReceipt(headers).catch(console.warn);
   }
 
   public onEnd(): void {
@@ -124,11 +126,13 @@ export class StompSession implements StompClientCommandListener, IChangeStatusLi
 
         // notify about tasks
         const tasks = this.session.taskManager.getAll();
-        tasks.forEach((task) => this._sendTaskMessage(task).catch(console.error));
+        tasks.forEach((task) => this._sendTaskMessage(task).catch(console.warn));
         break;
       default:
         throw new Error(`Unsupported destination '${headers!.destination}'`);
     }
+
+    this._sendReceipt(headers).catch(console.warn);
   }
 
   public unsubscribe(headers?: StompHeaders): void {
@@ -137,6 +141,8 @@ export class StompSession implements StompClientCommandListener, IChangeStatusLi
       throw new Error("Subscription is not found");
     }
     this._subscriptions.splice(subscriptionIndex, 1);
+
+    this._sendReceipt(headers).catch(console.warn);
   }
 
   public send(headers?: StompHeaders, body?: string): void {
@@ -207,6 +213,7 @@ export class StompSession implements StompClientCommandListener, IChangeStatusLi
       default:
         throw new Error(`Unsupported destination '${destination}'`);
     }
+    this._sendReceipt(headers).catch(console.warn);
   }
 
   public ack(headers?: StompHeaders): void {
@@ -321,12 +328,20 @@ export class StompSession implements StompClientCommandListener, IChangeStatusLi
     });
   }
 
-  protected async _sendError(error: Error, headers?: StompHeaders): Promise<void> {
+  protected async _sendError(error: Error, requestHeaders?: StompHeaders): Promise<void> {
     const errorHeaders: StompHeaders = {message: error.message};
-    if (headers && headers.receipt) {
-      errorHeaders["receipt-id"] = headers.receipt;
+    if (requestHeaders && requestHeaders.receipt) {
+      errorHeaders["receipt-id"] = requestHeaders.receipt;
     }
     await this._stomp.error(errorHeaders);
+  }
+
+  protected async _sendReceipt(requestHeaders?: StompHeaders): Promise<void> {
+    const receiptHeaders: StompHeaders = {};
+    if (requestHeaders && requestHeaders.receipt) {
+      receiptHeaders["receipt-id"] = requestHeaders.receipt;
+      await this._stomp.receipt(receiptHeaders);
+    }
   }
 
   protected _checkContentType(headers?: StompHeaders): void | never {
