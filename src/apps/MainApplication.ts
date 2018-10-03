@@ -1,7 +1,7 @@
 import config from "config";
 import crypto from "crypto";
 import {existsSync, mkdirSync} from "fs";
-import {AccessMode, AConnection, Factory} from "gdmn-db";
+import {AccessMode, AConnection, Factory, IConnectionOptions} from "gdmn-db";
 import {DataSource} from "gdmn-er-bridge";
 import {
   BlobAttribute,
@@ -77,7 +77,7 @@ export class MainApplication extends Application {
     return path.resolve(MainApplication.WORK_DIR, MainApplication._getAppName(uid));
   }
 
-  private static _createDBDetail(alias: string, dbPath: string): IDBDetail {
+  private static _createCustomDBDetail(alias: string, connectionOptions: IConnectionOptions): IDBDetail {
     return {
       alias,
       driver: Factory.FBDriver,
@@ -85,14 +85,18 @@ export class MainApplication extends Application {
         max: 100,
         acquireTimeoutMillis: 60000
       },
-      connectionOptions: {
-        host: config.get("db.host"),
-        port: config.get("db.port"),
-        username: config.get("db.user"),
-        password: config.get("db.password"),
-        path: dbPath
-      }
+      connectionOptions
     };
+  }
+
+  private static _createDBDetail(alias: string, dbPath: string): IDBDetail {
+    return MainApplication._createCustomDBDetail(alias, {
+      host: config.get("db.host"),
+      port: config.get("db.port"),
+      username: config.get("db.user"),
+      password: config.get("db.password"),
+      path: dbPath
+    });
   }
 
   private static _getAppName(uid: string): string {
@@ -115,31 +119,12 @@ export class MainApplication extends Application {
   }
 
   public async getApplicationInfo(uid: string, session: Session): Promise<IApplicationInfoOutput> {
-    return await AConnection.executeTransaction({
-      connection: session.connection,
-      callback: async (transaction) => {
-        const result = await session.connection.executeReturning(transaction, `
-          SELECT FIRST 1
-            apps.ALIAS,
-            app.UID,
-            app.CREATIONDATE,
-            app.OWNER
-          FROM APP_USER_APPLICATIONS apps
-            LEFT JOIN APPLICATION app ON app.ID = apps.KEY2
-          WHERE apps.KEY1 = :userKey
-            AND app.UID = :uid
-        `, {
-          uid,
-          userKey: session.userKey
-        });
-        return {
-          alias: result.getString("ALIAS"),
-          uid: result.getString("UID"),
-          creationDate: result.getDate("CREATIONDATE")!,
-          ownerKey: result.isNull("OWNER") ? result.getNumber("OWNER") : undefined
-        };
-      }
-    });
+    const appsInfo = await this._getApplicationsInfo(session.connection, session.userKey);
+    const appInfo = appsInfo.find((info) => info.uid === uid);
+    if (!appInfo) {
+      throw new Error("Application is not found");
+    }
+    return appInfo;
   }
 
   public async getApplicationsInfo(session: Session): Promise<IApplicationInfoOutput[]> {
@@ -151,8 +136,8 @@ export class MainApplication extends Application {
       throw new Error("MainApplication is not created");
     }
     const application = this._applications.get(uid);
+    const appInfo = await this.getApplicationInfo(uid, session);
     if (!application) {
-      const appInfo = await this.getApplicationInfo(uid, session);
       const alias = appInfo ? appInfo.alias : "Unknown";
       const dbDetail = MainApplication._createDBDetail(alias, MainApplication.getAppPath(uid));
       this._applications.set(uid, new GDMNApplication(dbDetail));
@@ -303,7 +288,7 @@ export class MainApplication extends Application {
               alias: resultSet.getString("ALIAS"),
               uid: resultSet.getString("UID"),
               creationDate: resultSet.getDate("CREATIONDATE")!,
-              ownerKey: resultSet.isNull("OWNER") ? resultSet.getNumber("OWNER") : undefined
+              ownerKey: !resultSet.isNull("OWNER") ? resultSet.getNumber("OWNER") : undefined
             });
           }
           return result;
@@ -381,6 +366,21 @@ export class MainApplication extends Application {
       await appEntity.create(transaction, new EntityAttribute({
         name: "OWNER", lName: {ru: {name: "Создатель"}}, required: false, entities: [userEntity]
       }));
+      // await appEntity.create(transaction, new StringAttribute({
+      //   name: "HOST", lName: {ru: {name: "Хост"}}, maxLength: 260
+      // }));
+      // await appEntity.create(transaction, new IntegerAttribute({
+      //   name: "PORT", lName: {ru: {name: "Хост"}}
+      // }));
+      // await appEntity.create(transaction, new StringAttribute({
+      //   name: "USERNAME", lName: {ru: {name: "Имя пользователя"}}, maxLength: 260
+      // }));
+      // await appEntity.create(transaction, new StringAttribute({
+      //   name: "PASSWORD", lName: {ru: {name: "Пароль"}}, maxLength: 260
+      // }));
+      // await appEntity.create(transaction, new StringAttribute({
+      //   name: "PATH", lName: {ru: {name: "Путь"}}, maxLength: 260
+      // }));
       const appUid = new StringAttribute({
         name: "UID", lName: {ru: {name: "Идентификатор приложения"}}, required: true, minLength: 1, maxLength: 36
       });
