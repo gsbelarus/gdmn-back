@@ -72,9 +72,9 @@ async function create(): Promise<IServer> {
   const httpServer = startHttpServer(serverApp);
 
   const wsServer = new WebSocket.Server({server: httpServer});
-  wsServer.on("connection", (webSocket, req) => {
+  wsServer.on("connection", (webSocket) => {
     console.log("webSocket connection");
-    if (stompManager.add(webSocket, req)) {
+    if (stompManager.add(webSocket)) {
       webSocket.on("close", () => {
         console.log("webSocket close");
         stompManager.delete(webSocket);

@@ -5,11 +5,16 @@ import {MainApplication} from "../apps/MainApplication";
 import {Session} from "../apps/Session";
 import {endStatuses, ICommand, Task, TaskStatus} from "../apps/task/Task";
 import {IChangeStatusListener} from "../apps/task/TaskManager";
-import {createAccessJwtToken, createRefreshJwtToken, getPayloadFromJwtToken} from "../passport";
+import {ITokens, Utils} from "./Utils";
 
-type Action = "PING" | "GET_SCHEMA" | "QUERY";
+type Action = "DELETE_APP" | "CREATE_APP" | "GET_APPS" |
+  "PING" | "GET_SCHEMA" | "QUERY";
 
 type Command<A extends Action, P> = ICommand<A, P>;
+
+type DeleteAppCommand = Command<"DELETE_APP", { uid: string }>;
+type CreateAppCommand = Command<"CREATE_APP", { alias: string }>;
+type GetAppsCommand = Command<"GET_APPS", undefined>;
 
 type PingCommand = Command<"PING", { steps: number, delay: number }>;
 type GetSchemaCommand = Command<"GET_SCHEMA", undefined>;
@@ -150,12 +155,59 @@ export class StompSession implements StompClientCommandListener, IChangeStatusLi
 
     switch (destination) {
       case StompSession.DESTINATION_TASK:
-        this._checkContentType(headers);
+        Utils.checkContentType(headers);
 
         const action = headers!.action as Action;
         const bodyObj = JSON.parse(body!);
 
         switch (action) {
+          // ------------------------------For MainApplication
+          case "DELETE_APP": {  // TODO tmp
+            const command: DeleteAppCommand = {action, ...bodyObj};
+            const {uid} = command.payload || {uid: -1};
+
+            this._sendReceipt(headers).catch(console.warn);
+
+            this.session.taskManager.add({
+              command,
+              destination,
+              worker: async () => {
+                await this.mainApplication.deleteApplication(uid, this.session);
+              }
+            });
+            break;
+          }
+          case "CREATE_APP": {  // TODO tmp
+            const command: CreateAppCommand = {action, ...bodyObj};
+            const {alias} = command.payload || {alias: "Unknown"};
+
+            this._sendReceipt(headers).catch(console.warn);
+
+            this.session.taskManager.add({
+              command,
+              destination,
+              worker: async () => {
+                const uid = await this.mainApplication.createApplication(alias, this.session);
+                return await this.mainApplication.getApplicationInfo(uid, this.session);
+              }
+            });
+            break;
+          }
+          case "GET_APPS": {  // TODO tmp
+            const command: GetAppsCommand = {action, payload: undefined};
+
+            this._sendReceipt(headers).catch(console.warn);
+
+            this.session.taskManager.add({
+              command,
+              destination,
+              worker: async () => {
+                return await this.mainApplication.getApplicationsInfo(this.session);
+              }
+            });
+            break;
+          }
+          // ------------------------------For all applications
           case "PING": {
             const defaultPayload: PingCommand["payload"] = {steps: 1, delay: 0};
             const command: PingCommand = {action, payload: defaultPayload, ...bodyObj};
@@ -247,48 +299,35 @@ export class StompSession implements StompClientCommandListener, IChangeStatusLi
   }
 
   protected async _internalConnect(headers?: StompHeaders): Promise<void> {
-    const {login, passcode, access_token, authorization} = headers!;
+    const {login, passcode, access_token, authorization, "app-uid": appUid, "create-user": isCreateUser} = headers!;
 
-    let userKey: number;
-    let newTokens: { "access-token": string, "refresh-token": string } | undefined;
-
-    // TODO remove access_token
-    if (authorization || access_token) {
-      const payload = getPayloadFromJwtToken(authorization || access_token);
-      const user = await this.mainApplication.findUser({id: payload.id});
-      if (!user) {
-        throw new Error("No users for token");
-      }
-      userKey = user.id;
-      if (payload.isRefresh) {
-        newTokens = {
-          "access-token": createAccessJwtToken(user),
-          "refresh-token": createRefreshJwtToken(user)
-        };
-      }
+    // authorization
+    let result: { userKey: number, newTokens?: ITokens };
+    if (login && passcode && isCreateUser) {
+      result = await Utils.createUser(this.mainApplication, login, passcode);
     } else if (login && passcode) {
-      const user = await this.mainApplication.checkUserPassword(login, passcode);
-      if (!user) {
-        throw new Error("Incorrect login or password");
-      }
-      userKey = user.id;
-      newTokens = {
-        "access-token": createAccessJwtToken(user),
-        "refresh-token": createRefreshJwtToken(user)
-      };
-
+      result = await Utils.login(this.mainApplication, login, passcode);
+    } else if (authorization || access_token) { // TODO remove access_token
+      result = await Utils.authorize(this.mainApplication, authorization || access_token);
     } else {
       throw new Error("Unauthorized");
     }
 
-    this._session = await this._application!.sessionManager.get(userKey);
+    // get application from main
+    this._application = await Utils.getApplication(this.mainApplication, result.userKey, appUid);
+    if (!this._application.connected) {
+      await this._application.connect();
+    }
+
+    // create session for application
+    this._session = await this.application.sessionManager.get(result.userKey);
     if (!this._session) {
-      this._session = await this._application!.sessionManager.open(userKey);
+      this._session = await this.application.sessionManager.open(result.userKey);
     }
     this._session.borrow();
     this._session.taskManager.addChangeStatusListener(this);
 
-    await this._sendConnected(newTokens);
+    await this._sendConnected(result.newTokens);
   }
 
   protected async _sendTaskMessage(task: Task<any, any, any>): Promise<void> {
@@ -346,13 +385,6 @@ export class StompSession implements StompClientCommandListener, IChangeStatusLi
     if (requestHeaders && requestHeaders.receipt) {
       receiptHeaders["receipt-id"] = requestHeaders.receipt;
       await this._stomp.receipt(receiptHeaders);
-    }
-  }
-
-  protected _checkContentType(headers?: StompHeaders): void | never {
-    const contentType = headers!["content-type"];
-    if (contentType !== "application/json;charset=utf-8") {
-      throw new Error(`Unsupported content-type '${contentType}'; supported - 'application/json;charset=utf-8'`);
     }
   }
 }

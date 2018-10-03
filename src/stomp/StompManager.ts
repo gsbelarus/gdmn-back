@@ -1,9 +1,6 @@
-import http from "http";
 import {createStompServerSession, setLoggingListeners} from "node-stomp-protocol";
-import {parse} from "url";
 import WebSocket from "ws";
 import {MainApplication} from "../apps/MainApplication";
-import {MainStompSession} from "./MainStompSession";
 import {StompSession} from "./StompSession";
 
 setLoggingListeners({
@@ -33,31 +30,9 @@ export class StompManager {
     return this._mainApplication;
   }
 
-  public add(webSocket: WebSocket, req: http.IncomingMessage): boolean {
-    let stomp;
-    let session;
-
-    const query = parse(req.url!).query || "";
-    const groupParams = query.split("&").map((group) => group.split("="));
-    const groupUid = groupParams.find((group) => group[0] === "uid");
-
-    if (groupUid) {
-      try {
-        stomp = createStompServerSession(webSocket, StompSession);
-        session = stomp.listener as StompSession;
-        session.application = this._mainApplication.getApplicationSync(groupUid[1]);
-        if (!session.application.connected) {
-          throw new Error("Application is not connected");
-        }
-      } catch (error) {
-        webSocket.close(1003, error.message);
-        return false;
-      }
-    } else {
-      stomp = createStompServerSession(webSocket, MainStompSession);
-      session = stomp.listener as MainStompSession;
-      session.application = this._mainApplication;
-    }
+  public add(webSocket: WebSocket): boolean {
+    const stomp = createStompServerSession(webSocket, StompSession);
+    const session = stomp.listener as StompSession;
     session.mainApplication = this._mainApplication;
     this._sessions.set(webSocket, session);
     return true;

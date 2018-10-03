@@ -155,14 +155,11 @@ Pre-requirements: Xcode Command Line Tools (macOS), Node.js, npm, git.
 ## STOMP API (over WebSocket)
 <details>
   <summary>expand me</summary>
-  
-* To work with the auth database you need to connect to ws://address
-* To work with the user's databases you need to connect to ws://address/?uid=...
 
+* To work with the auth database you need to simple `CONNECT`
+* To work with the user's databases you need to `CONNECT` with header: `app-uid`
 
-#### Auth database
-
-##### Create account
+##### Create account (auth db is used)
 ```
 >>> CONNECT
 login:login
@@ -177,14 +174,13 @@ refresh-token:token
 
 ```
 
-#### All databases
-
-##### Login (auth base is used)
+##### Login (auth db is used)
 ```
 >>> CONNECT
 login:login
 passcode:password
 create-user:0 (optional)
+app-uid:uid (for user's apps)
 
 <<< CONNECTED
 server:gdmn-back/1.0.0
@@ -197,6 +193,7 @@ or
 ```
 >>> CONNECT
 authorization:access-token
+app-uid:uid (for user's apps)
 
 <<< CONNECTED
 server:gdmn-back/1.0.0
@@ -207,6 +204,7 @@ or
 ```
 >>> CONNECT
 authorization:refresh-token
+app-uid:uid (for user's apps)
 
 <<< CONNECTED
 server:gdmn-back/1.0.0
@@ -220,6 +218,7 @@ refresh-token:refresh-token
 ```
 >>> CONNECT
 authorization:refresh-token
+app-uid:uid (for user's apps)
 
 <<< CONNECTED
 server:gdmn-back/1.0.0
@@ -234,6 +233,7 @@ or
 login:login
 passcode:password
 create-user:0 (optional)
+app-uid:uid (for user's apps)
 
 <<< CONNECTED
 server:gdmn-back/1.0.0
