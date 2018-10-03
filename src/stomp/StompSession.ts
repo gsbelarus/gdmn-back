@@ -89,17 +89,17 @@ export class StompSession implements StompClientCommandListener, IChangeStatusLi
   }
 
   public onProtocolError(error: StompError): void {
-    console.log("protocol error", error);
+    console.log("Protocol Error", error);
   }
 
-  public connect(headers?: StompHeaders): void {
+  public connect(headers: StompHeaders = {}): void {
     this._internalConnect(headers)
       .catch((error) => {
-        this._sendError(error).catch(console.warn);
+        this._sendError(error, headers).catch(console.warn);
       });
   }
 
-  public disconnect(headers?: StompHeaders): void {
+  public disconnect(headers: StompHeaders = {}): void {
     this.onEnd();
 
     this._sendReceipt(headers).catch(console.warn);
@@ -114,19 +114,19 @@ export class StompSession implements StompClientCommandListener, IChangeStatusLi
     }
   }
 
-  public subscribe(headers?: StompHeaders): void {
-    switch (headers!.destination) {
+  public subscribe(headers: StompHeaders = {}): void {
+    switch (headers.destination) {
       case StompSession.DESTINATION_TASK:
-        if (this._subscriptions.some((sub) => sub.id === headers!.id)) {
+        if (this._subscriptions.some((sub) => sub.id === headers.id)) {
           throw new Error("Subscriptions with same id exists");
         }
-        if (this._subscriptions.some((sub) => sub.destination === headers!.destination)) {
+        if (this._subscriptions.some((sub) => sub.destination === headers.destination)) {
           throw new Error("Subscriptions with same destination exists");
         }
         this._subscriptions.push({
-          id: headers!.id,
-          destination: headers!.destination,
-          ack: headers!.ack as Ack || "auto"
+          id: headers.id,
+          destination: headers.destination,
+          ack: headers.ack as Ack || "auto"
         });
 
         this._sendReceipt(headers).catch(console.warn);
@@ -136,12 +136,12 @@ export class StompSession implements StompClientCommandListener, IChangeStatusLi
         tasks.forEach((task) => this._sendTaskMessage(task).catch(console.warn));
         break;
       default:
-        throw new Error(`Unsupported destination '${headers!.destination}'`);
+        throw new Error(`Unsupported destination '${headers.destination}'`);
     }
   }
 
-  public unsubscribe(headers?: StompHeaders): void {
-    const subscriptionIndex = this._subscriptions.findIndex((sub) => sub.id === headers!.id);
+  public unsubscribe(headers: StompHeaders = {}): void {
+    const subscriptionIndex = this._subscriptions.findIndex((sub) => sub.id === headers.id);
     if (subscriptionIndex === -1) {
       throw new Error("Subscription is not found");
     }
@@ -150,14 +150,14 @@ export class StompSession implements StompClientCommandListener, IChangeStatusLi
     this._sendReceipt(headers).catch(console.warn);
   }
 
-  public send(headers?: StompHeaders, body?: string): void {
-    const destination = headers!.destination;
+  public send(headers: StompHeaders = {}, body: string = ""): void {
+    const destination = headers.destination;
 
     switch (destination) {
       case StompSession.DESTINATION_TASK:
         Utils.checkContentType(headers);
 
-        const action = headers!.action as Action;
+        const action = headers.action as Action;
         const bodyObj = JSON.parse(body!);
 
         switch (action) {
@@ -220,12 +220,10 @@ export class StompSession implements StompClientCommandListener, IChangeStatusLi
               command,
               destination,
               worker: async (checkStatus, progress) => {
-                const timeout = delay / steps;
-                const step = (progress.max - progress.min) / steps;
-
+                const stepPercent = 100 / steps;
                 for (let i = 0; i < steps; i++) {
-                  await new Promise((resolve) => setTimeout(resolve, timeout));
-                  progress.increment(step, `Process ping... Complete step: ${i + 1}`);
+                  await new Promise((resolve) => setTimeout(resolve, delay));
+                  progress.increment(stepPercent, `Process ping... Complete step: ${i + 1}`);
                   await checkStatus();
                 }
 
@@ -273,9 +271,9 @@ export class StompSession implements StompClientCommandListener, IChangeStatusLi
     }
   }
 
-  public ack(headers?: StompHeaders): void {
-    if (headers!.id !== StompSession.IGNORED_ACK_ID) {
-      const task = this.session.taskManager.find(headers!.id);
+  public ack(headers: StompHeaders = {}): void {
+    if (headers.id !== StompSession.IGNORED_ACK_ID) {
+      const task = this.session.taskManager.find(headers.id);
       if (task) {
         this.session.taskManager.delete(task);
       }
@@ -298,8 +296,8 @@ export class StompSession implements StompClientCommandListener, IChangeStatusLi
     throw new Error("Unsupported yet");
   }
 
-  protected async _internalConnect(headers?: StompHeaders): Promise<void> {
-    const {login, passcode, access_token, authorization, "app-uid": appUid, "create-user": isCreateUser} = headers!;
+  protected async _internalConnect(headers: StompHeaders): Promise<void> {
+    const {login, passcode, access_token, authorization, "app-uid": appUid, "create-user": isCreateUser} = headers;
 
     // authorization
     let result: { userKey: number, newTokens?: ITokens };
@@ -327,7 +325,7 @@ export class StompSession implements StompClientCommandListener, IChangeStatusLi
     this._session.borrow();
     this._session.taskManager.addChangeStatusListener(this);
 
-    await this._sendConnected(result.newTokens);
+    await this._sendConnected(result.newTokens || {});
   }
 
   protected async _sendTaskMessage(task: Task<any, any, any>): Promise<void> {
@@ -363,7 +361,7 @@ export class StompSession implements StompClientCommandListener, IChangeStatusLi
     }
   }
 
-  protected async _sendConnected(headers?: StompHeaders): Promise<void> {
+  protected async _sendConnected(headers: StompHeaders): Promise<void> {
     const pack = require("../../package.json");
     await this._stomp.connected({
       server: `${pack.name}/${pack.version}`,
@@ -372,7 +370,7 @@ export class StompSession implements StompClientCommandListener, IChangeStatusLi
     });
   }
 
-  protected async _sendError(error: Error, requestHeaders?: StompHeaders): Promise<void> {
+  protected async _sendError(error: Error, requestHeaders: StompHeaders): Promise<void> {
     const errorHeaders: StompHeaders = {message: error.message};
     if (requestHeaders && requestHeaders.receipt) {
       errorHeaders["receipt-id"] = requestHeaders.receipt;
@@ -380,7 +378,7 @@ export class StompSession implements StompClientCommandListener, IChangeStatusLi
     await this._stomp.error(errorHeaders);
   }
 
-  protected async _sendReceipt(requestHeaders?: StompHeaders): Promise<void> {
+  protected async _sendReceipt(requestHeaders: StompHeaders): Promise<void> {
     const receiptHeaders: StompHeaders = {};
     if (requestHeaders && requestHeaders.receipt) {
       receiptHeaders["receipt-id"] = requestHeaders.receipt;
