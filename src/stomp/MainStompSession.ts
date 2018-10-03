@@ -29,6 +29,8 @@ export class MainStompSession extends StompSession {
             const command: InitAppCommand = {action, ...bodyObj};
             const {uid} = command.payload || {uid: -1};
 
+            this._sendReceipt(headers).catch(console.warn);
+
             this.session.taskManager.add({
               command,
               destination,
@@ -49,6 +51,8 @@ export class MainStompSession extends StompSession {
             const command: DeleteAppCommand = {action, ...bodyObj};
             const {uid} = command.payload || {uid: -1};
 
+            this._sendReceipt(headers).catch(console.warn);
+
             this.session.taskManager.add({
               command,
               destination,
@@ -62,6 +66,8 @@ export class MainStompSession extends StompSession {
             const command: CreateAppCommand = {action, ...bodyObj};
             const {alias} = command.payload || {alias: "Unknown"};
 
+            this._sendReceipt(headers).catch(console.warn);
+
             this.session.taskManager.add({
               command,
               destination,
@@ -74,6 +80,8 @@ export class MainStompSession extends StompSession {
           }
           case "GET_APPS": {  // TODO tmp
             const command: GetAppsCommand = {action, payload: undefined};
+
+            this._sendReceipt(headers).catch(console.warn);
 
             this.session.taskManager.add({
               command,
@@ -91,8 +99,6 @@ export class MainStompSession extends StompSession {
       default:
         return super.send(headers, body);
     }
-
-    this._sendReceipt(headers).catch(console.warn);
   }
 
   protected async _internalConnect(headers?: StompHeaders): Promise<void> {

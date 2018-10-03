@@ -124,6 +124,8 @@ export class StompSession implements StompClientCommandListener, IChangeStatusLi
           ack: headers!.ack as Ack || "auto"
         });
 
+        this._sendReceipt(headers).catch(console.warn);
+
         // notify about tasks
         const tasks = this.session.taskManager.getAll();
         tasks.forEach((task) => this._sendTaskMessage(task).catch(console.warn));
@@ -131,8 +133,6 @@ export class StompSession implements StompClientCommandListener, IChangeStatusLi
       default:
         throw new Error(`Unsupported destination '${headers!.destination}'`);
     }
-
-    this._sendReceipt(headers).catch(console.warn);
   }
 
   public unsubscribe(headers?: StompHeaders): void {
@@ -162,6 +162,8 @@ export class StompSession implements StompClientCommandListener, IChangeStatusLi
             const steps = command.payload.steps || defaultPayload.steps;
             const delay = command.payload.delay || defaultPayload.delay;
 
+            this._sendReceipt(headers).catch(console.warn);
+
             this.session.taskManager.add({
               command,
               destination,
@@ -185,6 +187,8 @@ export class StompSession implements StompClientCommandListener, IChangeStatusLi
           case "GET_SCHEMA": {
             const command: GetSchemaCommand = {action, payload: undefined};
 
+            this._sendReceipt(headers).catch(console.warn);
+
             this.session.taskManager.add({
               command,
               destination,
@@ -194,6 +198,8 @@ export class StompSession implements StompClientCommandListener, IChangeStatusLi
           }
           case "QUERY": {
             const command: QueryCommand = {action, ...bodyObj};
+
+            this._sendReceipt(headers).catch(console.warn);
 
             this.session.taskManager.add({
               command,
@@ -213,7 +219,6 @@ export class StompSession implements StompClientCommandListener, IChangeStatusLi
       default:
         throw new Error(`Unsupported destination '${destination}'`);
     }
-    this._sendReceipt(headers).catch(console.warn);
   }
 
   public ack(headers?: StompHeaders): void {
