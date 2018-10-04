@@ -1,7 +1,7 @@
 import {IEntityQueryInspector} from "gdmn-orm";
 import {StompClientCommandListener, StompError, StompHeaders, StompServerSessionLayer} from "node-stomp-protocol";
 import {Application} from "../apps/Application";
-import {MainApplication} from "../apps/MainApplication";
+import {IOptionalConnectionOptions, MainApplication} from "../apps/MainApplication";
 import {Session} from "../apps/Session";
 import {endStatuses, ICommand, Task, TaskStatus} from "../apps/task/Task";
 import {IChangeStatusListener} from "../apps/task/TaskManager";
@@ -13,7 +13,7 @@ type Action = "DELETE_APP" | "CREATE_APP" | "GET_APPS" |
 type Command<A extends Action, P> = ICommand<A, P>;
 
 type DeleteAppCommand = Command<"DELETE_APP", { uid: string }>;
-type CreateAppCommand = Command<"CREATE_APP", { alias: string }>;
+type CreateAppCommand = Command<"CREATE_APP", { alias: string, connectionOptions?: IOptionalConnectionOptions }>;
 type GetAppsCommand = Command<"GET_APPS", undefined>;
 
 type PingCommand = Command<"PING", { steps: number, delay: number }>;
@@ -179,7 +179,7 @@ export class StompSession implements StompClientCommandListener, IChangeStatusLi
           }
           case "CREATE_APP": {  // TODO tmp
             const command: CreateAppCommand = {action, ...bodyObj};
-            const {alias} = command.payload || {alias: "Unknown"};
+            const {alias, connectionOptions} = command.payload || {alias: "Unknown", connectionOptions: undefined};
 
             this._sendReceipt(headers).catch(console.warn);
 
@@ -187,7 +187,7 @@ export class StompSession implements StompClientCommandListener, IChangeStatusLi
               command,
               destination,
               worker: async () => {
-                const uid = await this.mainApplication.createApplication(alias, this.session);
+                const uid = await this.mainApplication.createApplication(alias, this.session, connectionOptions);
                 return await this.mainApplication.getApplicationInfo(uid, this.session);
               }
             });
