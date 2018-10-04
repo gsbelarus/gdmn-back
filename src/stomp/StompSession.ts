@@ -97,7 +97,7 @@ export class StompSession implements StompClientCommandListener, IChangeListener
   }
 
   public onEnd(): void {
-    console.log("OnEnd()");
+    console.log("End");
     this.releaseResources();
   }
 
@@ -390,7 +390,7 @@ export class StompSession implements StompClientCommandListener, IChangeListener
 
   protected releaseResources(): void {
     if (this._session) {
-      console.log("release resource");
+      console.log("Resource is released");
       this._subscriptions.splice(0, this._subscriptions.length);
       this._session.taskList.removeChangeTaskListener(this);
       this._session.release();

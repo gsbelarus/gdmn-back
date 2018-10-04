@@ -26,7 +26,7 @@ export class Session {
   constructor(options: IOptions, closeListener: CloseListener) {
     this._options = options;
     this._closeListener = closeListener;
-    this.updateTimer();
+    this.initTimer();
   }
 
   get id(): string {
@@ -64,7 +64,7 @@ export class Session {
     }
     this._holdings--;
     if (this._holdings === 0) {
-      this.updateTimer();
+      this.initTimer();
     }
   }
 
@@ -80,21 +80,19 @@ export class Session {
     await this._options.connection.disconnect();
   }
 
-  private updateTimer(): void {
+  private initTimer(): void {
     this.clearTimer();
-    this._timer = setTimeout(() => {
-      if (this._taskList.size()) {
-        this.updateTimer();
-      } else {
+    this._timer = setInterval(() => {
+      if (!this._taskList.size()) {
         this.close().catch(console.error);
-        this.clearTimer();
       }
     }, Session.DEFAULT_TIMEOUT);
   }
 
   private clearTimer(): void {
     if (this._timer) {
-      clearTimeout(this._timer);
+      clearInterval(this._timer);
+      this._timer = undefined;
     }
   }
 }
