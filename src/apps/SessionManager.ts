@@ -27,14 +27,6 @@ export class SessionManager {
     return this._sessions.find((s) => s.userKey === userKey);
   }
 
-  public async openOrGet(userKey: number, timeout?: number): Promise<Session> {
-    const session = this.get(userKey);
-    if (!session) {
-      return await this.open(userKey, timeout);
-    }
-    return session;
-  }
-
   public async closeAll(): Promise<void> {
     const promise = this._sessions.map((session) => session.close());
     await Promise.all(promise);

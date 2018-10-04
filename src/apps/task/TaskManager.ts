@@ -48,6 +48,10 @@ export class TaskManager {
     return this._list.slice();
   }
 
+  public length(): number {
+    return this._list.length;
+  }
+
   public delete(task: Task<any, any, any>): void {
     const index = this._list.indexOf(task);
     if (index === -1) {

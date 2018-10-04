@@ -1,5 +1,4 @@
 import {AConnection} from "gdmn-db";
-import {TaskStatus} from "./task/Task";
 import {TaskManager} from "./task/TaskManager";
 
 export type CloseListener = (session: Session) => void;
@@ -77,7 +76,7 @@ export class Session {
   private updateTimer(): void {
     this.clearTimer();
     this._timer = setTimeout(() => {
-      if (this._taskManager.find(TaskStatus.IDLE, TaskStatus.RUNNING, TaskStatus.PAUSED).length) {
+      if (this._taskManager.length()) {
         this.updateTimer();
       } else {
         this.close().catch(console.error);
