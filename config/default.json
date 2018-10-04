@@ -15,6 +15,9 @@
     "dir": "./databases"
   },
   "auth": {
+    "session": {
+      "timeout": 300000
+    },
     "jwtSecret": "DefaultJWTSecret"
   }
 }

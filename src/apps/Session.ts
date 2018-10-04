@@ -1,3 +1,4 @@
+import config from "config";
 import {AConnection} from "gdmn-db";
 import {TaskManager} from "./task/TaskManager";
 
@@ -12,7 +13,7 @@ export interface IOptions {
 
 export class Session {
 
-  private static DEFAULT_TIMEOUT = 5 * 60 * 1000;
+  private static DEFAULT_TIMEOUT: number = config.get("auth.session.timeout");
 
   private readonly _options: IOptions;
   private readonly _closeListener: CloseListener;

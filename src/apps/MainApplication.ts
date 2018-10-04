@@ -64,6 +64,11 @@ export interface IAppBackupInfoOutput {
 
 export class MainApplication extends Application {
 
+  public static readonly DEFAULT_HOST: string = config.get("db.host");
+  public static readonly DEFAULT_PORT: number = config.get("db.port");
+  public static readonly DEFAULT_USER: string = config.get("db.user");
+  public static readonly DEFAULT_PASSWORD: string = config.get("db.password");
+
   public static readonly MAIN_DIR = path.resolve(config.get("db.dir"));
   public static readonly WORK_DIR = path.resolve(MainApplication.MAIN_DIR, "work");
   public static readonly APP_EXT = ".FDB";
@@ -95,10 +100,10 @@ export class MainApplication extends Application {
         acquireTimeoutMillis: 60 * 1000
       },
       connectionOptions: {
-        host: appInfo && appInfo.host || config.get("db.host"),
-        port: appInfo && appInfo.port || config.get("db.port"),
-        username: appInfo && appInfo.username || config.get("db.user"),
-        password: appInfo && appInfo.password || config.get("db.password"),
+        host: appInfo && appInfo.host || MainApplication.DEFAULT_HOST,
+        port: appInfo && appInfo.port || MainApplication.DEFAULT_PORT,
+        username: appInfo && appInfo.username || MainApplication.DEFAULT_USER,
+        password: appInfo && appInfo.password || MainApplication.DEFAULT_PASSWORD,
         path: appInfo && appInfo.path || dbPath
       }
     };
