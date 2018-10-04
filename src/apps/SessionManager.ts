@@ -2,6 +2,7 @@ import {AConnectionPool, ICommonConnectionPoolOptions} from "gdmn-db";
 import {v1 as uuidV1} from "uuid";
 import {Session} from "./Session";
 
+// TODO multiple sessions for one user; sharing tasks between sessions on one user
 export class SessionManager {
 
   private readonly _connectionPool: AConnectionPool<ICommonConnectionPoolOptions>;

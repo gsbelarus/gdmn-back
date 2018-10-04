@@ -3,8 +3,7 @@ import {StompClientCommandListener, StompError, StompHeaders, StompServerSession
 import {Application} from "../apps/Application";
 import {IOptionalConnectionOptions, MainApplication} from "../apps/MainApplication";
 import {Session} from "../apps/Session";
-import {endStatuses, ICommand, Task, TaskStatus} from "../apps/task/Task";
-import {IChangeStatusListener} from "../apps/task/TaskManager";
+import {endStatuses, IChangeListener, ICommand, Task, TaskStatus} from "../apps/task/Task";
 import {ITokens, Utils} from "./Utils";
 
 type Action = "DELETE_APP" | "CREATE_APP" | "GET_APPS" |
@@ -28,10 +27,9 @@ export interface ISubscription {
   ack: Ack;
 }
 
-export class StompSession implements StompClientCommandListener, IChangeStatusListener<any, any, any> {
+export class StompSession implements StompClientCommandListener, IChangeListener<any, any, any> {
 
   public static readonly DESTINATION_TASK = "/task";
-
   public static readonly IGNORED_ACK_ID = "ignored-id";
 
   private readonly _stomp: StompServerSessionLayer;
@@ -82,36 +80,30 @@ export class StompSession implements StompClientCommandListener, IChangeStatusLi
     return this._subscriptions;
   }
 
-  public onChange(task: Task<any, any, any>): void {
+  public onChangeTask(task: Task<any, any, any>): void {
     if (this._subscriptions.find((sub) => sub.destination === task.options.destination)) {
-      this._sendTaskMessage(task).catch(console.warn);
+      this._sendTaskMessage(task);
     }
+  }
+
+  public connect(headers: StompHeaders = {}): void {
+    this._internalConnect(headers).catch((error) => this._sendError(error, headers));
+  }
+
+  public disconnect(headers: StompHeaders = {}): void {
+    this.releaseResources();
+
+    this._sendReceipt(headers);
+  }
+
+  public onEnd(): void {
+    console.log("OnEnd()");
+    this.releaseResources();
   }
 
   public onProtocolError(error: StompError): void {
     console.log("Protocol Error", error);
-  }
-
-  public connect(headers: StompHeaders = {}): void {
-    this._internalConnect(headers)
-      .catch((error) => {
-        this._sendError(error, headers).catch(console.warn);
-      });
-  }
-
-  public disconnect(headers: StompHeaders = {}): void {
-    this.onEnd();
-
-    this._sendReceipt(headers).catch(console.warn);
-  }
-
-  public onEnd(): void {
-    if (this._session) {
-      this._subscriptions.splice(0, this._subscriptions.length);
-      this._session.taskManager.removeChangeStatusListener(this);
-      this._session.release();
-      this._session = undefined;
-    }
+    this.releaseResources();
   }
 
   public subscribe(headers: StompHeaders = {}): void {
@@ -128,12 +120,12 @@ export class StompSession implements StompClientCommandListener, IChangeStatusLi
           destination: headers.destination,
           ack: headers.ack as Ack || "auto"
         });
+        this.session.taskList.addChangeTaskListener(this);
 
-        this._sendReceipt(headers).catch(console.warn);
+        this._sendReceipt(headers);
 
-        // notify about tasks
-        const tasks = this.session.taskManager.getAll();
-        tasks.forEach((task) => this._sendTaskMessage(task).catch(console.warn));
+        // notify about taskList
+        this.session.taskList.getAll().forEach((task) => this.onChangeTask(task));
         break;
       default:
         throw new Error(`Unsupported destination '${headers.destination}'`);
@@ -146,8 +138,9 @@ export class StompSession implements StompClientCommandListener, IChangeStatusLi
       throw new Error("Subscription is not found");
     }
     this._subscriptions.splice(subscriptionIndex, 1);
+    this.session.taskList.removeChangeTaskListener(this);
 
-    this._sendReceipt(headers).catch(console.warn);
+    this._sendReceipt(headers);
   }
 
   public send(headers: StompHeaders = {}, body: string = ""): void {
@@ -166,45 +159,49 @@ export class StompSession implements StompClientCommandListener, IChangeStatusLi
             const command: DeleteAppCommand = {action, ...bodyObj};
             const {uid} = command.payload || {uid: -1};
 
-            this._sendReceipt(headers).catch(console.warn);
-
-            this.session.taskManager.add({
+            const task = this.session.taskList.add(new Task({
+              session: this.session,
               command,
               destination,
-              worker: async () => {
-                await this.mainApplication.deleteApplication(uid, this.session);
-              }
-            });
+              worker: (context) => this.mainApplication.deleteApplication(uid, context.session)
+            }));
+            this._sendReceipt(headers);
+
+            task.execute().catch(console.error);
             break;
           }
           case "CREATE_APP": {  // TODO tmp
             const command: CreateAppCommand = {action, ...bodyObj};
             const {alias, connectionOptions} = command.payload || {alias: "Unknown", connectionOptions: undefined};
 
-            this._sendReceipt(headers).catch(console.warn);
-
-            this.session.taskManager.add({
+            const task = this.session.taskList.add(new Task({
+              session: this.session,
               command,
               destination,
-              worker: async () => {
-                const uid = await this.mainApplication.createApplication(alias, this.session, connectionOptions);
-                return await this.mainApplication.getApplicationInfo(uid, this.session);
+              worker: async (context) => {
+                const uid = await this.mainApplication.createApplication(alias, context.session, connectionOptions);
+                return await this.mainApplication.getApplicationInfo(uid, context.session);
               }
-            });
+            }));
+            this._sendReceipt(headers);
+
+            task.execute().catch(console.error);
             break;
           }
           case "GET_APPS": {  // TODO tmp
             const command: GetAppsCommand = {action, payload: undefined};
 
-            this._sendReceipt(headers).catch(console.warn);
-
-            this.session.taskManager.add({
+            const task = this.session.taskList.add(new Task({
+              session: this.session,
               command,
               destination,
-              worker: async () => {
-                return await this.mainApplication.getApplicationsInfo(this.session);
+              worker: async (context) => {
+                return await this.mainApplication.getApplicationsInfo(context.session);
               }
-            });
+            }));
+            this._sendReceipt(headers);
+
+            task.execute().catch(console.error);
             break;
           }
           // ------------------------------For all applications
@@ -214,52 +211,58 @@ export class StompSession implements StompClientCommandListener, IChangeStatusLi
             const steps = command.payload.steps || defaultPayload.steps;
             const delay = command.payload.delay || defaultPayload.delay;
 
-            this._sendReceipt(headers).catch(console.warn);
-
-            this.session.taskManager.add({
+            const task = this.session.taskList.add(new Task({
+              session: this.session,
               command,
               destination,
-              worker: async (checkStatus, progress) => {
+              worker: async (context) => {
                 const stepPercent = 100 / steps;
                 for (let i = 0; i < steps; i++) {
                   await new Promise((resolve) => setTimeout(resolve, delay));
-                  progress.increment(stepPercent, `Process ping... Complete step: ${i + 1}`);
-                  await checkStatus();
+                  context.progress.increment(stepPercent, `Process ping... Complete step: ${i + 1}`);
+                  await context.checkStatus();
                 }
 
                 if (!this.application.connected) {
                   throw new Error("Application is not connected");
                 }
               }
-            });
+            }));
+            this._sendReceipt(headers);
+
+            task.execute().catch(console.error);
             break;
           }
           case "GET_SCHEMA": {
             const command: GetSchemaCommand = {action, payload: undefined};
 
-            this._sendReceipt(headers).catch(console.warn);
-
-            this.session.taskManager.add({
+            const task = this.session.taskList.add(new Task({
+              session: this.session,
               command,
               destination,
-              worker: async () => this.application.erModel.serialize()
-            });
+              worker: () => this.application.erModel.serialize()
+            }));
+            this._sendReceipt(headers);
+
+            task.execute().catch(console.error);
             break;
           }
           case "QUERY": {
             const command: QueryCommand = {action, ...bodyObj};
 
-            this._sendReceipt(headers).catch(console.warn);
-
-            this.session.taskManager.add({
+            const task = this.session.taskList.add(new Task({
+              session: this.session,
               command,
               destination,
-              worker: async (checkStatus) => {
-                const result = this.application.query(command.payload, this.session);
-                await checkStatus();
+              worker: async (context) => {
+                const result = this.application.query(command.payload, context.session);
+                await context.checkStatus();
                 return result;
               }
-            });
+            }));
+            this._sendReceipt(headers);
+
+            task.execute().catch(console.error);
             break;
           }
           default:
@@ -273,9 +276,9 @@ export class StompSession implements StompClientCommandListener, IChangeStatusLi
 
   public ack(headers: StompHeaders = {}): void {
     if (headers.id !== StompSession.IGNORED_ACK_ID) {
-      const task = this.session.taskManager.find(headers.id);
+      const task = this.session.taskList.find(headers.id);
       if (task) {
-        this.session.taskManager.delete(task);
+        this.session.taskList.remove(task);
       }
     }
   }
@@ -323,12 +326,11 @@ export class StompSession implements StompClientCommandListener, IChangeStatusLi
       this._session = await this.application.sessionManager.open(result.userKey);
     }
     this._session.borrow();
-    this._session.taskManager.addChangeStatusListener(this);
 
-    await this._sendConnected(result.newTokens || {});
+    this._sendConnected(result.newTokens || {});
   }
 
-  protected async _sendTaskMessage(task: Task<any, any, any>): Promise<void> {
+  protected _sendTaskMessage(task: Task<any, any, any>): void {
     const subscription = this._subscriptions.find((sub) => sub.destination === task.options.destination);
     if (subscription) {
       const ack = endStatuses.includes(task.status) ? task.id : StompSession.IGNORED_ACK_ID;
@@ -344,7 +346,7 @@ export class StompSession implements StompClientCommandListener, IChangeStatusLi
         headers.ack = ack;
       }
 
-      await this._stomp.message(headers, JSON.stringify({
+      this._stomp.message(headers, JSON.stringify({
         status: task.status,
         progress: task.status === TaskStatus.RUNNING ? {
           value: task.progress.value,
@@ -353,36 +355,46 @@ export class StompSession implements StompClientCommandListener, IChangeStatusLi
         payload: task.options.command.payload,
         result: task.result ? task.result : undefined,
         errorMessage: task.error ? task.error.message : undefined
-      }));
+      })).catch(console.warn);
 
       if (subscription.ack === "auto") {
-        this.session.taskManager.delete(task);
+        this.session.taskList.remove(task);
       }
     }
   }
 
-  protected async _sendConnected(headers: StompHeaders): Promise<void> {
+  protected _sendConnected(headers: StompHeaders): void {
     const pack = require("../../package.json");
-    await this._stomp.connected({
+    this._stomp.connected({
       server: `${pack.name}/${pack.version}`,
       session: this.session.id,
       ...headers
-    });
+    }).catch(console.warn);
   }
 
-  protected async _sendError(error: Error, requestHeaders: StompHeaders): Promise<void> {
+  protected _sendError(error: Error, requestHeaders: StompHeaders): void {
     const errorHeaders: StompHeaders = {message: error.message};
     if (requestHeaders && requestHeaders.receipt) {
       errorHeaders["receipt-id"] = requestHeaders.receipt;
     }
-    await this._stomp.error(errorHeaders);
+    this._stomp.error(errorHeaders).catch(console.warn);
   }
 
-  protected async _sendReceipt(requestHeaders: StompHeaders): Promise<void> {
+  protected _sendReceipt(requestHeaders: StompHeaders): void {
     const receiptHeaders: StompHeaders = {};
     if (requestHeaders && requestHeaders.receipt) {
       receiptHeaders["receipt-id"] = requestHeaders.receipt;
-      await this._stomp.receipt(receiptHeaders);
+      this._stomp.receipt(receiptHeaders).catch(console.warn);
+    }
+  }
+
+  protected releaseResources(): void {
+    if (this._session) {
+      console.log("release resource");
+      this._subscriptions.splice(0, this._subscriptions.length);
+      this._session.taskList.removeChangeTaskListener(this);
+      this._session.release();
+      this._session = undefined;
     }
   }
 }

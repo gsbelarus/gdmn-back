@@ -1,3 +1,5 @@
+import {v1 as uuidV1} from "uuid";
+import {Session} from "../Session";
 import {IProgressOptions, Progress} from "./Progress";
 
 export enum TaskStatus {
@@ -12,11 +14,19 @@ export enum TaskStatus {
 
 export const endStatuses = [TaskStatus.INTERRUPTED, TaskStatus.ERROR, TaskStatus.DONE];
 
-export type ChangeListener<Action, Payload, Result> = (task: Task<Action, Payload, Result>) => void;
+export interface IChangeListener<Action, Payload, Result> {
+  onChangeTask(task: Task<Action, Payload, Result>): void;
+}
 
 export type StatusChecker = () => Promise<void | never>;
 
-export type TaskWorker<Result> = (checkStatus: StatusChecker, progress: Progress) => Promise<Result>;
+export interface IContext {
+  session: Session;
+  checkStatus: StatusChecker;
+  progress: Progress;
+}
+
+export type TaskWorker<Result> = (context: IContext) => Result | Promise<Result>;
 
 export interface ICommand<A, P = any> {
   readonly action: A;
@@ -25,6 +35,7 @@ export interface ICommand<A, P = any> {
 
 export interface IOptions<Action, Payload, Result> {
   readonly command: ICommand<Action, Payload>;
+  readonly session: Session;
   readonly destination: string;
   readonly progress?: IProgressOptions;
   readonly pauseCheckTimeout?: number;
@@ -37,7 +48,7 @@ export class Task<Action, Payload, Result> {
 
   private readonly _id: string;
   private readonly _options: IOptions<Action, Payload, Result>;
-  private readonly _changeListener?: ChangeListener<Action, Payload, Result>;
+  private readonly _changeListeners: Array<IChangeListener<Action, Payload, Result>> = [];
   private readonly _progress: Progress;
   private readonly _log: any[] = [];
 
@@ -45,15 +56,12 @@ export class Task<Action, Payload, Result> {
   private _result?: Result;
   private _error?: Error;
 
-  constructor(id: string,
-              options: IOptions<Action, Payload, Result>,
-              changeListener?: ChangeListener<Action, Payload, Result>) {
-    this._id = id;
+  constructor(options: IOptions<Action, Payload, Result>) {
+    this._id = uuidV1().toUpperCase();
     this._options = options;
     this._progress = new Progress(options.progress, () => {
       this._updateStatus(this._status);
     });
-    this._changeListener = changeListener;
     this._updateStatus(TaskStatus.IDLE);
   }
 
@@ -85,6 +93,18 @@ export class Task<Action, Payload, Result> {
     return this._error;
   }
 
+  public addChangeListener(changeListener: IChangeListener<Action, Payload, Result>): void {
+    this._changeListeners.push(changeListener);
+  }
+
+  public removeChangeListener(changeListener: IChangeListener<Action, Payload, Result>): void {
+    this._changeListeners.splice(this._changeListeners.indexOf(changeListener), 1);
+  }
+
+  public clearChangeListeners(): void {
+    this._changeListeners.splice(0, this._changeListeners.length);
+  }
+
   public interrupt(): void {
     this._updateStatus(TaskStatus.INTERRUPTED);
   }
@@ -104,7 +124,11 @@ export class Task<Action, Payload, Result> {
     this._updateStatus(TaskStatus.RUNNING);
     try {
       await this._checkStatus();
-      this._result = await this._options.worker(this._checkStatus.bind(this), this._progress);
+      this._result = await this._options.worker({
+        session: this._options.session,
+        checkStatus: this._checkStatus.bind(this),
+        progress: this._progress
+      });
       this._updateStatus(TaskStatus.DONE);
     } catch (error) {
       this._error = error;
@@ -113,18 +137,12 @@ export class Task<Action, Payload, Result> {
   }
 
   private _updateStatus(status: TaskStatus): void {
-    if (this._status === TaskStatus.DONE
-      || this._status === TaskStatus.ERROR
-      || this._status === TaskStatus.INTERRUPTED) {
+    if (endStatuses.includes(this._status)) {
       throw new Error("Task was finished");
     }
     this._status = status;
-
     this._log.push(`Status: ${TaskStatus[status]}; Progress: ${this._progress.value};`);
-
-    if (this._changeListener) {
-      this._changeListener(this);
-    }
+    this._changeListeners.forEach((listener) => listener.onChangeTask(this));
   }
 
   private async _checkStatus(): Promise<void | never> {

@@ -1,71 +1,70 @@
-import {v1 as uuidV1} from "uuid";
-import {ChangeListener, endStatuses, IOptions, Task, TaskStatus} from "./Task";
+import {IChangeListener, Task, TaskStatus} from "./Task";
 
-export interface IChangeStatusListener<Action, Payload, Result> {
-  onChange: ChangeListener<Action, Payload, Result>;
-}
+export class TaskManager implements IChangeListener<any, any, any> {
 
-export class TaskManager {
+  private readonly _tasks = new Set<Task<any, any, any>>();
+  private readonly _changeListeners: Array<IChangeListener<any, any, any>> = [];
 
-  private readonly _list: Array<Task<any, any, any>> = [];
-  private readonly _changeStatusListeners: Array<IChangeStatusListener<any, any, any>> = [];
-
-  public addChangeStatusListener<Result>(changeStatusListener: IChangeStatusListener<any, any, Result>): void {
-    this._changeStatusListeners.push(changeStatusListener);
+  public onChangeTask(task: Task<any, any, any>): void {
+    this._changeListeners.forEach((listener) => listener.onChangeTask(task));
   }
 
-  public removeChangeStatusListener<Result>(changeStatusListener: IChangeStatusListener<any, any, Result>): void {
-    this._changeStatusListeners.splice(this._changeStatusListeners.indexOf(changeStatusListener), 1);
-  }
-
-  public clearChangeStatusListeners(): void {
-    this._changeStatusListeners.splice(0, this._changeStatusListeners.length);
-  }
-
-  public add<Action, Payload, Result>(
-    options: IOptions<Action, Payload, Result>
-  ): Task<Action, Payload, Result> {
-    const uid = uuidV1().toUpperCase();
-    const task = new Task(uid, options, (t) => {
-      this._changeStatusListeners.forEach((listener) => listener.onChange(t));
-    });
-    this._list.push(task);
-    task.execute().catch(console.error);
+  public add<Action, Payload, Result>(task: Task<Action, Payload, Result>): Task<Action, Payload, Result> {
+    this._tasks.add(task);
+    task.addChangeListener(this);
     return task;
+  }
+
+  public remove(task: Task<any, any, any>): void {
+    if (!this._tasks.has(task)) {
+      throw new Error("Task not found");
+    }
+    task.removeChangeListener(this);
+    this._tasks.delete(task);
   }
 
   public find<Action, Payload, Result>(uid: string): Task<Action, Payload, Result> | undefined;
   public find<Action, Payload, Result>(...status: TaskStatus[]): Array<Task<Action, Payload, Result>>;
   public find(...source: any[]): any {
     if (typeof source[0] === "string") {
-      return this._list.find((task) => task.id === source[0]);
+      for (const task of this._tasks) {
+        if (task.id === source[0]) {
+          return task;
+        }
+      }
+      return undefined;
     } else {
-      return this._list.filter((task) => source.includes(task.status));
+      const filter = [];
+      for (const task of this._tasks) {
+        if (source.includes(task.status)) {
+          filter.push(task);
+        }
+      }
+      return filter;
     }
   }
 
-  public getAll(): Array<Task<any, any, any>> {
-    return this._list.slice();
+  public size(): number {
+    return this._tasks.size;
   }
 
-  public length(): number {
-    return this._list.length;
-  }
-
-  public delete(task: Task<any, any, any>): void {
-    const index = this._list.indexOf(task);
-    if (index === -1) {
-      throw new Error("Task not found");
-    }
-    this._list.splice(this._list.indexOf(task), 1);
+  public getAll(): Set<Task<any, any, any>> {
+    return this._tasks;
   }
 
   public clear(): void {
-    this._list.forEach((task) => {
-      if (!endStatuses.includes(task.status)) {
-        task.interrupt();
-      }
-    });
-    this._list.splice(0, this._list.length);
+    this._tasks.clear();
+  }
+
+  public addChangeTaskListener(changeListener: IChangeListener<any, any, any>): void {
+    this._changeListeners.push(changeListener);
+  }
+
+  public removeChangeTaskListener(changeListener: IChangeListener<any, any, any>): void {
+    this._changeListeners.splice(this._changeListeners.indexOf(changeListener), 1);
+  }
+
+  public clearChangeTaskListeners(): void {
+    this._changeListeners.splice(0, this._changeListeners.length);
   }
 }

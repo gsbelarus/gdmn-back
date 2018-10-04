@@ -1,5 +1,6 @@
 import config from "config";
 import {AConnection} from "gdmn-db";
+import {endStatuses} from "./task/Task";
 import {TaskManager} from "./task/TaskManager";
 
 export type CloseListener = (session: Session) => void;
@@ -17,7 +18,7 @@ export class Session {
 
   private readonly _options: IOptions;
   private readonly _closeListener: CloseListener;
-  private readonly _taskManager = new TaskManager();
+  private readonly _taskList = new TaskManager();
 
   private _holdings = 0;
   private _timer?: NodeJS.Timer;
@@ -48,8 +49,8 @@ export class Session {
     return this._options.connection.connected;
   }
 
-  get taskManager(): TaskManager {
-    return this._taskManager;
+  get taskList(): TaskManager {
+    return this._taskList;
   }
 
   public borrow(): void {
@@ -70,14 +71,19 @@ export class Session {
   public async close(): Promise<void> {
     this.clearTimer();
     this._closeListener(this);
-    this._taskManager.clear();
+    this._taskList.getAll().forEach((task) => {
+      if (task.options.session === this && !endStatuses.includes(task.status)) {
+        task.interrupt();
+      }
+    });
+    this._taskList.clear();
     await this._options.connection.disconnect();
   }
 
   private updateTimer(): void {
     this.clearTimer();
     this._timer = setTimeout(() => {
-      if (this._taskManager.length()) {
+      if (this._taskList.size()) {
         this.updateTimer();
       } else {
         this.close().catch(console.error);
