@@ -42,6 +42,15 @@ export interface IOptions<Action, Payload, Result> {
   readonly worker: TaskWorker<Result>;
 }
 
+export interface ITaskLog {
+  date: Date;
+  status: TaskStatus;
+  progress: {
+    value: number;
+    description: string;
+  };
+}
+
 export class Task<Action, Payload, Result> {
 
   public static readonly DEFAULT_PAUSE_CHECK_TIMEOUT = 5 * 1000;
@@ -50,7 +59,7 @@ export class Task<Action, Payload, Result> {
   private readonly _options: IOptions<Action, Payload, Result>;
   private readonly _changeListeners: Array<IChangeListener<Action, Payload, Result>> = [];
   private readonly _progress: Progress;
-  private readonly _log: any[] = [];
+  private readonly _log: ITaskLog[] = [];
 
   private _status: TaskStatus = TaskStatus.IDLE;
   private _result?: Result;
@@ -81,7 +90,7 @@ export class Task<Action, Payload, Result> {
     return this._status;
   }
 
-  get log(): any[] {
+  get log(): ITaskLog[] {
     return this._log;
   }
 
@@ -117,6 +126,13 @@ export class Task<Action, Payload, Result> {
     this._updateStatus(TaskStatus.RUNNING);
   }
 
+  public getDate(status: TaskStatus): Date | undefined {
+    const event = this._log.find((e) => e.status === status);
+    if (event) {
+      return event.date;
+    }
+  }
+
   public async execute(): Promise<void> {
     if (this._status !== TaskStatus.IDLE) {
       throw new Error(`Task mast has ${TaskStatus[TaskStatus.IDLE]} status, but he has ${TaskStatus[this._status]}`);
@@ -141,7 +157,14 @@ export class Task<Action, Payload, Result> {
       throw new Error("Task was finished");
     }
     this._status = status;
-    this._log.push(`Status: ${TaskStatus[status]}; Progress: ${this._progress.value};`);
+    this._log.push({
+      date: new Date(),
+      status: this._status,
+      progress: {
+        value: this._progress.value,
+        description: this._progress.description
+      }
+    });
     this._changeListeners.forEach((listener) => listener.onChangeTask(this));
   }
 
