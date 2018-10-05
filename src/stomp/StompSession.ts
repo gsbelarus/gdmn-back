@@ -27,6 +27,16 @@ export interface ISubscription {
   ack: Ack;
 }
 
+export interface IConnectHeaders {
+  session?: string;
+  login?: string;
+  passcode?: string;
+  access_token?: string;
+  authorization?: string;
+  "app-uid"?: string;
+  "create-user"?: number;
+}
+
 export class StompSession implements StompClientCommandListener, IChangeListener<any, any, any> {
 
   public static readonly DESTINATION_TASK = "/task";
@@ -300,7 +310,8 @@ export class StompSession implements StompClientCommandListener, IChangeListener
   }
 
   protected async _internalConnect(headers: StompHeaders): Promise<void> {
-    const {login, passcode, access_token, authorization, "app-uid": appUid, "create-user": isCreateUser} = headers;
+    const {session, login, passcode, access_token, authorization, "app-uid": appUid, "create-user": isCreateUser}
+      = headers as IConnectHeaders;
 
     // authorization
     let result: { userKey: number, newTokens?: ITokens };
@@ -309,7 +320,7 @@ export class StompSession implements StompClientCommandListener, IChangeListener
     } else if (login && passcode) {
       result = await Utils.login(this.mainApplication, login, passcode);
     } else if (authorization || access_token) { // TODO remove access_token
-      result = await Utils.authorize(this.mainApplication, authorization || access_token);
+      result = await Utils.authorize(this.mainApplication, authorization || access_token!);
     } else {
       throw new Error("Unauthorized");
     }
@@ -321,8 +332,12 @@ export class StompSession implements StompClientCommandListener, IChangeListener
     }
 
     // create session for application
-    this._session = await this.application.sessionManager.get(result.userKey);
-    if (!this._session) {
+    if (session) {
+      this._session = await this.application.sessionManager.find(session, result.userKey);
+      if (!this._session) {
+        throw new Error("Session is not found");
+      }
+    } else if (!this._session) {
       this._session = await this.application.sessionManager.open(result.userKey);
     }
     this._session.borrow();

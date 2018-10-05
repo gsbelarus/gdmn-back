@@ -20,7 +20,7 @@ export class Session {
   private readonly _closeListener: CloseListener;
   private readonly _taskList = new TaskManager();
 
-  private _holdings = 0;
+  private _borrowed: boolean = false;
   private _timer?: NodeJS.Timer;
 
   constructor(options: IOptions, closeListener: CloseListener) {
@@ -54,18 +54,19 @@ export class Session {
   }
 
   public borrow(): void {
-    this._holdings++;
+    if (this._borrowed) {
+      throw new Error("Session already borrowed");
+    }
+    this._borrowed = true;
     this.clearTimer();
   }
 
   public release(): void {
-    if (this._holdings === 0) {
-      throw new Error("Session is not using");
+    if (!this._borrowed) {
+      throw new Error("Session already released");
     }
-    this._holdings--;
-    if (this._holdings === 0) {
-      this.initTimer();
-    }
+    this._borrowed = false;
+    this.initTimer();
   }
 
   public async close(): Promise<void> {

@@ -22,15 +22,13 @@ export class Utils {
                                      uid?: string): Promise<Application> {
     if (uid) {
       // auth on main and get application
-      let session = mainApplication.sessionManager.get(userKey);
-      if (!session) {
-        session = await mainApplication.sessionManager.open(userKey, 1000);
-      }
-      session.borrow();
+      const session = await mainApplication.sessionManager.open(userKey, 1000);
       try {
+        session.borrow();
         return await mainApplication.getApplication(uid, session);
       } finally {
         session.release();
+        await session.close();
       }
     } else {
       // use main as application

@@ -2,7 +2,7 @@ import {AConnectionPool, ICommonConnectionPoolOptions} from "gdmn-db";
 import {v1 as uuidV1} from "uuid";
 import {Session} from "./Session";
 
-// TODO multiple sessions for one user; sharing tasks between sessions on one user
+// TODO sharing tasks between sessions on one user
 export class SessionManager {
 
   private readonly _connectionPool: AConnectionPool<ICommonConnectionPoolOptions>;
@@ -24,8 +24,17 @@ export class SessionManager {
     return session;
   }
 
-  public get(userKey: number): Session | undefined {
-    return this._sessions.find((s) => s.userKey === userKey);
+  public find(userKey: number): Session[];
+  public find(session: string, userKey: number): Session | undefined;
+  public find(param1: string | number, param2?: number): Session[] | Session | undefined {
+    switch (typeof param1) {
+      case "string":
+        return this._sessions.find((session) => session.id === param1 && session.userKey === param2);
+      case "number":
+        return this._sessions.filter((session) => session.userKey === param1);
+      default:
+        throw new Error("Invalid arguments");
+    }
   }
 
   public async closeAll(): Promise<void> {
