@@ -1,4 +1,5 @@
 import {v1 as uuidV1} from "uuid";
+import {ErrorCode, ServerError} from "../../stomp/ServerError";
 import {Session} from "../Session";
 import {IProgressOptions, Progress} from "./Progress";
 
@@ -63,7 +64,7 @@ export class Task<Action, Payload, Result> {
 
   private _status: TaskStatus = TaskStatus.IDLE;
   private _result?: Result;
-  private _error?: Error;
+  private _error?: ServerError;
 
   constructor(options: IOptions<Action, Payload, Result>) {
     this._id = uuidV1().toUpperCase();
@@ -98,7 +99,7 @@ export class Task<Action, Payload, Result> {
     return this._result;
   }
 
-  get error(): Error | undefined {
+  get error(): ServerError | undefined {
     return this._error;
   }
 
@@ -147,7 +148,7 @@ export class Task<Action, Payload, Result> {
       });
       this._updateStatus(TaskStatus.DONE);
     } catch (error) {
-      this._error = error;
+      this._error = error instanceof ServerError ? error : new ServerError(ErrorCode.INTERNAL, error.message);
       this._updateStatus(TaskStatus.ERROR);
     }
   }

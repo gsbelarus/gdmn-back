@@ -158,17 +158,20 @@ Pre-requirements: Xcode Command Line Tools (macOS), Node.js, npm, git.
 
 * To work with the auth database you need to simple `CONNECT`
 * To work with the user's databases you need to `CONNECT` with header: `app-uid`
+* To restore the session you need to `CONNECT` with header: `session`
 
 ##### Create account (auth db is used)
 ```
 >>> CONNECT
 login:login
 passcode:password
+session:session (optional)
 create-user:1
 
 <<< CONNECTED
 server:gdmn-back/1.0.0
 version:1.2
+session:session
 access-token:token
 refresh-token:token
 
@@ -179,12 +182,14 @@ refresh-token:token
 >>> CONNECT
 login:login
 passcode:password
+session:session (optional)
 create-user:0 (optional)
 app-uid:uid (for user's apps)
 
 <<< CONNECTED
 server:gdmn-back/1.0.0
 version:1.2
+session:session
 access-token:access-token
 refresh-token:refresh-token
 
@@ -193,22 +198,26 @@ or
 ```
 >>> CONNECT
 authorization:access-token
+session:session (optional)
 app-uid:uid (for user's apps)
 
 <<< CONNECTED
 server:gdmn-back/1.0.0
 version:1.2
+session:session
 
 ```
 or
 ```
 >>> CONNECT
 authorization:refresh-token
+session:session (optional)
 app-uid:uid (for user's apps)
 
 <<< CONNECTED
 server:gdmn-back/1.0.0
 version:1.2
+session:session
 access-token:access-token
 refresh-token:refresh-token
 
@@ -218,11 +227,13 @@ refresh-token:refresh-token
 ```
 >>> CONNECT
 authorization:refresh-token
+session:session (optional)
 app-uid:uid (for user's apps)
 
 <<< CONNECTED
 server:gdmn-back/1.0.0
 version:1.2
+session:session
 access-token:access-token
 refresh-token:refresh-token
 
@@ -232,12 +243,14 @@ or
 >>> CONNECT
 login:login
 passcode:password
+session:session (optional)
 create-user:0 (optional)
 app-uid:uid (for user's apps)
 
 <<< CONNECTED
 server:gdmn-back/1.0.0
 version:1.2
+session:session
 access-token:access-token
 refresh-token:refresh-token
 
@@ -286,7 +299,27 @@ content-length:...
   * 5 - `DONE`
 * `progress` is sent only when the status is `RUNNING`
 * `error` is sent only when the status is `ERROR`
+  * `code` - error code
+  * `message` - error message
 * `result` is sent only when the status is `DONE`
+
+##### Error:
+```
+<<< ERROR
+code:0
+message:message
+receipt-id:id (optional)
+
+```
+* `code`:
+  * 0 - `INTERNAL`
+  * 1 - `UNSUPPORTED`
+  * 2 - `UNAUTHORIZED`
+  * 3 - `INVALID`
+  * 4 - `NOT_FOUND`
+  * 5 - `NOT_UNIQUE`
+* `message` - error message
+
 
 ##### Default user
 login: `Administrator`  
