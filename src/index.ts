@@ -96,7 +96,8 @@ function startHttpServer(serverApp: Koa): HttpServer | undefined {
     httpServer.listen(config.get("server.http.port"), config.get("server.http.host"));
     httpServer.on("error", serverErrorHandler);
     httpServer.on("listening", () => {
-      console.log(`Listening on http://${httpServer!.address().address}:${httpServer!.address().port};` +
+      const {address, port} = httpServer!.address() as any; // TODO
+      console.log(`Listening on http://${address}:${port};` +
         ` env: ${process.env.NODE_ENV}`);
     });
   }

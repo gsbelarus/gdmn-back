@@ -3,7 +3,7 @@ import {StompClientCommandListener, StompError, StompHeaders, StompServerSession
 import {Application} from "../apps/Application";
 import {IOptionalConnectionOptions, MainApplication} from "../apps/MainApplication";
 import {Session} from "../apps/Session";
-import {endStatuses, IChangeListener, ICommand, Task, TaskStatus} from "../apps/task/Task";
+import {endStatuses, ICommand, IEvents, Task} from "../apps/task/Task";
 import {ErrorCode, ServerError} from "./ServerError";
 import {ITokens, Utils} from "./Utils";
 
@@ -38,13 +38,15 @@ export interface IConnectHeaders {
   "create-user"?: number;
 }
 
-export class StompSession implements StompClientCommandListener, IChangeListener<any, any, any> {
+export class StompSession implements StompClientCommandListener {
 
   public static readonly DESTINATION_TASK = "/task";
   public static readonly IGNORED_ACK_ID = "ignored-id";
 
   private readonly _stomp: StompServerSessionLayer;
   private readonly _subscriptions: ISubscription[] = [];
+  private readonly _onChangeTask: IEvents<any, any, any>["change"];
+  private readonly _onProgressTask: IEvents<any, any, any>["progress"];
 
   private _session?: Session;
   private _application?: Application;
@@ -52,6 +54,8 @@ export class StompSession implements StompClientCommandListener, IChangeListener
 
   constructor(session: StompServerSessionLayer) {
     this._stomp = session;
+    this._onChangeTask = (task: Task<any, any, any>) => this._sendTaskMessage(task);
+    this._onProgressTask = (task: Task<any, any, any>) => this._sendTaskMessage(task, true);
   }
 
   get application(): Application {
@@ -91,12 +95,6 @@ export class StompSession implements StompClientCommandListener, IChangeListener
     return this._subscriptions;
   }
 
-  public onChangeTask(task: Task<any, any, any>): void {
-    if (this._subscriptions.find((sub) => sub.destination === task.options.destination)) {
-      this._sendTaskMessage(task);
-    }
-  }
-
   public connect(headers: StompHeaders): void {
     this._internalConnect(headers).catch((error) => this._sendError(error, headers));
   }
@@ -120,25 +118,26 @@ export class StompSession implements StompClientCommandListener, IChangeListener
 
   public subscribe(headers: StompHeaders): void {
     this._try(() => {
+      if (this._subscriptions.some((sub) => sub.id === headers.id)) {
+        throw new ServerError(ErrorCode.NOT_UNIQUE, "Subscriptions with same id exists");
+      }
+      if (this._subscriptions.some((sub) => sub.destination === headers.destination)) {
+        throw new ServerError(ErrorCode.NOT_UNIQUE, "Subscriptions with same destination exists");
+      }
       switch (headers.destination) {
         case StompSession.DESTINATION_TASK:
-          if (this._subscriptions.some((sub) => sub.id === headers.id)) {
-            throw new ServerError(ErrorCode.NOT_UNIQUE, "Subscriptions with same id exists");
-          }
-          if (this._subscriptions.some((sub) => sub.destination === headers.destination)) {
-            throw new ServerError(ErrorCode.NOT_UNIQUE, "Subscriptions with same destination exists");
-          }
           this._subscriptions.push({
             id: headers.id,
             destination: headers.destination,
             ack: headers.ack as Ack || "auto"
           });
-          this.session.taskList.addChangeTaskListener(this);
+          this.session.taskList.emitter.addListener("change", this._onChangeTask);
+          this.session.taskList.emitter.addListener("progress", this._onProgressTask);
 
           this._sendReceipt(headers);
 
           // notify about taskList
-          this.session.taskList.getAll().forEach((task) => this.onChangeTask(task));
+          this.session.taskList.getAll().forEach((task) => this._onChangeTask(task));
           break;
         default:
           throw new ServerError(ErrorCode.UNSUPPORTED, `Unsupported destination '${headers.destination}'`);
@@ -148,14 +147,22 @@ export class StompSession implements StompClientCommandListener, IChangeListener
 
   public unsubscribe(headers: StompHeaders): void {
     this._try(() => {
-      const subscriptionIndex = this._subscriptions.findIndex((sub) => sub.id === headers.id);
-      if (subscriptionIndex === -1) {
+      const subscription = this._subscriptions.find((sub) => sub.id === headers.id);
+      if (!subscription) {
         throw new ServerError(ErrorCode.NOT_FOUND, "Subscription is not found");
       }
-      this._subscriptions.splice(subscriptionIndex, 1);
-      this.session.taskList.removeChangeTaskListener(this);
+      switch (headers.destination) {
+        case StompSession.DESTINATION_TASK:
+          this.session.taskList.emitter.removeListener("progress", this._onProgressTask);
+          this.session.taskList.emitter.removeListener("change", this._onChangeTask);
+          this._subscriptions.splice(this._subscriptions.indexOf(subscription), 1);
 
-      this._sendReceipt(headers);
+          this._sendReceipt(headers);
+          break;
+        default:
+          throw new ServerError(ErrorCode.UNSUPPORTED, `Unsupported destination '${headers.destination}'`);
+          break;
+      }
     }, headers);
   }
 
@@ -234,6 +241,7 @@ export class StompSession implements StompClientCommandListener, IChangeListener
                 destination,
                 worker: async (context) => {
                   const stepPercent = 100 / steps;
+                  context.progress.increment(0, `Process ping...`);
                   for (let i = 0; i < steps; i++) {
                     await new Promise((resolve) => setTimeout(resolve, delay));
                     context.progress.increment(stepPercent, `Process ping... Complete step: ${i + 1}`);
@@ -363,7 +371,7 @@ export class StompSession implements StompClientCommandListener, IChangeListener
     this._sendConnected(result.newTokens || {});
   }
 
-  protected _sendTaskMessage(task: Task<any, any, any>): void {
+  protected _sendTaskMessage(task: Task<any, any, any>, progress?: boolean): void {
     const subscription = this._subscriptions.find((sub) => sub.destination === task.options.destination);
     if (subscription) {
       const ack = endStatuses.includes(task.status) ? task.id : StompSession.IGNORED_ACK_ID;
@@ -381,7 +389,7 @@ export class StompSession implements StompClientCommandListener, IChangeListener
 
       this._stomp.message(headers, JSON.stringify({
         status: task.status,
-        progress: task.status === TaskStatus.RUNNING ? {
+        progress: progress ? {
           value: task.progress.value,
           description: task.progress.description
         } : undefined,
@@ -429,7 +437,8 @@ export class StompSession implements StompClientCommandListener, IChangeListener
     if (this._session) {
       console.log("Resource is released");
       this._subscriptions.splice(0, this._subscriptions.length);
-      this._session.taskList.removeChangeTaskListener(this);
+      this.session.taskList.emitter.removeListener("progress", this._onProgressTask);
+      this.session.taskList.emitter.removeListener("change", this._onChangeTask);
       this._session.release();
       this._session = undefined;
     }

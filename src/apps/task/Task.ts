@@ -1,3 +1,5 @@
+import {EventEmitter} from "events";
+import StrictEventEmitter from "strict-event-emitter-types";
 import {v1 as uuidV1} from "uuid";
 import {ErrorCode, ServerError} from "../../stomp/ServerError";
 import {Session} from "../Session";
@@ -14,10 +16,6 @@ export enum TaskStatus {
 }
 
 export const endStatuses = [TaskStatus.INTERRUPTED, TaskStatus.ERROR, TaskStatus.DONE];
-
-export interface IChangeListener<Action, Payload, Result> {
-  onChangeTask(task: Task<Action, Payload, Result>): void;
-}
 
 export type StatusChecker = () => Promise<void | never>;
 
@@ -46,19 +44,21 @@ export interface IOptions<Action, Payload, Result> {
 export interface ITaskLog {
   date: Date;
   status: TaskStatus;
-  progress: {
-    value: number;
-    description: string;
-  };
+}
+
+export interface IEvents<Action, Payload, Result> {
+  change: (task: Task<Action, Payload, Result>) => void;
+  progress: (task: Task<Action, Payload, Result>) => void;
 }
 
 export class Task<Action, Payload, Result> {
 
   public static readonly DEFAULT_PAUSE_CHECK_TIMEOUT = 5 * 1000;
 
+  public readonly emitter: StrictEventEmitter<EventEmitter, IEvents<Action, Payload, Result>> = new EventEmitter();
+
   private readonly _id: string;
   private readonly _options: IOptions<Action, Payload, Result>;
-  private readonly _changeListeners: Array<IChangeListener<Action, Payload, Result>> = [];
   private readonly _progress: Progress;
   private readonly _log: ITaskLog[] = [];
 
@@ -69,9 +69,7 @@ export class Task<Action, Payload, Result> {
   constructor(options: IOptions<Action, Payload, Result>) {
     this._id = uuidV1().toUpperCase();
     this._options = options;
-    this._progress = new Progress(options.progress, () => {
-      this._updateStatus(this._status);
-    });
+    this._progress = new Progress(options.progress, () => this.emitter.emit("progress", this));
     this._updateStatus(TaskStatus.IDLE);
   }
 
@@ -101,18 +99,6 @@ export class Task<Action, Payload, Result> {
 
   get error(): ServerError | undefined {
     return this._error;
-  }
-
-  public addChangeListener(changeListener: IChangeListener<Action, Payload, Result>): void {
-    this._changeListeners.push(changeListener);
-  }
-
-  public removeChangeListener(changeListener: IChangeListener<Action, Payload, Result>): void {
-    this._changeListeners.splice(this._changeListeners.indexOf(changeListener), 1);
-  }
-
-  public clearChangeListeners(): void {
-    this._changeListeners.splice(0, this._changeListeners.length);
   }
 
   public interrupt(): void {
@@ -160,13 +146,9 @@ export class Task<Action, Payload, Result> {
     this._status = status;
     this._log.push({
       date: new Date(),
-      status: this._status,
-      progress: {
-        value: this._progress.value,
-        description: this._progress.description
-      }
+      status: this._status
     });
-    this._changeListeners.forEach((listener) => listener.onChangeTask(this));
+    this.emitter.emit("change", this);
   }
 
   private async _checkStatus(): Promise<void | never> {

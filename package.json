@@ -17,28 +17,29 @@
     "config": "^2.0.1",
     "gdmn-er-bridge": "git://github.com/gsbelarus/gdmn-er-bridge.git",
     "jsonwebtoken": "^8.3.0",
-    "koa": "^2.5.2",
+    "koa": "^2.5.3",
     "koa-body": "^4.0.4",
     "koa-error": "^3.2.0",
     "koa-logger": "^3.2.0",
-    "koa-passport": "^4.1.0",
+    "koa-passport": "^4.1.1",
     "koa-router": "^7.4.0",
     "koa-send": "^5.0.0",
     "koa-static": "^5.0.0",
     "koa2-cors": "^2.0.6",
-    "node-stomp-protocol": "^0.4.0",
+    "node-stomp-protocol": "^0.4.1",
     "passport-jwt": "^4.0.0",
     "passport-local": "^1.0.0",
+    "strict-event-emitter-types": "^2.0.0",
     "uuid": "^3.3.2",
-    "ws": "^6.0.0"
+    "ws": "^6.1.0"
   },
   "devDependencies": {
     "@types/config": "^0.0.34",
     "@types/jsonwebtoken": "^7.2.8",
     "@types/koa": "^2.0.46",
     "@types/koa-logger": "^3.1.0",
-    "@types/koa-passport": "^4.0.1",
-    "@types/koa-router": "^7.0.31",
+    "@types/koa-passport": "^4.0.2",
+    "@types/koa-router": "^7.0.32",
     "@types/koa-send": "^4.1.1",
     "@types/koa-static": "^4.0.0",
     "@types/koa2-cors": "^2.0.1",
@@ -49,6 +50,6 @@
     "nodemon": "^1.18.4",
     "ts-node": "^7.0.1",
     "tslint": "^5.11.0",
-    "typescript": "^3.0.3"
+    "typescript": "^3.1.1"
   }
 }

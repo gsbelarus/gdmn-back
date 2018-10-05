@@ -12,6 +12,7 @@ export interface IOptions {
   readonly connection: AConnection;
 }
 
+// TODO timeout for pending tasks
 export class Session {
 
   private static DEFAULT_TIMEOUT: number = config.get("auth.session.timeout");
