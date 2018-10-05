@@ -35,7 +35,6 @@ export interface ICommand<A, P = any> {
 export interface IOptions<Action, Payload, Result> {
   readonly command: ICommand<Action, Payload>;
   readonly session: Session;
-  readonly destination: string;
   readonly progress?: IProgressOptions;
   readonly pauseCheckTimeout?: number;
   readonly worker: TaskWorker<Result>;

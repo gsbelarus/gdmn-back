@@ -267,28 +267,30 @@ content-length:...
 {"payload":{...}}
 ```
 * `action`: 
-  * `PING` - `payload: {delay: number, steps: number}`
-  * `GET_SCHEMA` - `payload: undefined`
-  * `QUERY` - `payload: IEntityQueryInspector`
+  * `PING`:
+    * `payload: {delay: number, steps: number}`
+    * `result: undefined`
+  * `GET_SCHEMA`:
+    * `payload: undefined`
+    * `result: IERModel`
+  * `QUERY`:
+    * `payload: IEntityQueryInspector`
+    * `result: IQueryResponse`
 
-###### Subscription response:
+###### Subscription `/task/status` response:
 ```
 <<< MESSAGE
-destination:/task
+destination:/task/status
 action:...
 message-id:msg-0
-ack:ack-0
+ack:client-individual (optional)
 subscription:sub-0
 content-type:application/json;charset=utf-8
 content-length:...
 
-{"status":1,"progress":{"value":50,"description":"progress"},payload":{...}}
+{"payload":{...},"status":1,...}
 ```
 
-* `action`:
-  * `PING` - `result: undefined`
-  * `GET_SCHEMA` - `result: IERModel`
-  * `QUERY` - `result: IQueryResponse`
 * `payload` - is request payload
 * `status`:
   * 0 - `IDLE`
@@ -297,11 +299,29 @@ content-length:...
   * 3 - `INTERRUPTED`
   * 4 - `ERROR`
   * 5 - `DONE`
-* `progress` is sent only when the status is `RUNNING`
 * `error` is sent only when the status is `ERROR`
   * `code` - error code
   * `message` - error message
 * `result` is sent only when the status is `DONE`
+
+###### Subscription `/task/progress` response:
+```
+<<< MESSAGE
+destination:/task/progress
+action:...
+message-id:msg-0
+ack:auto (required)
+subscription:sub-0
+content-type:application/json;charset=utf-8
+content-length:...
+
+{"payload":{...},"progress":{"value":50,"description":"progress"}}
+```
+
+* `payload` - is request payload
+* `progress`:
+  * `value` - is value between 0 and 100
+  * `description` - some text about progress
 
 ##### Error:
 ```

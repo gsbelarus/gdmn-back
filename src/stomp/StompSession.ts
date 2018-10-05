@@ -3,7 +3,7 @@ import {StompClientCommandListener, StompError, StompHeaders, StompServerSession
 import {Application} from "../apps/Application";
 import {IOptionalConnectionOptions, MainApplication} from "../apps/MainApplication";
 import {Session} from "../apps/Session";
-import {endStatuses, ICommand, IEvents, Task} from "../apps/task/Task";
+import {endStatuses, ICommand, IEvents, Task, TaskStatus} from "../apps/task/Task";
 import {ErrorCode, ServerError} from "./ServerError";
 import {ITokens, Utils} from "./Utils";
 
@@ -41,6 +41,8 @@ export interface IConnectHeaders {
 export class StompSession implements StompClientCommandListener {
 
   public static readonly DESTINATION_TASK = "/task";
+  public static readonly DESTINATION_TASK_STATUS = `${StompSession.DESTINATION_TASK}/status`;
+  public static readonly DESTINATION_TASK_PROGRESS = `${StompSession.DESTINATION_TASK}/progress`;
   public static readonly IGNORED_ACK_ID = "ignored-id";
 
   private readonly _stomp: StompServerSessionLayer;
@@ -54,8 +56,59 @@ export class StompSession implements StompClientCommandListener {
 
   constructor(session: StompServerSessionLayer) {
     this._stomp = session;
-    this._onChangeTask = (task: Task<any, any, any>) => this._sendTaskMessage(task);
-    this._onProgressTask = (task: Task<any, any, any>) => this._sendTaskMessage(task, true);
+    this._onChangeTask = (task: Task<any, any, any>) => {
+      const subscription = this._subscriptions
+        .find((sub) => sub.destination === StompSession.DESTINATION_TASK_STATUS);
+      if (subscription) {
+        const ack = endStatuses.includes(task.status) ? task.id : StompSession.IGNORED_ACK_ID;
+
+        const headers: StompHeaders = {
+          "content-type": "application/json;charset=utf-8",
+          "destination": StompSession.DESTINATION_TASK_STATUS,
+          "action": task.options.command.action,
+          "subscription": subscription.id,
+          "message-id": ack
+        };
+        if (subscription.ack !== "auto") {
+          headers.ack = ack;
+        }
+
+        this._stomp.message(headers, JSON.stringify({
+          status: task.status,
+          payload: task.options.command.payload,
+          result: task.result ? task.result : undefined,
+          error: task.error ? {
+            code: task.error.code,
+            message: task.error.message
+          } : undefined
+        })).catch(console.warn);
+
+        if (subscription.ack === "auto") {
+          this.session.taskList.remove(task);
+        }
+      }
+    };
+    this._onProgressTask = (task: Task<any, any, any>) => {
+      const subscription = this._subscriptions
+        .find((sub) => sub.destination === StompSession.DESTINATION_TASK_PROGRESS);
+      if (subscription) {
+        const headers: StompHeaders = {
+          "content-type": "application/json;charset=utf-8",
+          "destination": StompSession.DESTINATION_TASK_PROGRESS,
+          "action": task.options.command.action,
+          "subscription": subscription.id,
+          "message-id": StompSession.IGNORED_ACK_ID
+        };
+
+        this._stomp.message(headers, JSON.stringify({
+          payload: task.options.command.payload,
+          progress: {
+            value: task.progress.value,
+            description: task.progress.description
+          }
+        })).catch(console.warn);
+      }
+    };
   }
 
   get application(): Application {
@@ -125,23 +178,35 @@ export class StompSession implements StompClientCommandListener {
         throw new ServerError(ErrorCode.NOT_UNIQUE, "Subscriptions with same destination exists");
       }
       switch (headers.destination) {
-        case StompSession.DESTINATION_TASK:
-          this._subscriptions.push({
-            id: headers.id,
-            destination: headers.destination,
-            ack: headers.ack as Ack || "auto"
-          });
+        case StompSession.DESTINATION_TASK_STATUS:
           this.session.taskList.emitter.addListener("change", this._onChangeTask);
-          this.session.taskList.emitter.addListener("progress", this._onProgressTask);
-
           this._sendReceipt(headers);
 
           // notify about taskList
           this.session.taskList.getAll().forEach((task) => this._onChangeTask(task));
           break;
+        case StompSession.DESTINATION_TASK_PROGRESS:
+          if (headers.ack && headers.ack !== "auto") {
+            throw new ServerError(ErrorCode.UNSUPPORTED,
+              `Unsupported ack mode '${headers.ack}'; supported - 'auto'`);
+          }
+          this.session.taskList.emitter.addListener("progress", this._onProgressTask);
+          this._sendReceipt(headers);
+
+          this.session.taskList.getAll().forEach((task) => {
+            if (task.status === TaskStatus.RUNNING) {
+              this._onProgressTask(task);
+            }
+          });
+          break;
         default:
           throw new ServerError(ErrorCode.UNSUPPORTED, `Unsupported destination '${headers.destination}'`);
       }
+      this._subscriptions.push({
+        id: headers.id,
+        destination: headers.destination,
+        ack: headers.ack as Ack || "auto"
+      });
     }, headers);
   }
 
@@ -152,17 +217,18 @@ export class StompSession implements StompClientCommandListener {
         throw new ServerError(ErrorCode.NOT_FOUND, "Subscription is not found");
       }
       switch (headers.destination) {
-        case StompSession.DESTINATION_TASK:
-          this.session.taskList.emitter.removeListener("progress", this._onProgressTask);
+        case StompSession.DESTINATION_TASK_STATUS:
           this.session.taskList.emitter.removeListener("change", this._onChangeTask);
-          this._subscriptions.splice(this._subscriptions.indexOf(subscription), 1);
-
+          this._sendReceipt(headers);
+          break;
+        case StompSession.DESTINATION_TASK_PROGRESS:
+          this.session.taskList.emitter.removeListener("progress", this._onProgressTask);
           this._sendReceipt(headers);
           break;
         default:
           throw new ServerError(ErrorCode.UNSUPPORTED, `Unsupported destination '${headers.destination}'`);
-          break;
       }
+      this._subscriptions.splice(this._subscriptions.indexOf(subscription), 1);
     }, headers);
   }
 
@@ -186,7 +252,6 @@ export class StompSession implements StompClientCommandListener {
               const task = this.session.taskList.add(new Task({
                 session: this.session,
                 command,
-                destination,
                 worker: (context) => this.mainApplication.deleteApplication(uid, context.session)
               }));
               this._sendReceipt(headers);
@@ -201,7 +266,6 @@ export class StompSession implements StompClientCommandListener {
               const task = this.session.taskList.add(new Task({
                 session: this.session,
                 command,
-                destination,
                 worker: async (context) => {
                   const uid = await this.mainApplication.createApplication(alias, context.session, connectionOptions);
                   return await this.mainApplication.getApplicationInfo(uid, context.session);
@@ -218,7 +282,6 @@ export class StompSession implements StompClientCommandListener {
               const task = this.session.taskList.add(new Task({
                 session: this.session,
                 command,
-                destination,
                 worker: async (context) => {
                   return await this.mainApplication.getApplicationsInfo(context.session);
                 }
@@ -238,7 +301,6 @@ export class StompSession implements StompClientCommandListener {
               const task = this.session.taskList.add(new Task({
                 session: this.session,
                 command,
-                destination,
                 worker: async (context) => {
                   const stepPercent = 100 / steps;
                   context.progress.increment(0, `Process ping...`);
@@ -264,7 +326,6 @@ export class StompSession implements StompClientCommandListener {
               const task = this.session.taskList.add(new Task({
                 session: this.session,
                 command,
-                destination,
                 worker: () => this.application.erModel.serialize()
               }));
               this._sendReceipt(headers);
@@ -278,7 +339,6 @@ export class StompSession implements StompClientCommandListener {
               const task = this.session.taskList.add(new Task({
                 session: this.session,
                 command,
-                destination,
                 worker: async (context) => {
                   const result = this.application.query(command.payload, context.session);
                   await context.checkStatus();
@@ -369,42 +429,6 @@ export class StompSession implements StompClientCommandListener {
     this._session.borrow();
 
     this._sendConnected(result.newTokens || {});
-  }
-
-  protected _sendTaskMessage(task: Task<any, any, any>, progress?: boolean): void {
-    const subscription = this._subscriptions.find((sub) => sub.destination === task.options.destination);
-    if (subscription) {
-      const ack = endStatuses.includes(task.status) ? task.id : StompSession.IGNORED_ACK_ID;
-
-      const headers: StompHeaders = {
-        "content-type": "application/json;charset=utf-8",
-        "destination": task.options.destination,
-        "action": task.options.command.action,
-        "subscription": subscription.id,
-        "message-id": ack
-      };
-      if (subscription.ack !== "auto") {
-        headers.ack = ack;
-      }
-
-      this._stomp.message(headers, JSON.stringify({
-        status: task.status,
-        progress: progress ? {
-          value: task.progress.value,
-          description: task.progress.description
-        } : undefined,
-        payload: task.options.command.payload,
-        result: task.result ? task.result : undefined,
-        error: task.error ? {
-          code: task.error.code,
-          message: task.error.message
-        } : undefined
-      })).catch(console.warn);
-
-      if (subscription.ack === "auto") {
-        this.session.taskList.remove(task);
-      }
-    }
   }
 
   protected _sendConnected(headers: StompHeaders): void {
