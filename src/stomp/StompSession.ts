@@ -96,11 +96,11 @@ export class StompSession implements StompClientCommandListener, IChangeListener
     }
   }
 
-  public connect(headers: StompHeaders = {}): void {
+  public connect(headers: StompHeaders): void {
     this._internalConnect(headers).catch((error) => this._sendError(error, headers));
   }
 
-  public disconnect(headers: StompHeaders = {}): void {
+  public disconnect(headers: StompHeaders): void {
     this.releaseResources();
 
     this._sendReceipt(headers);
@@ -116,7 +116,7 @@ export class StompSession implements StompClientCommandListener, IChangeListener
     this.releaseResources();
   }
 
-  public subscribe(headers: StompHeaders = {}): void {
+  public subscribe(headers: StompHeaders): void {
     switch (headers.destination) {
       case StompSession.DESTINATION_TASK:
         if (this._subscriptions.some((sub) => sub.id === headers.id)) {
@@ -142,7 +142,7 @@ export class StompSession implements StompClientCommandListener, IChangeListener
     }
   }
 
-  public unsubscribe(headers: StompHeaders = {}): void {
+  public unsubscribe(headers: StompHeaders): void {
     const subscriptionIndex = this._subscriptions.findIndex((sub) => sub.id === headers.id);
     if (subscriptionIndex === -1) {
       throw new Error("Subscription is not found");
@@ -153,7 +153,7 @@ export class StompSession implements StompClientCommandListener, IChangeListener
     this._sendReceipt(headers);
   }
 
-  public send(headers: StompHeaders = {}, body: string = ""): void {
+  public send(headers: StompHeaders, body: string = ""): void {
     const destination = headers.destination;
 
     switch (destination) {
@@ -284,7 +284,7 @@ export class StompSession implements StompClientCommandListener, IChangeListener
     }
   }
 
-  public ack(headers: StompHeaders = {}): void {
+  public ack(headers: StompHeaders): void {
     if (headers.id !== StompSession.IGNORED_ACK_ID) {
       const task = this.session.taskList.find(headers.id);
       if (task) {
@@ -389,7 +389,7 @@ export class StompSession implements StompClientCommandListener, IChangeListener
 
   protected _sendError(error: Error, requestHeaders: StompHeaders): void {
     const errorHeaders: StompHeaders = {message: error.message};
-    if (requestHeaders && requestHeaders.receipt) {
+    if (requestHeaders.receipt) {
       errorHeaders["receipt-id"] = requestHeaders.receipt;
     }
     this._stomp.error(errorHeaders).catch(console.warn);
@@ -397,7 +397,7 @@ export class StompSession implements StompClientCommandListener, IChangeListener
 
   protected _sendReceipt(requestHeaders: StompHeaders): void {
     const receiptHeaders: StompHeaders = {};
-    if (requestHeaders && requestHeaders.receipt) {
+    if (requestHeaders.receipt) {
       receiptHeaders["receipt-id"] = requestHeaders.receipt;
       this._stomp.receipt(receiptHeaders).catch(console.warn);
     }
