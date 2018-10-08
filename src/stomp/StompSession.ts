@@ -1,24 +1,14 @@
-import {IEntityQueryInspector} from "gdmn-orm";
 import {StompClientCommandListener, StompError, StompHeaders, StompServerSessionLayer} from "node-stomp-protocol";
-import {Application} from "../apps/Application";
-import {IOptionalConnectionOptions, MainApplication} from "../apps/MainApplication";
-import {Session} from "../apps/Session";
-import {endStatuses, ICommand, IEvents, Task, TaskStatus} from "../apps/task/Task";
+import {Application} from "../apps/base/Application";
+import {Session} from "../apps/base/Session";
+import {Action, GetSchemaCommand, PingCommand, QueryCommand} from "../apps/base/TaskFactory";
+import {MainApplication} from "../apps/MainApplication";
+import {CreateAppCommand, DeleteAppCommand, GetAppsCommand, MainAction} from "../apps/MainTaskFactory";
+import {endStatuses, IEvents, Task, TaskStatus} from "../apps/base/task/Task";
 import {ErrorCode, ServerError} from "./ServerError";
 import {ITokens, Utils} from "./Utils";
 
-type Action = "DELETE_APP" | "CREATE_APP" | "GET_APPS" |
-  "PING" | "GET_SCHEMA" | "QUERY";
-
-type Command<A extends Action, P> = ICommand<A, P>;
-
-type DeleteAppCommand = Command<"DELETE_APP", { uid: string }>;
-type CreateAppCommand = Command<"CREATE_APP", { alias: string, connectionOptions?: IOptionalConnectionOptions }>;
-type GetAppsCommand = Command<"GET_APPS", undefined>;
-
-type PingCommand = Command<"PING", { steps: number, delay: number }>;
-type GetSchemaCommand = Command<"GET_SCHEMA", undefined>;
-type QueryCommand = Command<"QUERY", IEntityQueryInspector>;
+type Actions = Action | MainAction;
 
 export type Ack = "auto" | "client" | "client-individual";
 
@@ -240,37 +230,30 @@ export class StompSession implements StompClientCommandListener {
         case StompSession.DESTINATION_TASK:
           Utils.checkContentType(headers);
 
-          const action = headers.action as Action;
-          const bodyObj = JSON.parse(body!);
+          const action = headers.action as Actions;
+          const bodyObj = JSON.parse(body || "{}");
 
           switch (action) {
             // ------------------------------For MainApplication
             case "DELETE_APP": {  // TODO tmp
+              if (!bodyObj.payload || !bodyObj.uid) {
+                throw new ServerError(ErrorCode.INVALID, "Payload must contains 'uid'");
+              }
               const command: DeleteAppCommand = {action, ...bodyObj};
-              const {uid} = command.payload || {uid: -1};
-
-              const task = this.session.taskList.add(new Task({
-                session: this.session,
-                command,
-                worker: (context) => this.mainApplication.deleteApplication(uid, context.session)
-              }));
+              const task = this.mainApplication.taskFactory.deleteApplication(this.session, command);
+              this.session.taskList.add(task);
               this._sendReceipt(headers);
 
               task.execute().catch(console.error);
               break;
             }
             case "CREATE_APP": {  // TODO tmp
+              if (!bodyObj.payload || !bodyObj.alias) {
+                throw new ServerError(ErrorCode.INVALID, "Payload must contains 'alias'");
+              }
               const command: CreateAppCommand = {action, ...bodyObj};
-              const {alias, connectionOptions} = command.payload || {alias: "Unknown", connectionOptions: undefined};
-
-              const task = this.session.taskList.add(new Task({
-                session: this.session,
-                command,
-                worker: async (context) => {
-                  const uid = await this.mainApplication.createApplication(alias, context.session, connectionOptions);
-                  return await this.mainApplication.getApplicationInfo(uid, context.session);
-                }
-              }));
+              const task = this.mainApplication.taskFactory.createApplication(this.session, command);
+              this.session.taskList.add(task);
               this._sendReceipt(headers);
 
               task.execute().catch(console.error);
@@ -278,14 +261,8 @@ export class StompSession implements StompClientCommandListener {
             }
             case "GET_APPS": {  // TODO tmp
               const command: GetAppsCommand = {action, payload: undefined};
-
-              const task = this.session.taskList.add(new Task({
-                session: this.session,
-                command,
-                worker: async (context) => {
-                  return await this.mainApplication.getApplicationsInfo(context.session);
-                }
-              }));
+              const task = this.mainApplication.taskFactory.getApplications(this.session, command);
+              this.session.taskList.add(task);
               this._sendReceipt(headers);
 
               task.execute().catch(console.error);
@@ -293,28 +270,16 @@ export class StompSession implements StompClientCommandListener {
             }
             // ------------------------------For all applications
             case "PING": {
-              const defaultPayload: PingCommand["payload"] = {steps: 1, delay: 0};
-              const command: PingCommand = {action, payload: defaultPayload, ...bodyObj};
-              const steps = command.payload.steps || defaultPayload.steps;
-              const delay = command.payload.delay || defaultPayload.delay;
-
-              const task = this.session.taskList.add(new Task({
-                session: this.session,
-                command,
-                worker: async (context) => {
-                  const stepPercent = 100 / steps;
-                  context.progress.increment(0, `Process ping...`);
-                  for (let i = 0; i < steps; i++) {
-                    await new Promise((resolve) => setTimeout(resolve, delay));
-                    context.progress.increment(stepPercent, `Process ping... Complete step: ${i + 1}`);
-                    await context.checkStatus();
-                  }
-
-                  if (!this.application.connected) {
-                    throw new Error("Application is not connected");
-                  }
+              const command: PingCommand = {
+                action,
+                payload: {
+                  steps: bodyObj.payload.steps || 1,
+                  delay: bodyObj.payload.delay || 0
                 }
-              }));
+              };
+
+              const task = this.application.taskFactory.ping(this.session, command);
+              this.session.taskList.add(task);
               this._sendReceipt(headers);
 
               task.execute().catch(console.error);
@@ -322,12 +287,8 @@ export class StompSession implements StompClientCommandListener {
             }
             case "GET_SCHEMA": {
               const command: GetSchemaCommand = {action, payload: undefined};
-
-              const task = this.session.taskList.add(new Task({
-                session: this.session,
-                command,
-                worker: () => this.application.erModel.serialize()
-              }));
+              const task = this.application.taskFactory.getSchema(this.session, command);
+              this.session.taskList.add(task);
               this._sendReceipt(headers);
 
               task.execute().catch(console.error);
@@ -335,16 +296,8 @@ export class StompSession implements StompClientCommandListener {
             }
             case "QUERY": {
               const command: QueryCommand = {action, ...bodyObj};
-
-              const task = this.session.taskList.add(new Task({
-                session: this.session,
-                command,
-                worker: async (context) => {
-                  const result = this.application.query(command.payload, context.session);
-                  await context.checkStatus();
-                  return result;
-                }
-              }));
+              const task = this.application.taskFactory.query(this.session, command);
+              this.session.taskList.add(task);
               this._sendReceipt(headers);
 
               task.execute().catch(console.error);

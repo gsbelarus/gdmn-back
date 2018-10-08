@@ -1,12 +1,14 @@
 import {AccessMode, AConnection, DBStructure} from "gdmn-db";
 import {DataSource, ERBridge, IQueryResponse} from "gdmn-er-bridge";
 import {ERModel, IEntityQueryInspector} from "gdmn-orm";
-import {Database, IDBDetail} from "../db/Database";
+import {Database, IDBDetail} from "../../db/Database";
 import {Session} from "./Session";
 import {SessionManager} from "./SessionManager";
+import {TaskFactory} from "./TaskFactory";
 
 export abstract class Application extends Database {
 
+  private readonly _taskFactory = new TaskFactory(this);
   private readonly _sessionManager = new SessionManager(this.connectionPool);
 
   private _dbStructure: DBStructure = new DBStructure();
@@ -22,6 +24,10 @@ export abstract class Application extends Database {
 
   get erModel(): ERModel {
     return this._erModel;
+  }
+
+  get taskFactory(): TaskFactory {
+    return this._taskFactory;
   }
 
   get sessionManager(): SessionManager {

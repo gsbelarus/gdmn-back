@@ -1,5 +1,5 @@
 import {StompHeaders} from "node-stomp-protocol";
-import {Application} from "../apps/Application";
+import {Application} from "../apps/base/Application";
 import {MainApplication} from "../apps/MainApplication";
 import {createAccessJwtToken, createRefreshJwtToken, getPayloadFromJwtToken} from "../passport";
 import {ErrorCode, ServerError} from "./ServerError";

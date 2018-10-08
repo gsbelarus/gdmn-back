@@ -17,9 +17,10 @@ import path from "path";
 import {v1 as uuidV1} from "uuid";
 import {IDBDetail} from "../db/Database";
 import databases from "../db/databases";
-import {Application} from "./Application";
+import {Application} from "./base/Application";
+import {Session} from "./base/Session";
 import {GDMNApplication} from "./GDMNApplication";
-import {Session} from "./Session";
+import {MainTaskFactory} from "./MainTaskFactory";
 
 export interface IUserInput {
   login: string;
@@ -74,6 +75,8 @@ export class MainApplication extends Application {
   public static readonly APP_EXT = ".FDB";
   public static readonly MAIN_DB = `MAIN${MainApplication.APP_EXT}`;
 
+  private readonly _mainTaskFactory = new MainTaskFactory(this);
+
   private _applications: Map<string, Application> = new Map();
 
   constructor() {
@@ -85,6 +88,10 @@ export class MainApplication extends Application {
     if (!existsSync(MainApplication.WORK_DIR)) {
       mkdirSync(MainApplication.WORK_DIR);
     }
+  }
+
+  get taskFactory(): MainTaskFactory {
+    return this._mainTaskFactory;
   }
 
   public static getAppPath(uid: string): string {

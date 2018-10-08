@@ -2,7 +2,7 @@ import {AConnection} from "gdmn-db";
 import {DataSource} from "gdmn-er-bridge";
 import {Entity, StringAttribute} from "gdmn-orm";
 import {IDBDetail} from "../db/Database";
-import {Application} from "./Application";
+import {Application} from "./base/Application";
 
 export class GDMNApplication extends Application {
 

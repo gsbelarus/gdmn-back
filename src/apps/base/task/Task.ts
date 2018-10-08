@@ -1,7 +1,7 @@
 import {EventEmitter} from "events";
 import StrictEventEmitter from "strict-event-emitter-types";
 import {v1 as uuidV1} from "uuid";
-import {ErrorCode, ServerError} from "../../stomp/ServerError";
+import {ErrorCode, ServerError} from "../../../stomp/ServerError";
 import {Session} from "../Session";
 import {IProgressOptions, Progress} from "./Progress";
 
