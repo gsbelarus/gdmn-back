@@ -85,7 +85,7 @@ export class Session {
   private initTimer(): void {
     this.clearTimer();
     this._timer = setInterval(() => {
-      if (!this._taskList.size()) {
+      if (!this._taskList.size()) {// TODO timeout for finished tasks
         this.close().catch(console.error);
       }
     }, Session.DEFAULT_TIMEOUT);
