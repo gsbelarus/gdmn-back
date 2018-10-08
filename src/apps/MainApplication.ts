@@ -126,8 +126,11 @@ export class MainApplication extends Application {
     return crypto.pbkdf2Sync(password, salt, 1, 128, "sha1").toString("base64");
   }
 
+  // TODO tmp
   public pushCreateAppCommand(session: Session,
                               command: CreateAppCommand): Task<CreateAppCommand, IApplicationInfoOutput> {
+    this.checkSession(session);
+
     const task = new Task({
       session,
       command,
@@ -149,7 +152,10 @@ export class MainApplication extends Application {
     return session.taskList.add(task);
   }
 
+  // TODO tmp
   public pushDeleteAppCommand(session: Session, command: DeleteAppCommand): Task<DeleteAppCommand, void> {
+    this.checkSession(session);
+
     const task = new Task({
       session,
       command,
@@ -168,7 +174,10 @@ export class MainApplication extends Application {
     return session.taskList.add(task);
   }
 
+  // TODO tmp
   public pushGetAppsCommand(session: Session, command: GetAppsCommand): Task<GetAppsCommand, IApplicationInfoOutput[]> {
+    this.checkSession(session);
+
     const task = new Task({
       session,
       command,

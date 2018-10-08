@@ -12,6 +12,10 @@ export class SessionManager {
     this._connectionPool = connectionPool;
   }
 
+  public includes(session: Session): boolean {
+    return this._sessions.includes(session);
+  }
+
   public async open(userKey: number, timeout?: number): Promise<Session> {
     const uid = uuidV1().toUpperCase();
     const session = new Session({

@@ -38,6 +38,8 @@ export abstract class Application extends Database {
   }
 
   public pushPingCommand(session: Session, command: PingCommand): Task<PingCommand, void> {
+    this.checkSession(session);
+
     const task = new Task({
       session,
       command,
@@ -61,6 +63,8 @@ export abstract class Application extends Database {
   }
 
   public pushGetSchemaCommand(session: Session, command: GetSchemaCommand): Task<GetSchemaCommand, IERModel> {
+    this.checkSession(session);
+
     const task = new Task({
       session,
       command,
@@ -70,6 +74,8 @@ export abstract class Application extends Database {
   }
 
   public pushQueryCommand(session: Session, command: QueryCommand): Task<QueryCommand, IQueryResponse> {
+    this.checkSession(session);
+
     const task = new Task({
       session,
       command,
@@ -92,6 +98,12 @@ export abstract class Application extends Database {
     this._checkBusy();
 
     await this._reload();
+  }
+
+  protected checkSession(session: Session): void | never {
+    if (!this._sessionManager.includes(session)) {
+      throw new Error("Session does not belong to the application");
+    }
   }
 
   protected async _reload(): Promise<void> {

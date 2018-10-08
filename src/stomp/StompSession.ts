@@ -231,7 +231,7 @@ export class StompSession implements StompClientCommandListener {
 
           switch (action) {
             // ------------------------------For MainApplication
-            case "DELETE_APP": {  // TODO tmp
+            case "DELETE_APP": {
               if (!bodyObj.payload || !bodyObj.uid) {
                 throw new ServerError(ErrorCode.INVALID, "Payload must contains 'uid'");
               }
@@ -242,7 +242,7 @@ export class StompSession implements StompClientCommandListener {
               task.execute().catch(console.error);
               break;
             }
-            case "CREATE_APP": {  // TODO tmp
+            case "CREATE_APP": {
               if (!bodyObj.payload || !bodyObj.alias) {
                 throw new ServerError(ErrorCode.INVALID, "Payload must contains 'alias'");
               }
@@ -253,7 +253,7 @@ export class StompSession implements StompClientCommandListener {
               task.execute().catch(console.error);
               break;
             }
-            case "GET_APPS": {  // TODO tmp
+            case "GET_APPS": {
               const command: GetAppsCommand = {action, payload: undefined};
               const task = this.mainApplication.pushGetAppsCommand(this.session, command);
               this._sendReceipt(headers);
