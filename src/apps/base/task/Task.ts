@@ -19,25 +19,27 @@ export const endStatuses = [TaskStatus.INTERRUPTED, TaskStatus.ERROR, TaskStatus
 
 export type StatusChecker = () => Promise<void | never>;
 
-export interface IContext {
+export interface IContext<Command extends ICommand<any>> {
+  command: Command;
   session: Session;
   checkStatus: StatusChecker;
   progress: Progress;
 }
 
-export type TaskWorker<Result> = (context: IContext) => Result | Promise<Result>;
+export type TaskWorker<Command extends ICommand<any>, Result>
+  = (context: IContext<Command>) => Result | Promise<Result>;
 
 export interface ICommand<A, P = any> {
   readonly action: A;
   readonly payload: P;
 }
 
-export interface IOptions<Action, Payload, Result> {
-  readonly command: ICommand<Action, Payload>;
+export interface IOptions<Command extends ICommand<any>, Result> {
+  readonly command: Command;
   readonly session: Session;
   readonly progress?: IProgressOptions;
   readonly pauseCheckTimeout?: number;
-  readonly worker: TaskWorker<Result>;
+  readonly worker: TaskWorker<Command, Result>;
 }
 
 export interface ITaskLog {
@@ -45,19 +47,19 @@ export interface ITaskLog {
   status: TaskStatus;
 }
 
-export interface IEvents<Action, Payload, Result> {
-  change: (task: Task<Action, Payload, Result>) => void;
-  progress: (task: Task<Action, Payload, Result>) => void;
+export interface IEvents<Command extends ICommand<any>, Result> {
+  change: (task: Task<Command, Result>) => void;
+  progress: (task: Task<Command, Result>) => void;
 }
 
-export class Task<Action, Payload, Result> {
+export class Task<Command extends ICommand<any>, Result> {
 
   public static readonly DEFAULT_PAUSE_CHECK_TIMEOUT = 5 * 1000;
 
-  public readonly emitter: StrictEventEmitter<EventEmitter, IEvents<Action, Payload, Result>> = new EventEmitter();
+  public readonly emitter: StrictEventEmitter<EventEmitter, IEvents<Command, Result>> = new EventEmitter();
 
   private readonly _id: string;
-  private readonly _options: IOptions<Action, Payload, Result>;
+  private readonly _options: IOptions<Command, Result>;
   private readonly _progress: Progress;
   private readonly _log: ITaskLog[] = [];
 
@@ -65,7 +67,7 @@ export class Task<Action, Payload, Result> {
   private _result?: Result;
   private _error?: ServerError;
 
-  constructor(options: IOptions<Action, Payload, Result>) {
+  constructor(options: IOptions<Command, Result>) {
     this._id = uuidV1().toUpperCase();
     this._options = options;
     this._progress = new Progress(options.progress, () => this.emitter.emit("progress", this));
@@ -76,7 +78,7 @@ export class Task<Action, Payload, Result> {
     return this._id;
   }
 
-  get options(): IOptions<Action, Payload, Result> {
+  get options(): IOptions<Command, Result> {
     return this._options;
   }
 
@@ -127,6 +129,7 @@ export class Task<Action, Payload, Result> {
     try {
       await this._checkStatus();
       this._result = await this._options.worker({
+        command: this.options.command,
         session: this._options.session,
         checkStatus: this._checkStatus.bind(this),
         progress: this._progress

@@ -1,14 +1,21 @@
 import {AccessMode, AConnection, DBStructure} from "gdmn-db";
 import {DataSource, ERBridge, IQueryResponse} from "gdmn-er-bridge";
-import {ERModel, IEntityQueryInspector} from "gdmn-orm";
+import {ERModel, IEntityQueryInspector, IERModel} from "gdmn-orm";
 import {Database, IDBDetail} from "../../db/Database";
 import {Session} from "./Session";
 import {SessionManager} from "./SessionManager";
-import {TaskFactory} from "./TaskFactory";
+import {ICommand, Task} from "./task/Task";
+
+export type AppAction = "PING" | "GET_SCHEMA" | "QUERY";
+
+export type AppCommand<A extends AppAction, P = any> = ICommand<A, P>;
+
+export type PingCommand = AppCommand<"PING", { steps: number, delay: number }>;
+export type GetSchemaCommand = AppCommand<"GET_SCHEMA", undefined>;
+export type QueryCommand = AppCommand<"QUERY", IEntityQueryInspector>;
 
 export abstract class Application extends Database {
 
-  private readonly _taskFactory = new TaskFactory(this);
   private readonly _sessionManager = new SessionManager(this.connectionPool);
 
   private _dbStructure: DBStructure = new DBStructure();
@@ -26,12 +33,53 @@ export abstract class Application extends Database {
     return this._erModel;
   }
 
-  get taskFactory(): TaskFactory {
-    return this._taskFactory;
-  }
-
   get sessionManager(): SessionManager {
     return this._sessionManager;
+  }
+
+  public pushPingCommand(session: Session, command: PingCommand): Task<PingCommand, void> {
+    const task = new Task({
+      session,
+      command,
+      worker: async (context) => {
+        const {steps, delay} = context.command.payload;
+
+        const stepPercent = 100 / steps;
+        context.progress.increment(0, `Process ping...`);
+        for (let i = 0; i < steps; i++) {
+          await new Promise((resolve) => setTimeout(resolve, delay));
+          context.progress.increment(stepPercent, `Process ping... Complete step: ${i + 1}`);
+          await context.checkStatus();
+        }
+
+        if (!this.connected) {
+          throw new Error("Application is not connected");
+        }
+      }
+    });
+    return session.taskList.add(task);
+  }
+
+  public pushGetSchemaCommand(session: Session, command: GetSchemaCommand): Task<GetSchemaCommand, IERModel> {
+    const task = new Task({
+      session,
+      command,
+      worker: () => this.erModel.serialize()
+    });
+    return session.taskList.add(task);
+  }
+
+  public pushQueryCommand(session: Session, command: QueryCommand): Task<QueryCommand, IQueryResponse> {
+    const task = new Task({
+      session,
+      command,
+      worker: async (context) => {
+        const result = await this.query(command.payload, context.session);
+        await context.checkStatus();
+        return result;
+      }
+    });
+    return session.taskList.add(task);
   }
 
   public async query(query: IEntityQueryInspector, session: Session): Promise<IQueryResponse> {

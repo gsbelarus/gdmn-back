@@ -1,14 +1,12 @@
 import {StompClientCommandListener, StompError, StompHeaders, StompServerSessionLayer} from "node-stomp-protocol";
-import {Application} from "../apps/base/Application";
+import {AppAction, Application, GetSchemaCommand, PingCommand, QueryCommand} from "../apps/base/Application";
 import {Session} from "../apps/base/Session";
 import {endStatuses, IEvents, Task, TaskStatus} from "../apps/base/task/Task";
-import {Action, GetSchemaCommand, PingCommand, QueryCommand} from "../apps/base/TaskFactory";
-import {MainApplication} from "../apps/MainApplication";
-import {CreateAppCommand, DeleteAppCommand, GetAppsCommand, MainAction} from "../apps/MainTaskFactory";
+import {CreateAppCommand, DeleteAppCommand, GetAppsCommand, MainAction, MainApplication} from "../apps/MainApplication";
 import {ErrorCode, ServerError} from "./ServerError";
 import {ITokens, Utils} from "./Utils";
 
-type Actions = Action | MainAction;
+type Actions = AppAction | MainAction;
 
 export type Ack = "auto" | "client" | "client-individual";
 
@@ -37,8 +35,8 @@ export class StompSession implements StompClientCommandListener {
 
   private readonly _stomp: StompServerSessionLayer;
   private readonly _subscriptions: ISubscription[] = [];
-  private readonly _onChangeTask: IEvents<any, any, any>["change"];
-  private readonly _onProgressTask: IEvents<any, any, any>["progress"];
+  private readonly _onChangeTask: IEvents<any, any>["change"];
+  private readonly _onProgressTask: IEvents<any, any>["progress"];
 
   private _session?: Session;
   private _application?: Application;
@@ -46,7 +44,7 @@ export class StompSession implements StompClientCommandListener {
 
   constructor(session: StompServerSessionLayer) {
     this._stomp = session;
-    this._onChangeTask = (task: Task<any, any, any>) => {
+    this._onChangeTask = (task: Task<any, any>) => {
       const subscription = this._subscriptions
         .find((sub) => sub.destination === StompSession.DESTINATION_TASK_STATUS);
       if (subscription) {
@@ -78,7 +76,7 @@ export class StompSession implements StompClientCommandListener {
         }
       }
     };
-    this._onProgressTask = (task: Task<any, any, any>) => {
+    this._onProgressTask = (task: Task<any, any>) => {
       const subscription = this._subscriptions
         .find((sub) => sub.destination === StompSession.DESTINATION_TASK_PROGRESS);
       if (subscription) {
@@ -238,8 +236,7 @@ export class StompSession implements StompClientCommandListener {
                 throw new ServerError(ErrorCode.INVALID, "Payload must contains 'uid'");
               }
               const command: DeleteAppCommand = {action, ...bodyObj};
-              const task = this.mainApplication.taskFactory.deleteApplication(this.session, command);
-              this.session.taskList.add(task);
+              const task = this.mainApplication.pushDeleteAppCommand(this.session, command);
               this._sendReceipt(headers);
 
               task.execute().catch(console.error);
@@ -250,8 +247,7 @@ export class StompSession implements StompClientCommandListener {
                 throw new ServerError(ErrorCode.INVALID, "Payload must contains 'alias'");
               }
               const command: CreateAppCommand = {action, ...bodyObj};
-              const task = this.mainApplication.taskFactory.createApplication(this.session, command);
-              this.session.taskList.add(task);
+              const task = this.mainApplication.pushCreateAppCommand(this.session, command);
               this._sendReceipt(headers);
 
               task.execute().catch(console.error);
@@ -259,8 +255,7 @@ export class StompSession implements StompClientCommandListener {
             }
             case "GET_APPS": {  // TODO tmp
               const command: GetAppsCommand = {action, payload: undefined};
-              const task = this.mainApplication.taskFactory.getApplications(this.session, command);
-              this.session.taskList.add(task);
+              const task = this.mainApplication.pushGetAppsCommand(this.session, command);
               this._sendReceipt(headers);
 
               task.execute().catch(console.error);
@@ -275,9 +270,7 @@ export class StompSession implements StompClientCommandListener {
                   delay: bodyObj.payload.delay || 0
                 }
               };
-
-              const task = this.application.taskFactory.ping(this.session, command);
-              this.session.taskList.add(task);
+              const task = this.application.pushPingCommand(this.session, command);
               this._sendReceipt(headers);
 
               task.execute().catch(console.error);
@@ -285,8 +278,7 @@ export class StompSession implements StompClientCommandListener {
             }
             case "GET_SCHEMA": {
               const command: GetSchemaCommand = {action, payload: undefined};
-              const task = this.application.taskFactory.getSchema(this.session, command);
-              this.session.taskList.add(task);
+              const task = this.application.pushGetSchemaCommand(this.session, command);
               this._sendReceipt(headers);
 
               task.execute().catch(console.error);
@@ -294,8 +286,7 @@ export class StompSession implements StompClientCommandListener {
             }
             case "QUERY": {
               const command: QueryCommand = {action, ...bodyObj};
-              const task = this.application.taskFactory.query(this.session, command);
-              this.session.taskList.add(task);
+              const task = this.application.pushQueryCommand(this.session, command);
               this._sendReceipt(headers);
 
               task.execute().catch(console.error);

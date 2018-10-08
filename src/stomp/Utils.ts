@@ -27,7 +27,7 @@ export class Utils {
       const session = await mainApplication.sessionManager.open(userKey, 1000);
       try {
         session.borrow();
-        return await mainApplication.getApplication(uid, session);
+        return await mainApplication.getApplication(session, uid);
       } finally {
         session.release();
         await session.close();

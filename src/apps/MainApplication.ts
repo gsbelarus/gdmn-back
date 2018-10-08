@@ -19,8 +19,8 @@ import {IDBDetail} from "../db/Database";
 import databases from "../db/databases";
 import {Application} from "./base/Application";
 import {Session} from "./base/Session";
+import {ICommand, Task} from "./base/task/Task";
 import {GDMNApplication} from "./GDMNApplication";
-import {MainTaskFactory} from "./MainTaskFactory";
 
 export interface IUserInput {
   login: string;
@@ -36,7 +36,7 @@ export interface IUserOutput {
   admin: boolean;
 }
 
-export interface IOptionalConnectionOptions {
+export interface IOptConnectionOptions {
   host?: string;
   port?: number;
   username?: string;
@@ -44,13 +44,13 @@ export interface IOptionalConnectionOptions {
   path?: string;
 }
 
-export interface IApplicationInfoInput extends IOptionalConnectionOptions {
+export interface IApplicationInfoInput extends IOptConnectionOptions {
   uid: string;
   alias: string;
   ownerKey?: number;
 }
 
-export interface IApplicationInfoOutput extends IOptionalConnectionOptions {
+export interface IApplicationInfoOutput extends IOptConnectionOptions {
   uid: string;
   alias: string;
   creationDate: Date;
@@ -62,6 +62,14 @@ export interface IAppBackupInfoOutput {
   alias: string;
   creationDate: Date;
 }
+
+export type MainAction = "DELETE_APP" | "CREATE_APP" | "GET_APPS";
+
+export type MainCommand<A extends MainAction, P> = ICommand<A, P>;
+
+export type CreateAppCommand = MainCommand<"CREATE_APP", { alias: string, connectionOptions?: IOptConnectionOptions }>;
+export type DeleteAppCommand = MainCommand<"DELETE_APP", { uid: string }>;
+export type GetAppsCommand = MainCommand<"GET_APPS", undefined>;
 
 export class MainApplication extends Application {
 
@@ -75,8 +83,6 @@ export class MainApplication extends Application {
   public static readonly APP_EXT = ".FDB";
   public static readonly MAIN_DB = `MAIN${MainApplication.APP_EXT}`;
 
-  private readonly _mainTaskFactory = new MainTaskFactory(this);
-
   private _applications: Map<string, Application> = new Map();
 
   constructor() {
@@ -88,10 +94,6 @@ export class MainApplication extends Application {
     if (!existsSync(MainApplication.WORK_DIR)) {
       mkdirSync(MainApplication.WORK_DIR);
     }
-  }
-
-  get taskFactory(): MainTaskFactory {
-    return this._mainTaskFactory;
   }
 
   public static getAppPath(uid: string): string {
@@ -124,64 +126,71 @@ export class MainApplication extends Application {
     return crypto.pbkdf2Sync(password, salt, 1, 128, "sha1").toString("base64");
   }
 
-  public async getApplicationInfo(uid: string, session: Session): Promise<IApplicationInfoOutput> {
-    const appsInfo = await this._getApplicationsInfo(session.connection, session.userKey);
-    const appInfo = appsInfo.find((info) => info.uid === uid);
-    if (!appInfo) {
-      throw new Error("Application is not found");
-    }
-    return appInfo;
+  public pushCreateAppCommand(session: Session,
+                              command: CreateAppCommand): Task<CreateAppCommand, IApplicationInfoOutput> {
+    const task = new Task({
+      session,
+      command,
+      worker: async (context) => {
+        const {alias, connectionOptions} = command.payload;
+
+        const uid = uuidV1().toUpperCase();
+        await this._addApplicationInfo(context.session.connection, context.session.userKey, {
+          ...connectionOptions,
+          ownerKey: connectionOptions ? context.session.userKey : undefined,
+          alias,
+          uid
+        });
+        const application = await this.getApplication(context.session, uid);
+        await application.create();
+        return await this._getApplicationInfo(context.session.connection, context.session.userKey, uid);
+      }
+    });
+    return session.taskList.add(task);
   }
 
-  public async getApplicationsInfo(session: Session): Promise<IApplicationInfoOutput[]> {
-    return await this._getApplicationsInfo(session.connection, session.userKey);
+  public pushDeleteAppCommand(session: Session, command: DeleteAppCommand): Task<DeleteAppCommand, void> {
+    const task = new Task({
+      session,
+      command,
+      worker: async (context) => {
+        const {uid} = context.command.payload;
+
+        const appInfo = await this._getApplicationInfo(context.session.connection, context.session.userKey, uid);
+        const application = await this.getApplication(context.session, uid);
+        await this._deleteApplicationInfo(context.session.connection, context.session.userKey, uid);
+        if (appInfo.ownerKey !== undefined && appInfo.ownerKey === context.session.userKey) {
+          await application.delete();
+          this._applications.delete(uid);
+        }
+      }
+    });
+    return session.taskList.add(task);
   }
 
-  public async getApplication(uid: string, session: Session): Promise<Application> {
+  public pushGetAppsCommand(session: Session, command: GetAppsCommand): Task<GetAppsCommand, IApplicationInfoOutput[]> {
+    const task = new Task({
+      session,
+      command,
+      worker: (context) => this._getApplicationsInfo(context.session.connection, context.session.userKey)
+    });
+    return session.taskList.add(task);
+  }
+
+  public async getApplication(session: Session, uid: string): Promise<Application> {
     if (!this.connected) {
       throw new Error("MainApplication is not created");
     }
     const application = this._applications.get(uid);
-    const appInfo = await this.getApplicationInfo(uid, session);
+    const appInfo = await this._getApplicationInfo(session.connection, session.userKey, uid);
     if (!application) {
       const alias = appInfo ? appInfo.alias : "Unknown";
       const dbDetail = MainApplication._createDBDetail(alias, MainApplication.getAppPath(uid), appInfo);
       this._applications.set(uid, new GDMNApplication(dbDetail));
 
-      return this.getApplication(uid, session);
+      return this.getApplication(session, uid);
     }
     return application;
-  }
-
-  public async createApplication(alias: string,
-                                 session: Session,
-                                 connectionOptions?: IOptionalConnectionOptions): Promise<string> {
-    if (!this.connected) {
-      throw new Error("ApplicationManager is not created");
-    }
-    const uid = uuidV1().toUpperCase();
-    await this._addApplicationInfo(session.connection, session.userKey, {
-      ...connectionOptions,
-      ownerKey: connectionOptions ? session.userKey : undefined,
-      alias,
-      uid
-    });
-    const application = await this.getApplication(uid, session);
-    await application.create();
-    return uid;
-  }
-
-  public async deleteApplication(uid: string, session: Session): Promise<void> {
-    if (!this.connected) {
-      throw new Error("MainApplication is not created");
-    }
-    const appInfo = await this.getApplicationInfo(uid, session);
-    const application = await this.getApplication(uid, session);
-    await this._deleteApplicationInfo(session.connection, session.userKey, uid);
-    if (appInfo.ownerKey !== undefined && appInfo.ownerKey === session.userKey) {
-      await application.delete();
-      this._applications.delete(uid);
-    }
   }
 
   public async addUser(user: IUserInput): Promise<IUserOutput> {
@@ -272,6 +281,17 @@ export class MainApplication extends Application {
   //     })
   //   }));
   // }
+
+  protected async _getApplicationInfo(connection: AConnection,
+                                      userKey: number,
+                                      uid: string): Promise<IApplicationInfoOutput> {
+    const appsInfo = await this._getApplicationsInfo(connection, userKey);
+    const appInfo = appsInfo.find((info) => info.uid === uid);
+    if (!appInfo) {
+      throw new Error("Application is not found");
+    }
+    return appInfo;
+  }
 
   protected async _getApplicationsInfo(connection: AConnection, userKey?: number): Promise<IApplicationInfoOutput[]> {
     return await AConnection.executeTransaction({

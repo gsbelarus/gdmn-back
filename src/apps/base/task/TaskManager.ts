@@ -1,29 +1,29 @@
 import {EventEmitter} from "events";
 import StrictEventEmitter from "strict-event-emitter-types";
-import {IEvents, Task, TaskStatus} from "./Task";
+import {ICommand, IEvents, Task, TaskStatus} from "./Task";
 
 export class TaskManager {
 
-  public readonly emitter: StrictEventEmitter<EventEmitter, IEvents<any, any, any>> = new EventEmitter();
+  public readonly emitter: StrictEventEmitter<EventEmitter, IEvents<any, any>> = new EventEmitter();
 
-  private readonly _tasks = new Set<Task<any, any, any>>();
+  private readonly _tasks = new Set<Task<any, any>>();
 
-  private readonly _onChangeTask: IEvents<any, any, any>["change"];
-  private readonly _onProgressTask: IEvents<any, any, any>["progress"];
+  private readonly _onChangeTask: IEvents<any, any>["change"];
+  private readonly _onProgressTask: IEvents<any, any>["progress"];
 
   constructor() {
-    this._onChangeTask = (task: Task<any, any, any>) => this.emitter.emit("change", task);
-    this._onProgressTask = (task: Task<any, any, any>) => this.emitter.emit("progress", task);
+    this._onChangeTask = (task: Task<any, any>) => this.emitter.emit("change", task);
+    this._onProgressTask = (task: Task<any, any>) => this.emitter.emit("progress", task);
   }
 
-  public add<Action, Payload, Result>(task: Task<Action, Payload, Result>): Task<Action, Payload, Result> {
+  public add<Command extends ICommand<any>, Result>(task: Task<Command, Result>): Task<Command, Result> {
     this._tasks.add(task);
     task.emitter.addListener("change", this._onChangeTask);
     task.emitter.addListener("progress", this._onProgressTask);
     return task;
   }
 
-  public remove(task: Task<any, any, any>): void {
+  public remove(task: Task<any, any>): void {
     if (!this._tasks.has(task)) {
       throw new Error("Task not found");
     }
@@ -32,8 +32,8 @@ export class TaskManager {
     this._tasks.delete(task);
   }
 
-  public find<Action, Payload, Result>(uid: string): Task<Action, Payload, Result> | undefined;
-  public find<Action, Payload, Result>(...status: TaskStatus[]): Array<Task<Action, Payload, Result>>;
+  public find<Command extends ICommand<any>, Result>(uid: string): Task<Command, Result> | undefined;
+  public find<Command extends ICommand<any>, Result>(...status: TaskStatus[]): Array<Task<Command, Result>>;
   public find(...source: any[]): any {
     if (typeof source[0] === "string") {
       for (const task of this._tasks) {
@@ -57,7 +57,7 @@ export class TaskManager {
     return this._tasks.size;
   }
 
-  public getAll(): Set<Task<any, any, any>> {
+  public getAll(): Set<Task<any, any>> {
     return this._tasks;
   }
 
