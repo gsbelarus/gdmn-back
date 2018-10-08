@@ -1,10 +1,10 @@
 import {StompClientCommandListener, StompError, StompHeaders, StompServerSessionLayer} from "node-stomp-protocol";
 import {Application} from "../apps/base/Application";
 import {Session} from "../apps/base/Session";
+import {endStatuses, IEvents, Task, TaskStatus} from "../apps/base/task/Task";
 import {Action, GetSchemaCommand, PingCommand, QueryCommand} from "../apps/base/TaskFactory";
 import {MainApplication} from "../apps/MainApplication";
 import {CreateAppCommand, DeleteAppCommand, GetAppsCommand, MainAction} from "../apps/MainTaskFactory";
-import {endStatuses, IEvents, Task, TaskStatus} from "../apps/base/task/Task";
 import {ErrorCode, ServerError} from "./ServerError";
 import {ITokens, Utils} from "./Utils";
 
@@ -138,15 +138,8 @@ export class StompSession implements StompClientCommandListener {
     return this._subscriptions;
   }
 
-  public connect(headers: StompHeaders): void {
-    this._internalConnect(headers).catch((error) => this._sendError(error, headers));
-  }
-
-  public disconnect(headers: StompHeaders): void {
-    this._try(() => {
-      this._releaseResources();
-      this._sendReceipt(headers);
-    }, headers);
+  public onProtocolError(error: StompError): void {
+    console.log("Protocol Error", error);
   }
 
   public onEnd(): void {
@@ -154,9 +147,14 @@ export class StompSession implements StompClientCommandListener {
     this._releaseResources();
   }
 
-  public onProtocolError(error: StompError): void {
-    console.log("Protocol Error", error);
-    this._releaseResources();
+  public connect(headers: StompHeaders): void {
+    this._internalConnect(headers).catch((error) => this._sendError(error, headers));
+  }
+
+  public disconnect(headers: StompHeaders): void {
+    this._try(() => {
+      this._sendReceipt(headers);
+    }, headers);
   }
 
   public subscribe(headers: StompHeaders): void {
@@ -399,7 +397,6 @@ export class StompSession implements StompClientCommandListener {
       errorHeaders["receipt-id"] = requestHeaders.receipt;
     }
     this._stomp.error(errorHeaders).catch(console.warn);
-    this._releaseResources(); // TODO issue #25
   }
 
   protected _sendReceipt(requestHeaders: StompHeaders): void {
