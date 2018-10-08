@@ -103,7 +103,7 @@ export class StompSession implements StompClientCommandListener {
 
   get application(): Application {
     if (!this._application) {
-      throw new ServerError(ErrorCode.NOT_FOUND, "Application is not found");
+      throw new ServerError(ErrorCode.INTERNAL, "Application is not found");
     }
     return this._application;
   }
@@ -114,7 +114,7 @@ export class StompSession implements StompClientCommandListener {
 
   get mainApplication(): MainApplication {
     if (!this._mainApplication) {
-      throw new ServerError(ErrorCode.NOT_FOUND, "MainApplication is not found");
+      throw new ServerError(ErrorCode.INTERNAL, "MainApplication is not found");
     }
     return this._mainApplication;
   }
@@ -125,7 +125,7 @@ export class StompSession implements StompClientCommandListener {
 
   get session(): Session {
     if (!this._session) {
-      throw new ServerError(ErrorCode.NOT_FOUND, "Session is not found");
+      throw new ServerError(ErrorCode.UNAUTHORIZED, "Session is not found");
     }
     return this._session;
   }
@@ -371,13 +371,10 @@ export class StompSession implements StompClientCommandListener {
     // create session for application
     if (session) {
       this._session = await this.application.sessionManager.find(session, result.userKey);
-      if (!this._session) {
-        throw new ServerError(ErrorCode.NOT_FOUND, "Session is not found");
-      }
-    } else if (!this._session) {
+    } else {
       this._session = await this.application.sessionManager.open(result.userKey);
     }
-    this._session.borrow();
+    this.session.borrow();
 
     this._sendConnected(result.newTokens || {});
   }
