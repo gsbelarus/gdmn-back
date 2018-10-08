@@ -59,7 +59,7 @@ export abstract class Application extends Database {
         }
       }
     });
-    return session.taskList.add(task);
+    return session.taskManager.add(task);
   }
 
   public pushGetSchemaCommand(session: Session, command: GetSchemaCommand): Task<GetSchemaCommand, IERModel> {
@@ -70,7 +70,7 @@ export abstract class Application extends Database {
       command,
       worker: () => this.erModel.serialize()
     });
-    return session.taskList.add(task);
+    return session.taskManager.add(task);
   }
 
   public pushQueryCommand(session: Session, command: QueryCommand): Task<QueryCommand, IQueryResponse> {
@@ -85,7 +85,7 @@ export abstract class Application extends Database {
         return result;
       }
     });
-    return session.taskList.add(task);
+    return session.taskManager.add(task);
   }
 
   public async query(query: IEntityQueryInspector, session: Session): Promise<IQueryResponse> {

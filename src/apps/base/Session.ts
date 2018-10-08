@@ -1,6 +1,6 @@
 import config from "config";
 import {AConnection} from "gdmn-db";
-import {endStatuses} from "./task/Task";
+import {endStatuses, TaskStatus} from "./task/Task";
 import {TaskManager} from "./task/TaskManager";
 
 export type CloseListener = (session: Session) => void;
@@ -12,22 +12,24 @@ export interface IOptions {
   readonly connection: AConnection;
 }
 
-// TODO timeout for pending tasks
 export class Session {
 
   private static DEFAULT_TIMEOUT: number = config.get("auth.session.timeout");
+  private static CLOSE_CHECK_INTERVAL: number = config.get("auth.session.closeCheckInterval");
 
   private readonly _options: IOptions;
   private readonly _closeListener: CloseListener;
-  private readonly _taskList = new TaskManager();
+  private readonly _taskManager = new TaskManager();
 
+  private _softClosed: boolean = false;
+  private _closed: boolean = false;
   private _borrowed: boolean = false;
   private _timer?: NodeJS.Timer;
 
   constructor(options: IOptions, closeListener: CloseListener) {
     this._options = options;
     this._closeListener = closeListener;
-    this.initTimer();
+    this._updateTimer();
   }
 
   get id(): string {
@@ -46,12 +48,16 @@ export class Session {
     return this._options.connection;
   }
 
-  get active(): boolean {
-    return this._options.connection.connected;
+  get softClosed(): boolean {
+    return this._softClosed;
   }
 
-  get taskList(): TaskManager {
-    return this._taskList;
+  get active(): boolean {
+    return this._options.connection.connected && !this._closed;
+  }
+
+  get taskManager(): TaskManager {
+    return this._taskManager;
   }
 
   public borrow(): void {
@@ -59,7 +65,7 @@ export class Session {
       throw new Error("Session already borrowed");
     }
     this._borrowed = true;
-    this.clearTimer();
+    this._clearTimer();
   }
 
   public release(): void {
@@ -67,34 +73,59 @@ export class Session {
       throw new Error("Session already released");
     }
     this._borrowed = false;
-    this.initTimer();
+    this._updateTimer();
+  }
+
+  public softClose(): void {
+    this._softClosed = true;
+    this._closeListener(this);
+    this._updateTimer();
+    this._checkSoftClose();
   }
 
   public async close(): Promise<void> {
-    this.clearTimer();
+    if (this._closed) {
+      throw new Error("Session already closed");
+    }
+    this._closed = true;
+    this._clearTimer();
     this._closeListener(this);
-    this._taskList.getAll().forEach((task) => {
+    this._taskManager.getAll().forEach((task) => {
       if (task.options.session === this && !endStatuses.includes(task.status)) {
         task.interrupt();
       }
     });
-    this._taskList.clear();
+    this._taskManager.clear();
     await this._options.connection.disconnect();
+    console.log("Session is closed");
   }
 
-  private initTimer(): void {
-    this.clearTimer();
+  private _updateTimer(): void {
+    this._clearTimer();
     this._timer = setInterval(() => {
-      if (!this._taskList.size()) {// TODO timeout for finished tasks
-        this.close().catch(console.error);
+      if (!this._checkSoftClose()) {
+        this.softClose();
       }
-    }, Session.DEFAULT_TIMEOUT);
+    }, this._softClosed ? Session.CLOSE_CHECK_INTERVAL : Session.DEFAULT_TIMEOUT);
   }
 
-  private clearTimer(): void {
+  private _clearTimer(): void {
     if (this._timer) {
       clearInterval(this._timer);
       this._timer = undefined;
     }
+  }
+
+  private _checkSoftClose(): boolean {
+    if (this._softClosed) {
+      const runningTasks = this._taskManager
+        .find(TaskStatus.RUNNING)
+        .filter((task) => task.options.session === this);
+      if (!runningTasks.length) {
+        this.close().catch(console.error);
+        return true;
+      }
+    }
+    return false;
   }
 }

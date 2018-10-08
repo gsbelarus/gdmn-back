@@ -149,7 +149,7 @@ export class MainApplication extends Application {
         return await this._getApplicationInfo(context.session.connection, context.session.userKey, uid);
       }
     });
-    return session.taskList.add(task);
+    return session.taskManager.add(task);
   }
 
   // TODO tmp
@@ -171,7 +171,7 @@ export class MainApplication extends Application {
         }
       }
     });
-    return session.taskList.add(task);
+    return session.taskManager.add(task);
   }
 
   // TODO tmp
@@ -183,7 +183,7 @@ export class MainApplication extends Application {
       command,
       worker: (context) => this._getApplicationsInfo(context.session.connection, context.session.userKey)
     });
-    return session.taskList.add(task);
+    return session.taskManager.add(task);
   }
 
   public async getApplication(session: Session, uid: string): Promise<Application> {

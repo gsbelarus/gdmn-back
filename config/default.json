@@ -16,7 +16,8 @@
   },
   "auth": {
     "session": {
-      "timeout": 300000
+      "timeout": 8.64E7,
+      "closeCheckInterval": 300E3
     },
     "jwtSecret": "DefaultJWTSecret"
   }

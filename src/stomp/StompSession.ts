@@ -72,7 +72,7 @@ export class StompSession implements StompClientCommandListener {
         })).catch(console.warn);
 
         if (subscription.ack === "auto") {
-          this.session.taskList.remove(task);
+          this.session.taskManager.remove(task);
         }
       }
     };
@@ -138,6 +138,7 @@ export class StompSession implements StompClientCommandListener {
 
   public onProtocolError(error: StompError): void {
     console.log("Protocol Error", error);
+    this.session.softClose();
   }
 
   public onEnd(): void {
@@ -151,6 +152,7 @@ export class StompSession implements StompClientCommandListener {
 
   public disconnect(headers: StompHeaders): void {
     this._try(() => {
+      this.session.softClose();
       this._sendReceipt(headers);
     }, headers);
   }
@@ -165,21 +167,21 @@ export class StompSession implements StompClientCommandListener {
       }
       switch (headers.destination) {
         case StompSession.DESTINATION_TASK_STATUS:
-          this.session.taskList.emitter.addListener("change", this._onChangeTask);
+          this.session.taskManager.emitter.addListener("change", this._onChangeTask);
           this._sendReceipt(headers);
 
-          // notify about taskList
-          this.session.taskList.getAll().forEach((task) => this._onChangeTask(task));
+          // notify about taskManager
+          this.session.taskManager.getAll().forEach((task) => this._onChangeTask(task));
           break;
         case StompSession.DESTINATION_TASK_PROGRESS:
           if (headers.ack && headers.ack !== "auto") {
             throw new ServerError(ErrorCode.UNSUPPORTED,
               `Unsupported ack mode '${headers.ack}'; supported - 'auto'`);
           }
-          this.session.taskList.emitter.addListener("progress", this._onProgressTask);
+          this.session.taskManager.emitter.addListener("progress", this._onProgressTask);
           this._sendReceipt(headers);
 
-          this.session.taskList.getAll().forEach((task) => {
+          this.session.taskManager.getAll().forEach((task) => {
             if (task.status === TaskStatus.RUNNING) {
               this._onProgressTask(task);
             }
@@ -204,11 +206,11 @@ export class StompSession implements StompClientCommandListener {
       }
       switch (headers.destination) {
         case StompSession.DESTINATION_TASK_STATUS:
-          this.session.taskList.emitter.removeListener("change", this._onChangeTask);
+          this.session.taskManager.emitter.removeListener("change", this._onChangeTask);
           this._sendReceipt(headers);
           break;
         case StompSession.DESTINATION_TASK_PROGRESS:
-          this.session.taskList.emitter.removeListener("progress", this._onProgressTask);
+          this.session.taskManager.emitter.removeListener("progress", this._onProgressTask);
           this._sendReceipt(headers);
           break;
         default:
@@ -305,9 +307,9 @@ export class StompSession implements StompClientCommandListener {
   public ack(headers: StompHeaders): void {
     this._try(() => {
       if (headers.id !== StompSession.IGNORED_ACK_ID) {
-        const task = this.session.taskList.find(headers.id);
+        const task = this.session.taskManager.find(headers.id);
         if (task) {
-          this.session.taskList.remove(task);
+          this.session.taskManager.remove(task);
         }
       }
     }, headers);
@@ -399,8 +401,8 @@ export class StompSession implements StompClientCommandListener {
     if (this._session) {
       console.log("Resource is released");
       this._subscriptions.splice(0, this._subscriptions.length);
-      this.session.taskList.emitter.removeListener("progress", this._onProgressTask);
-      this.session.taskList.emitter.removeListener("change", this._onChangeTask);
+      this.session.taskManager.emitter.removeListener("progress", this._onProgressTask);
+      this.session.taskManager.emitter.removeListener("change", this._onChangeTask);
       this._session.release();
       this._session = undefined;
     }
