@@ -1,15 +1,20 @@
 import {EventEmitter} from "events";
 import StrictEventEmitter from "strict-event-emitter-types";
-import {ICommand, IEvents, Task, TaskStatus} from "./Task";
+import {ICommand, ITaskEvents, Task, TaskStatus} from "./Task";
+
+export interface ITaskManagerEvents extends ITaskEvents<any, any> {
+  add: (task: Task<any, any>) => void;
+  remove: (task: Task<any, any>) => void;
+}
 
 export class TaskManager {
 
-  public readonly emitter: StrictEventEmitter<EventEmitter, IEvents<any, any>> = new EventEmitter();
+  public readonly emitter: StrictEventEmitter<EventEmitter, ITaskManagerEvents> = new EventEmitter();
 
   private readonly _tasks = new Set<Task<any, any>>();
 
-  private readonly _onChangeTask: IEvents<any, any>["change"];
-  private readonly _onProgressTask: IEvents<any, any>["progress"];
+  private readonly _onChangeTask: ITaskEvents<any, any>["change"];
+  private readonly _onProgressTask: ITaskEvents<any, any>["progress"];
 
   constructor() {
     this._onChangeTask = (task: Task<any, any>) => this.emitter.emit("change", task);
@@ -18,6 +23,7 @@ export class TaskManager {
 
   public add<Command extends ICommand<any>, Result>(task: Task<Command, Result>): Task<Command, Result> {
     this._tasks.add(task);
+    this.emitter.emit("add", task);
     task.emitter.addListener("change", this._onChangeTask);
     task.emitter.addListener("progress", this._onProgressTask);
     return task;
@@ -29,6 +35,7 @@ export class TaskManager {
     }
     task.emitter.removeListener("progress", this._onProgressTask);
     task.emitter.removeListener("change", this._onChangeTask);
+    this.emitter.emit("remove", task);
     this._tasks.delete(task);
   }
 
@@ -62,6 +69,6 @@ export class TaskManager {
   }
 
   public clear(): void {
-    this._tasks.clear();
+    this._tasks.forEach((task) => this.remove(task));
   }
 }

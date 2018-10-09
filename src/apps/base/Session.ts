@@ -15,7 +15,6 @@ export interface IOptions {
 export class Session {
 
   private static DEFAULT_TIMEOUT: number = config.get("auth.session.timeout");
-  private static CLOSE_CHECK_INTERVAL: number = config.get("auth.session.closeCheckInterval");
 
   private readonly _options: IOptions;
   private readonly _closeListener: CloseListener;
@@ -77,10 +76,12 @@ export class Session {
   }
 
   public softClose(): void {
-    this._softClosed = true;
-    this._closeListener(this);
-    this._updateTimer();
-    this._checkSoftClose();
+    if (!this._softClosed) {
+      this._softClosed = true;
+      this._clearTimer();
+      this._closeListener(this);
+      this._internalSoftClose();
+    }
   }
 
   public async close(): Promise<void> {
@@ -102,30 +103,28 @@ export class Session {
 
   private _updateTimer(): void {
     this._clearTimer();
-    this._timer = setInterval(() => {
-      if (!this._checkSoftClose()) {
-        this.softClose();
-      }
-    }, this._softClosed ? Session.CLOSE_CHECK_INTERVAL : Session.DEFAULT_TIMEOUT);
+    this._timer = setTimeout(() => this.softClose(), Session.DEFAULT_TIMEOUT);
   }
 
   private _clearTimer(): void {
     if (this._timer) {
-      clearInterval(this._timer);
+      clearTimeout(this._timer);
       this._timer = undefined;
     }
   }
 
-  private _checkSoftClose(): boolean {
+  private _internalSoftClose(): void {
     if (this._softClosed) {
       const runningTasks = this._taskManager
         .find(TaskStatus.RUNNING)
         .filter((task) => task.options.session === this);
-      if (!runningTasks.length) {
+      if (runningTasks.length) {
+        this._taskManager.emitter.once("change", () => {
+          this._internalSoftClose();
+        });
+      } else {
         this.close().catch(console.error);
-        return true;
       }
     }
-    return false;
   }
 }

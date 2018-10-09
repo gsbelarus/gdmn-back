@@ -2,7 +2,8 @@ import {StompClientCommandListener, StompError, StompHeaders, StompServerSession
 import {v1 as uuidV1} from "uuid";
 import {AppAction, Application, GetSchemaCommand, PingCommand, QueryCommand} from "../apps/base/Application";
 import {Session} from "../apps/base/Session";
-import {endStatuses, IEvents, Task, TaskStatus} from "../apps/base/task/Task";
+import {endStatuses, Task, TaskStatus} from "../apps/base/task/Task";
+import {ITaskManagerEvents} from "../apps/base/task/TaskManager";
 import {CreateAppCommand, DeleteAppCommand, GetAppsCommand, MainAction, MainApplication} from "../apps/MainApplication";
 import {ErrorCode, ServerError} from "./ServerError";
 import {ITokens, Utils} from "./Utils";
@@ -35,8 +36,8 @@ export class StompSession implements StompClientCommandListener {
 
   private readonly _stomp: StompServerSessionLayer;
   private readonly _subscriptions: ISubscription[] = [];
-  private readonly _onChangeTask: IEvents<any, any>["change"];
-  private readonly _onProgressTask: IEvents<any, any>["progress"];
+  private readonly _onChangeTask: ITaskManagerEvents["change"];
+  private readonly _onProgressTask: ITaskManagerEvents["progress"];
 
   private _session?: Session;
   private _application?: Application;
@@ -168,19 +169,30 @@ export class StompSession implements StompClientCommandListener {
         throw new ServerError(ErrorCode.NOT_UNIQUE, "Subscriptions with same destination exists");
       }
       switch (headers.destination) {
-        case StompSession.DESTINATION_TASK_STATUS:
+        case StompSession.DESTINATION_TASK_STATUS: {
           this.session.taskManager.emitter.addListener("change", this._onChangeTask);
+          this._subscriptions.push({
+            id: headers.id,
+            destination: headers.destination,
+            ack: headers.ack as Ack || "auto"
+          });
           this._sendReceipt(headers);
 
           // notify about taskManager
           this.session.taskManager.getAll().forEach((task) => this._onChangeTask(task));
           break;
-        case StompSession.DESTINATION_TASK_PROGRESS:
-          // if (headers.ack && headers.ack !== "auto") {
-          //   throw new ServerError(ErrorCode.UNSUPPORTED,
-          //     `Unsupported ack mode '${headers.ack}'; supported - 'auto'`);
-          // }
+        }
+        case StompSession.DESTINATION_TASK_PROGRESS: {
+          if (headers.ack && headers.ack !== "auto") {
+            throw new ServerError(ErrorCode.UNSUPPORTED,
+              `Unsupported ack mode '${headers.ack}'; supported - 'auto'`);
+          }
           this.session.taskManager.emitter.addListener("progress", this._onProgressTask);
+          this._subscriptions.push({
+            id: headers.id,
+            destination: headers.destination,
+            ack: headers.ack as Ack || "auto"
+          });
           this._sendReceipt(headers);
 
           this.session.taskManager.getAll().forEach((task) => {
@@ -189,14 +201,10 @@ export class StompSession implements StompClientCommandListener {
             }
           });
           break;
+        }
         default:
           throw new ServerError(ErrorCode.UNSUPPORTED, `Unsupported destination '${headers.destination}'`);
       }
-      this._subscriptions.push({
-        id: headers.id,
-        destination: headers.destination,
-        ack: headers.ack as Ack || "auto"
-      });
     }, headers);
   }
 
@@ -209,16 +217,17 @@ export class StompSession implements StompClientCommandListener {
       switch (headers.destination) {
         case StompSession.DESTINATION_TASK_STATUS:
           this.session.taskManager.emitter.removeListener("change", this._onChangeTask);
+          this._subscriptions.splice(this._subscriptions.indexOf(subscription), 1);
           this._sendReceipt(headers);
           break;
         case StompSession.DESTINATION_TASK_PROGRESS:
           this.session.taskManager.emitter.removeListener("progress", this._onProgressTask);
+          this._subscriptions.splice(this._subscriptions.indexOf(subscription), 1);
           this._sendReceipt(headers);
           break;
         default:
           throw new ServerError(ErrorCode.UNSUPPORTED, `Unsupported destination '${headers.destination}'`);
       }
-      this._subscriptions.splice(this._subscriptions.indexOf(subscription), 1);
     }, headers);
   }
 

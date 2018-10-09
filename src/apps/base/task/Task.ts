@@ -47,7 +47,7 @@ export interface ITaskLog {
   status: TaskStatus;
 }
 
-export interface IEvents<Command extends ICommand<any>, Result> {
+export interface ITaskEvents<Command extends ICommand<any>, Result> {
   change: (task: Task<Command, Result>) => void;
   progress: (task: Task<Command, Result>) => void;
 }
@@ -56,7 +56,7 @@ export class Task<Command extends ICommand<any>, Result> {
 
   public static readonly DEFAULT_PAUSE_CHECK_TIMEOUT = 5 * 1000;
 
-  public readonly emitter: StrictEventEmitter<EventEmitter, IEvents<Command, Result>> = new EventEmitter();
+  public readonly emitter: StrictEventEmitter<EventEmitter, ITaskEvents<Command, Result>> = new EventEmitter();
 
   private readonly _id: string;
   private readonly _options: IOptions<Command, Result>;

@@ -101,6 +101,9 @@ export abstract class Application extends Database {
   }
 
   protected checkSession(session: Session): void | never {
+    if (!session.softClosed || !session.active) {
+      throw new Error("Session is closed");
+    }
     if (!this._sessionManager.includes(session)) {
       throw new Error("Session does not belong to the application");
     }
