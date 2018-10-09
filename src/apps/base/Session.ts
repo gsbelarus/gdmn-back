@@ -1,9 +1,9 @@
 import config from "config";
+import {EventEmitter} from "events";
 import {AConnection} from "gdmn-db";
+import StrictEventEmitter from "strict-event-emitter-types";
 import {endStatuses, TaskStatus} from "./task/Task";
 import {TaskManager} from "./task/TaskManager";
-
-export type CloseListener = (session: Session) => void;
 
 export interface IOptions {
   readonly id: string;
@@ -12,12 +12,17 @@ export interface IOptions {
   readonly connection: AConnection;
 }
 
+export interface ISessionEvents {
+  close: (session: Session) => void;
+}
+
 export class Session {
 
   private static DEFAULT_TIMEOUT: number = config.get("auth.session.timeout");
 
+  public readonly emitter: StrictEventEmitter<EventEmitter, ISessionEvents> = new EventEmitter();
+
   private readonly _options: IOptions;
-  private readonly _closeListener: CloseListener;
   private readonly _taskManager = new TaskManager();
 
   private _softClosed: boolean = false;
@@ -25,9 +30,8 @@ export class Session {
   private _borrowed: boolean = false;
   private _timer?: NodeJS.Timer;
 
-  constructor(options: IOptions, closeListener: CloseListener) {
+  constructor(options: IOptions) {
     this._options = options;
-    this._closeListener = closeListener;
     this._updateTimer();
   }
 
@@ -79,9 +83,10 @@ export class Session {
     if (!this._softClosed) {
       this._softClosed = true;
       this._clearTimer();
-      this._closeListener(this);
+      this.emitter.emit("close", this);
       this._internalSoftClose();
     }
+    console.log("Session is closed softly");
   }
 
   public async close(): Promise<void> {
@@ -90,7 +95,7 @@ export class Session {
     }
     this._closed = true;
     this._clearTimer();
-    this._closeListener(this);
+    this.emitter.emit("close", this);
     this._taskManager.getAll().forEach((task) => {
       if (task.options.session === this && !endStatuses.includes(task.status)) {
         task.interrupt();
@@ -119,9 +124,7 @@ export class Session {
         .find(TaskStatus.RUNNING)
         .filter((task) => task.options.session === this);
       if (runningTasks.length) {
-        this._taskManager.emitter.once("change", () => {
-          this._internalSoftClose();
-        });
+        this._taskManager.emitter.once("change", () => this._internalSoftClose());
       } else {
         this.close().catch(console.error);
       }

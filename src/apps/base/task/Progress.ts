@@ -1,8 +1,13 @@
-export type IProgressListener = (progress: Progress) => void;
+import {EventEmitter} from "events";
+import StrictEventEmitter from "strict-event-emitter-types";
 
 export interface IProgressOptions {
   readonly min?: number;
   readonly max?: number;
+}
+
+export interface IProgressEvents {
+  change: (progress: Progress) => void;
 }
 
 export class Progress {
@@ -10,14 +15,15 @@ export class Progress {
   public static readonly DEFAULT_MAX = 100;
   public static readonly DEFAULT_MIN = 0;
 
+  public readonly emitter: StrictEventEmitter<EventEmitter, IProgressEvents> = new EventEmitter();
+
   private readonly _max: number;
   private readonly _min: number;
-  private readonly _progressListener?: IProgressListener;
 
   private _value: number;
   private _description: string;
 
-  constructor(options: IProgressOptions = {}, _progressListener?: IProgressListener) {
+  constructor(options: IProgressOptions = {}) {
     this._max = options.max !== undefined ? options.max : Progress.DEFAULT_MAX;
     this._min = options.min !== undefined ? options.min : Progress.DEFAULT_MIN;
     if (this._min >= this._max) {
@@ -25,7 +31,6 @@ export class Progress {
     }
     this._value = this._min;
     this._description = "";
-    this._progressListener = _progressListener;
   }
 
   get value(): number {
@@ -55,18 +60,12 @@ export class Progress {
     }
     this._value += i;
     this._description = description;
-    this.notify();
+    this.emitter.emit("change", this);
   }
 
   public reset(): void {
     this._value = this._min;
     this._description = "";
-    this.notify();
-  }
-
-  private notify(): void {
-    if (this._progressListener) {
-      this._progressListener(this);
-    }
+    this.emitter.emit("change", this);
   }
 }

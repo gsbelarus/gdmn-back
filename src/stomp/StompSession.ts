@@ -279,8 +279,8 @@ export class StompSession implements StompClientCommandListener {
               const command: PingCommand = {
                 action,
                 payload: {
-                  steps: bodyObj.payload.steps || 1,
-                  delay: bodyObj.payload.delay || 0
+                  steps: bodyObj.payload && bodyObj.payload.steps || 1,
+                  delay: bodyObj.payload && bodyObj.payload.delay || 0
                 }
               };
               const task = this.application.pushPingCommand(this.session, command);

@@ -70,7 +70,8 @@ export class Task<Command extends ICommand<any>, Result> {
   constructor(options: IOptions<Command, Result>) {
     this._id = uuidV1().toUpperCase();
     this._options = options;
-    this._progress = new Progress(options.progress, () => this.emitter.emit("progress", this));
+    this._progress = new Progress(options.progress);
+    this._progress.emitter.on("change", () => this.emitter.emit("progress", this));
     this._updateStatus(TaskStatus.IDLE);
   }
 

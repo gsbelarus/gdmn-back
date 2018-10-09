@@ -38,7 +38,8 @@ export abstract class Application extends Database {
   }
 
   public pushPingCommand(session: Session, command: PingCommand): Task<PingCommand, void> {
-    this.checkSession(session);
+    this._checkSession(session);
+    this._checkBusy();
 
     const task = new Task({
       session,
@@ -63,7 +64,8 @@ export abstract class Application extends Database {
   }
 
   public pushGetSchemaCommand(session: Session, command: GetSchemaCommand): Task<GetSchemaCommand, IERModel> {
-    this.checkSession(session);
+    this._checkSession(session);
+    this._checkBusy();
 
     const task = new Task({
       session,
@@ -74,24 +76,20 @@ export abstract class Application extends Database {
   }
 
   public pushQueryCommand(session: Session, command: QueryCommand): Task<QueryCommand, IQueryResponse> {
-    this.checkSession(session);
+    this._checkSession(session);
+    this._checkBusy();
 
     const task = new Task({
       session,
       command,
       worker: async (context) => {
-        const result = await this.query(command.payload, context.session);
+        const result = await new ERBridge(context.session.connection)
+          .query(this._erModel, this._dbStructure, context.command.payload);
         await context.checkStatus();
         return result;
       }
     });
     return session.taskManager.add(task);
-  }
-
-  public async query(query: IEntityQueryInspector, session: Session): Promise<IQueryResponse> {
-    this._checkBusy();
-
-    return await new ERBridge(session.connection).query(this._erModel, this._dbStructure, query);
   }
 
   public async reload(): Promise<void> {
@@ -100,8 +98,8 @@ export abstract class Application extends Database {
     await this._reload();
   }
 
-  protected checkSession(session: Session): void | never {
-    if (!session.softClosed || !session.active) {
+  protected _checkSession(session: Session): void | never {
+    if (session.softClosed || !session.active) {
       throw new Error("Session is closed");
     }
     if (!this._sessionManager.includes(session)) {

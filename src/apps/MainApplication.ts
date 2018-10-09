@@ -129,7 +129,7 @@ export class MainApplication extends Application {
   // TODO tmp
   public pushCreateAppCommand(session: Session,
                               command: CreateAppCommand): Task<CreateAppCommand, IApplicationInfoOutput> {
-    this.checkSession(session);
+    this._checkSession(session);
 
     const task = new Task({
       session,
@@ -154,7 +154,7 @@ export class MainApplication extends Application {
 
   // TODO tmp
   public pushDeleteAppCommand(session: Session, command: DeleteAppCommand): Task<DeleteAppCommand, void> {
-    this.checkSession(session);
+    this._checkSession(session);
 
     const task = new Task({
       session,
@@ -176,7 +176,7 @@ export class MainApplication extends Application {
 
   // TODO tmp
   public pushGetAppsCommand(session: Session, command: GetAppsCommand): Task<GetAppsCommand, IApplicationInfoOutput[]> {
-    this.checkSession(session);
+    this._checkSession(session);
 
     const task = new Task({
       session,

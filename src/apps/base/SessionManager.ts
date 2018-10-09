@@ -23,7 +23,8 @@ export class SessionManager {
       userKey,
       timeout,
       connection: await this._connectionPool.get()
-    }, (s) => this._sessions.splice(this._sessions.indexOf(s), 1));
+    });
+    session.emitter.once("close", (s) => this._sessions.splice(this._sessions.indexOf(s), 1));
     this._sessions.push(session);
     return session;
   }
