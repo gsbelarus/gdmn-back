@@ -260,6 +260,7 @@ refresh-token:refresh-token
 ```
 >>> SEND
 destination:/task
+receipt:receipt-id
 action:...
 content-type:application/json;charset=utf-8
 content-length:...
@@ -276,6 +277,11 @@ content-length:...
   * `QUERY`:
     * `payload: IEntityQueryInspector`
     * `result: IQueryResponse`
+```
+<<< RECEIPT
+receipt-id:receipt-id
+task-id:task-id
+```
 
 ###### Subscription `/task/status` response:
 ```
@@ -285,6 +291,7 @@ action:...
 message-id:msg-0
 ack:client-individual (optional)
 subscription:sub-0
+task-id:task-id
 content-type:application/json;charset=utf-8
 content-length:...
 
@@ -312,6 +319,7 @@ action:...
 message-id:msg-0
 ack:auto (required)
 subscription:sub-0
+task-id:task-id
 content-type:application/json;charset=utf-8
 content-length:...
 
