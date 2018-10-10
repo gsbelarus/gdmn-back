@@ -9,6 +9,15 @@ export class GDMNApplication extends Application {
 
   constructor(dbDetail: IDBDetail) {
     super(dbDetail, log4js.getLogger("GDMNApp"));
+
+    // TODO verify
+    this.sessionManager.emitter.on("forceClose", () => {
+      if (!this.sessionManager.size()) {
+        if (this.connected) {
+          this.disconnect().catch(this._logger.warn);
+        }
+      }
+    });
   }
 
   protected async _onCreate(connection: AConnection): Promise<void> {

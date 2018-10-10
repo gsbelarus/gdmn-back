@@ -27,6 +27,10 @@ export class SessionManager {
     return this._sessions.includes(session);
   }
 
+  public size(): number {
+    return this._sessions.length;
+  }
+
   public async open(userKey: number): Promise<Session> {
     const uid = uuidV1().toUpperCase();
     const session = new Session({
