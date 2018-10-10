@@ -1,6 +1,7 @@
 import config from "config";
 import {EventEmitter} from "events";
 import {AConnection} from "gdmn-db";
+import {Logger} from "log4js";
 import StrictEventEmitter from "strict-event-emitter-types";
 import {endStatuses, TaskStatus} from "./task/Task";
 import {TaskManager} from "./task/TaskManager";
@@ -9,6 +10,7 @@ export interface IOptions {
   readonly id: string;
   readonly userKey: number;
   readonly connection: AConnection;
+  readonly logger?: Logger;
 }
 
 export interface ISessionEvents {
@@ -21,6 +23,7 @@ export class Session {
   private static DEFAULT_TIMEOUT: number = config.get("auth.session.timeout");
 
   public readonly emitter: StrictEventEmitter<EventEmitter, ISessionEvents> = new EventEmitter();
+  protected readonly _logger: Logger | Console;
 
   private readonly _options: IOptions;
   private readonly _taskManager = new TaskManager();
@@ -31,7 +34,8 @@ export class Session {
 
   constructor(options: IOptions) {
     this._options = options;
-    console.log(`Session (id#${this.id}) is opened`);
+    this._logger = options.logger || console;
+    this._logger.info("id#%s is opened", this.id);
   }
 
   get id(): string {
@@ -60,7 +64,7 @@ export class Session {
 
   public setCloseTimeout(timeout: number = Session.DEFAULT_TIMEOUT): void {
     this.clearCloseTimeout();
-    console.log(`Session (id#${this.id}) is lost and will be closed after ${timeout / (60 * 1000)} minutes`);
+    this._logger.info("id#%s is lost and will be closed after %s minutes", this.id, timeout / (60 * 1000));
     this._timer = setTimeout(() => this.close(), timeout);
   }
 
@@ -73,17 +77,19 @@ export class Session {
 
   public close(): void {
     if (this._closed) {
+      this._logger.error("id#%s already closed", this.id);
       throw new Error(`Session (id#${this.id}) already closed`);
     }
     this.clearCloseTimeout();
     this._closed = true;
     this.emitter.emit("close", this);
     this._internalClose();
-    console.log(`Session (id#${this.id}) is closed`);
+    this._logger.info("id#%s is closed", this.id);
   }
 
   public async forceClose(): Promise<void> {
     if (this._forceClosed) {
+      this._logger.error("id#%s already force closed", this.id);
       throw new Error(`Session (id#${this.id}) already force closed`);
     }
     this.clearCloseTimeout();
@@ -96,7 +102,7 @@ export class Session {
     });
     this._taskManager.clear();
     await this._options.connection.disconnect();
-    console.log(`Session (id#${this.id}) is force closed`);
+    this._logger.info("id#%s is force closed", this.id);
   }
 
   private _internalClose(): void {
@@ -105,6 +111,7 @@ export class Session {
         .find(TaskStatus.RUNNING)
         .filter((task) => task.options.session === this);
       if (runningTasks.length) {
+        this._logger.info("id#%s is waiting for task completion", this.id);
         this._taskManager.emitter.once("change", () => this._internalClose());
       } else {
         this.forceClose().catch(console.error);

@@ -1,7 +1,10 @@
+import log4js from "log4js";
 import {createStompServerSession, setLoggingListeners} from "node-stomp-protocol";
 import WebSocket from "ws";
 import {MainApplication} from "../apps/MainApplication";
 import {StompSession} from "./StompSession";
+
+const logger = log4js.getLogger("STOMP");
 
 setLoggingListeners({
   error: console.log,
@@ -9,11 +12,13 @@ setLoggingListeners({
   silly: (message, args) => {
     const receiverDataTemplate = /^StompWebSocketStreamLayer: received data %.$/g;
     if (receiverDataTemplate.test(message)) {
-      console.log(`>>> ${args}`);
+      logger.info("\n>>> %s", args);
     }
     const sendingDataTemplate = /^StompFrameLayer: sending frame data %.$/g;
     if (sendingDataTemplate.test(message)) {
-      console.log(`<<< ${args}`);
+      args.startsWith("ERROR")
+        ? logger.warn("\n<<< %s", args)
+        : logger.info("\n<<< %s", args);
     }
   },
   warn: console.log,

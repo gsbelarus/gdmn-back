@@ -1,3 +1,4 @@
+import log4js from "log4js";
 import {StompClientCommandListener, StompError, StompHeaders, StompServerSessionLayer} from "node-stomp-protocol";
 import {v1 as uuidV1} from "uuid";
 import {AppAction, Application, GetSchemaCommand, PingCommand, QueryCommand} from "../apps/base/Application";
@@ -33,6 +34,8 @@ export class StompSession implements StompClientCommandListener {
   public static readonly DESTINATION_TASK = "/task";
   public static readonly DESTINATION_TASK_STATUS = `${StompSession.DESTINATION_TASK}/status`;
   public static readonly DESTINATION_TASK_PROGRESS = `${StompSession.DESTINATION_TASK}/progress`;
+
+  protected readonly _logger = log4js.getLogger("STOMP");
 
   private readonly _stomp: StompServerSessionLayer;
   private readonly _subscriptions: ISubscription[] = [];
@@ -71,7 +74,7 @@ export class StompSession implements StompClientCommandListener {
             code: task.error.code,
             message: task.error.message
           } : undefined
-        })).catch(console.warn);
+        })).catch(this._logger.warn);
 
         if (subscription.ack === "auto") {
           this.session.taskManager.remove(task);
@@ -97,7 +100,7 @@ export class StompSession implements StompClientCommandListener {
             value: task.progress.value,
             description: task.progress.description
           }
-        })).catch(console.warn);
+        })).catch(this._logger.warn);
       }
     };
   }
@@ -140,13 +143,21 @@ export class StompSession implements StompClientCommandListener {
   }
 
   public onProtocolError(error: StompError): void {
-    console.log("Protocol Error", error);
+    this._logger.warn("Protocol Error: %s", error);
     this.session.close();
   }
 
   public onEnd(): void {
-    console.log("End");
-    this._releaseResources();
+    this._logger.info("Release resources");
+    if (this._session) {
+      this._subscriptions.splice(0, this._subscriptions.length);
+      this._session.taskManager.emitter.removeListener("progress", this._onProgressTask);
+      this._session.taskManager.emitter.removeListener("change", this._onChangeTask);
+      if (!this._session.closed) {
+        this._session.setCloseTimeout();
+      }
+      this._session = undefined;
+    }
   }
 
   public connect(headers: StompHeaders): void {
@@ -252,7 +263,7 @@ export class StompSession implements StompClientCommandListener {
               const task = this.mainApplication.pushDeleteAppCommand(this.session, command);
               this._sendReceipt(headers, {"task-id": task.id});
 
-              task.execute().catch(console.error);
+              task.execute().catch(this._logger.error);
               break;
             }
             case "CREATE_APP": {
@@ -263,7 +274,7 @@ export class StompSession implements StompClientCommandListener {
               const task = this.mainApplication.pushCreateAppCommand(this.session, command);
               this._sendReceipt(headers, {"task-id": task.id});
 
-              task.execute().catch(console.error);
+              task.execute().catch(this._logger.error);
               break;
             }
             case "GET_APPS": {
@@ -271,7 +282,7 @@ export class StompSession implements StompClientCommandListener {
               const task = this.mainApplication.pushGetAppsCommand(this.session, command);
               this._sendReceipt(headers, {"task-id": task.id});
 
-              task.execute().catch(console.error);
+              task.execute().catch(this._logger.error);
               break;
             }
             // ------------------------------For all applications
@@ -286,7 +297,7 @@ export class StompSession implements StompClientCommandListener {
               const task = this.application.pushPingCommand(this.session, command);
               this._sendReceipt(headers, {"task-id": task.id});
 
-              task.execute().catch(console.error);
+              task.execute().catch(this._logger.error);
               break;
             }
             case "GET_SCHEMA": {
@@ -294,7 +305,7 @@ export class StompSession implements StompClientCommandListener {
               const task = this.application.pushGetSchemaCommand(this.session, command);
               this._sendReceipt(headers, {"task-id": task.id});
 
-              task.execute().catch(console.error);
+              task.execute().catch(this._logger.error);
               break;
             }
             case "QUERY": {
@@ -302,7 +313,7 @@ export class StompSession implements StompClientCommandListener {
               const task = this.application.pushQueryCommand(this.session, command);
               this._sendReceipt(headers, {"task-id": task.id});
 
-              task.execute().catch(console.error);
+              task.execute().catch(this._logger.error);
               break;
             }
             default:
@@ -387,7 +398,7 @@ export class StompSession implements StompClientCommandListener {
       server: `${pack.name}/${pack.version}`,
       session: this.session.id,
       ...headers
-    }).catch(console.warn);
+    }).catch(this._logger.warn);
   }
 
   protected _sendError(error: ServerError, requestHeaders?: StompHeaders): void {
@@ -395,25 +406,14 @@ export class StompSession implements StompClientCommandListener {
     if (requestHeaders && requestHeaders.receipt) {
       errorHeaders["receipt-id"] = requestHeaders.receipt;
     }
-    this._stomp.error(errorHeaders).catch(console.warn);
+    this._stomp.error(errorHeaders).catch(this._logger.warn);
   }
 
   protected _sendReceipt(requestHeaders: StompHeaders, headers: StompHeaders = {}): void {
     const receiptHeaders: StompHeaders = headers;
     if (requestHeaders.receipt) {
       receiptHeaders["receipt-id"] = requestHeaders.receipt;
-      this._stomp.receipt(receiptHeaders).catch(console.warn);
-    }
-  }
-
-  protected _releaseResources(): void {
-    if (this._session) {
-      console.log("Resource is released");
-      this._subscriptions.splice(0, this._subscriptions.length);
-      this.session.taskManager.emitter.removeListener("progress", this._onProgressTask);
-      this.session.taskManager.emitter.removeListener("change", this._onChangeTask);
-      this._session.setCloseTimeout();
-      this._session = undefined;
+      this._stomp.receipt(receiptHeaders).catch(this._logger.warn);
     }
   }
 

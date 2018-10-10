@@ -1,6 +1,7 @@
 import {AccessMode, AConnection, DBStructure} from "gdmn-db";
 import {DataSource, ERBridge, IQueryResponse} from "gdmn-er-bridge";
 import {ERModel, IEntityQueryInspector, IERModel} from "gdmn-orm";
+import log4js, {Logger} from "log4js";
 import {Database, IDBDetail} from "../../db/Database";
 import {Session} from "./Session";
 import {SessionManager} from "./SessionManager";
@@ -16,13 +17,13 @@ export type QueryCommand = AppCommand<"QUERY", IEntityQueryInspector>;
 
 export abstract class Application extends Database {
 
-  private readonly _sessionManager = new SessionManager(this.connectionPool);
+  private readonly _sessionManager = new SessionManager(this.connectionPool, log4js.getLogger("Session"));
 
   private _dbStructure: DBStructure = new DBStructure();
   private _erModel: ERModel = new ERModel();
 
-  protected constructor(dbDetail: IDBDetail) {
-    super(dbDetail);
+  protected constructor(dbDetail: IDBDetail, logger: Logger) {
+    super(dbDetail, logger);
   }
 
   get dbStructure(): DBStructure {
@@ -44,6 +45,7 @@ export abstract class Application extends Database {
     const task = new Task({
       session,
       command,
+      logger: log4js.getLogger("Task"),
       worker: async (context) => {
         const {steps, delay} = context.command.payload;
 
@@ -56,6 +58,7 @@ export abstract class Application extends Database {
         }
 
         if (!this.connected) {
+          this._logger.error("Application is not connected");
           throw new Error("Application is not connected");
         }
       }
@@ -70,6 +73,7 @@ export abstract class Application extends Database {
     const task = new Task({
       session,
       command,
+      logger: log4js.getLogger("Task"),
       worker: () => this.erModel.serialize()
     });
     return session.taskManager.add(task);
@@ -82,6 +86,7 @@ export abstract class Application extends Database {
     const task = new Task({
       session,
       command,
+      logger: log4js.getLogger("Task"),
       worker: async (context) => {
         const result = await new ERBridge(context.session.connection)
           .query(this._erModel, this._dbStructure, context.command.payload);
@@ -100,9 +105,11 @@ export abstract class Application extends Database {
 
   protected _checkSession(session: Session): void | never {
     if (session.closed || !session.active) {
+      this._logger.error("Session is closed");
       throw new Error("Session is closed");
     }
     if (!this._sessionManager.includes(session)) {
+      this._logger.error("Session does not belong to the application");
       throw new Error("Session does not belong to the application");
     }
   }
@@ -115,17 +122,12 @@ export abstract class Application extends Database {
         connection,
         options: {accessMode: AccessMode.READ_ONLY},
         callback: async (transaction) => {
-
-          console.time("DBStructure load time");
           this._dbStructure = await this.dbDetail.driver.readDBStructure(connection, transaction);
-          console.log(`DBStructure: ${Object.entries(this._dbStructure.relations).length} relations loaded...`);
-          console.timeEnd("DBStructure load time");
+          this._logger.info("DBStructure: loaded %s relations", Object.entries(this._dbStructure.relations).length);
 
-          console.time("erModel load time");
           const erBridge = new ERBridge(connection);
           await erBridge.exportFromDatabase(this._dbStructure, transaction, this._erModel = new ERModel());
-          console.log(`erModel: loaded ${Object.entries(this._erModel.entities).length} entities`);
-          console.timeEnd("erModel load time");
+          this._logger.info("ERModel: loaded %s entities", Object.entries(this._erModel.entities).length);
         }
       });
     });

@@ -26,6 +26,7 @@
     "koa-send": "^5.0.0",
     "koa-static": "^5.0.0",
     "koa2-cors": "^2.0.6",
+    "log4js": "^3.0.6",
     "node-stomp-protocol": "^0.4.2",
     "passport-jwt": "^4.0.0",
     "passport-local": "^1.0.0",

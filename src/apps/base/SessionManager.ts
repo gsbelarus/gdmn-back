@@ -1,5 +1,6 @@
 import {EventEmitter} from "events";
 import {AConnectionPool, ICommonConnectionPoolOptions} from "gdmn-db";
+import {Logger} from "log4js";
 import StrictEventEmitter from "strict-event-emitter-types";
 import {v1 as uuidV1} from "uuid";
 import {ISessionEvents, Session} from "./Session";
@@ -14,10 +15,12 @@ export class SessionManager {
   public readonly emitter: StrictEventEmitter<EventEmitter, ISessionManagerEvents> = new EventEmitter();
 
   private readonly _connectionPool: AConnectionPool<ICommonConnectionPoolOptions>;
+  private readonly _logger?: Logger;
   private readonly _sessions: Session[] = [];
 
-  constructor(connectionPool: AConnectionPool<ICommonConnectionPoolOptions>) {
+  constructor(connectionPool: AConnectionPool<ICommonConnectionPoolOptions>, logger?: Logger) {
     this._connectionPool = connectionPool;
+    this._logger = logger;
   }
 
   public includes(session: Session): boolean {
@@ -29,7 +32,8 @@ export class SessionManager {
     const session = new Session({
       id: uid,
       userKey,
-      connection: await this._connectionPool.get()
+      connection: await this._connectionPool.get(),
+      logger: this._logger
     });
     session.emitter.once("close", (s) => {
       this.emitter.emit("close", session);

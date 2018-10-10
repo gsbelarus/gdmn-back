@@ -1,13 +1,14 @@
 import {AConnection} from "gdmn-db";
 import {DataSource} from "gdmn-er-bridge";
 import {Entity, StringAttribute} from "gdmn-orm";
+import log4js from "log4js";
 import {IDBDetail} from "../db/Database";
 import {Application} from "./base/Application";
 
 export class GDMNApplication extends Application {
 
   constructor(dbDetail: IDBDetail) {
-    super(dbDetail);
+    super(dbDetail, log4js.getLogger("GDMNApp"));
   }
 
   protected async _onCreate(connection: AConnection): Promise<void> {

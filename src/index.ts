@@ -8,6 +8,7 @@ import Router from "koa-router";
 import send from "koa-send";
 import serve from "koa-static";
 import cors from "koa2-cors";
+import log4js from "log4js";
 import path from "path";
 import WebSocket from "ws";
 import {checkHandledError, ErrorCodes, throwCtx} from "./ErrorCodes";
@@ -22,6 +23,9 @@ interface IServer {
 }
 
 process.env.NODE_ENV = process.env.NODE_ENV || "development";
+
+log4js.configure("./config/log4js.json");
+const defaultLogger = log4js.getLogger();
 
 async function create(): Promise<IServer> {
   const stompManager = new StompManager();
@@ -56,7 +60,6 @@ async function create(): Promise<IServer> {
     // TODO temp
     .get("/", (ctx) => ctx.redirect("/spa"))
     .get(/\/spa(\/*)?/g, async (ctx) => {
-      console.log(path.resolve(process.cwd(), config.get("server.publicDir")));
       await send(ctx, "/gs/ng/", {
         root: path.resolve(process.cwd(), config.get("server.publicDir")),
         index: "index",
@@ -73,10 +76,10 @@ async function create(): Promise<IServer> {
 
   const wsServer = new WebSocket.Server({server: httpServer});
   wsServer.on("connection", (webSocket) => {
-    console.log("webSocket connection");
+    defaultLogger.info("WebSocket event: 'connection'");
     if (stompManager.add(webSocket)) {
       webSocket.on("close", () => {
-        console.log("webSocket close");
+        defaultLogger.info("WebSocket event: 'close'");
         stompManager.delete(webSocket);
       });
     }
@@ -96,9 +99,13 @@ function startHttpServer(serverApp: Koa): HttpServer | undefined {
     httpServer.listen(config.get("server.http.port"), config.get("server.http.host"));
     httpServer.on("error", serverErrorHandler);
     httpServer.on("listening", () => {
-      const {address, port} = httpServer!.address() as any; // TODO
-      console.log(`Listening on http://${address}:${port};` +
-        ` env: ${process.env.NODE_ENV}`);
+      const address = httpServer!.address();
+      if (typeof address === "string") {
+        defaultLogger.info(`Listening ${httpServer!.address()}`);
+      } else {
+        defaultLogger.info(`Listening on http://%s:%s;` +
+          ` env: %s`, address.address, address.port, process.env.NODE_ENV);
+      }
     });
   }
   return httpServer;
@@ -121,16 +128,17 @@ async function exit(): Promise<void> {
     }
     await stompManager.destroy();
 
+    await new Promise((resolve, reject) => log4js.shutdown((error) => error ? reject(error) : resolve()));
   } catch (error) {
     switch (error.message) {
       case "connection shutdown":
         // ignore
         break;
       default:
-        console.error(error);
+        defaultLogger.error(error);
     }
   } finally {
-    console.log("Server destroyed");
+    defaultLogger.info("Server destroyed");
     process.exit();
   }
 }
@@ -141,11 +149,11 @@ function serverErrorHandler(error: NodeJS.ErrnoException): void {
   }
   switch (error.code) {
     case "EACCES":
-      console.error("Port requires elevated privileges");
+      defaultLogger.error("Port requires elevated privileges");
       process.exit();
       break;
     case "EADDRINUSE":
-      console.error("Port is already in use");
+      defaultLogger.error("Port is already in use");
       process.exit();
       break;
     default:

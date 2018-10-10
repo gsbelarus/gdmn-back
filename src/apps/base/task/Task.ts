@@ -1,4 +1,5 @@
 import {EventEmitter} from "events";
+import {Logger} from "log4js";
 import StrictEventEmitter from "strict-event-emitter-types";
 import {v1 as uuidV1} from "uuid";
 import {ErrorCode, ServerError} from "../../../stomp/ServerError";
@@ -37,6 +38,7 @@ export interface ICommand<A, P = any> {
 export interface IOptions<Command extends ICommand<any>, Result> {
   readonly command: Command;
   readonly session: Session;
+  readonly logger?: Logger;
   readonly progress?: IProgressOptions;
   readonly pauseCheckTimeout?: number;
   readonly worker: TaskWorker<Command, Result>;
@@ -58,6 +60,8 @@ export class Task<Command extends ICommand<any>, Result> {
 
   public readonly emitter: StrictEventEmitter<EventEmitter, ITaskEvents<Command, Result>> = new EventEmitter();
 
+  protected readonly _logger: Logger | Console;
+
   private readonly _id: string;
   private readonly _options: IOptions<Command, Result>;
   private readonly _progress: Progress;
@@ -70,8 +74,13 @@ export class Task<Command extends ICommand<any>, Result> {
   constructor(options: IOptions<Command, Result>) {
     this._id = uuidV1().toUpperCase();
     this._options = options;
+    this._logger = options.logger || console;
     this._progress = new Progress(options.progress);
-    this._progress.emitter.on("change", () => this.emitter.emit("progress", this));
+    this._progress.emitter.on("change", () => {
+      this._logger.info("id#%s in progress; Value: %s; Description: %s", this._id, this._progress.value,
+        this._progress.description);
+      this.emitter.emit("progress", this);
+    });
     this._updateStatus(TaskStatus.IDLE);
   }
 
@@ -124,6 +133,8 @@ export class Task<Command extends ICommand<any>, Result> {
 
   public async execute(): Promise<void> {
     if (this._status !== TaskStatus.IDLE) {
+      this._logger.error("id#%s mast has %s status, but he has %s", this._id, TaskStatus[TaskStatus.IDLE],
+        TaskStatus[this._status]);
       throw new Error(`Task mast has ${TaskStatus[TaskStatus.IDLE]} status, but he has ${TaskStatus[this._status]}`);
     }
     this._updateStatus(TaskStatus.RUNNING);
@@ -137,6 +148,7 @@ export class Task<Command extends ICommand<any>, Result> {
       });
       this._updateStatus(TaskStatus.DONE);
     } catch (error) {
+      this._logger.warn("id#%s throw error; Error: %s", error);
       this._error = error instanceof ServerError ? error : new ServerError(ErrorCode.INTERNAL, error.message);
       this._updateStatus(TaskStatus.ERROR);
     }
@@ -144,6 +156,7 @@ export class Task<Command extends ICommand<any>, Result> {
 
   private _updateStatus(status: TaskStatus): void {
     if (endStatuses.includes(this._status)) {
+      this._logger.error("id#%s was finished", this._id);
       throw new Error("Task was finished");
     }
     this._status = status;
@@ -151,9 +164,8 @@ export class Task<Command extends ICommand<any>, Result> {
       date: new Date(),
       status: this._status
     });
-    console.log(`Task (id#${this.id}) is changed; ` +
-      `Action: ${this._options.command.action}; ` +
-      `Status: ${TaskStatus[this._status]}`);
+    this._logger.info("id#%s is changed; Action: %s; Status: %s", this._id, this._options.command.action,
+      TaskStatus[this._status]);
     this.emitter.emit("change", this);
   }
 
@@ -161,15 +173,20 @@ export class Task<Command extends ICommand<any>, Result> {
     switch (this._status) {
       case TaskStatus.PAUSED:
         await new Promise((resolve) => {
-          setTimeout(resolve, this._options.pauseCheckTimeout || Task.DEFAULT_PAUSE_CHECK_TIMEOUT);
+          const timeout = this._options.pauseCheckTimeout || Task.DEFAULT_PAUSE_CHECK_TIMEOUT;
+          this._logger.info("id#%s is paused, check after %s minutes", timeout / (60 * 1000));
+          setTimeout(resolve, timeout);
         });
         await this._checkStatus();
         break;
       case TaskStatus.INTERRUPTED:
+        this._logger.error("Was interrupted");
         throw new Error("Task was interrupted");
       case TaskStatus.DONE:
+        this._logger.error("Was finished");
         throw new Error("Task was finished");
       case TaskStatus.IDLE:
+        this._logger.error("Wasn't started");
         throw new Error("Task wasn't started");
       case TaskStatus.RUNNING:
       default:

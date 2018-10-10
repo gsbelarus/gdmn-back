@@ -13,6 +13,7 @@ import {
   StringAttribute,
   TimeStampAttribute
 } from "gdmn-orm";
+import log4js from "log4js";
 import path from "path";
 import {v1 as uuidV1} from "uuid";
 import {IDBDetail} from "../db/Database";
@@ -86,7 +87,8 @@ export class MainApplication extends Application {
   private _applications: Map<string, Application> = new Map();
 
   constructor() {
-    super(MainApplication._createDBDetail("auth_db", path.resolve(MainApplication.MAIN_DIR, MainApplication.MAIN_DB)));
+    super(MainApplication._createDBDetail("auth_db", path.resolve(MainApplication.MAIN_DIR, MainApplication.MAIN_DB)),
+      log4js.getLogger("MainApp"));
 
     if (!existsSync(MainApplication.MAIN_DIR)) {
       mkdirSync(MainApplication.MAIN_DIR);
@@ -134,6 +136,7 @@ export class MainApplication extends Application {
     const task = new Task({
       session,
       command,
+      logger: log4js.getLogger("Task"),
       worker: async (context) => {
         const {alias, connectionOptions} = command.payload;
 
@@ -159,6 +162,7 @@ export class MainApplication extends Application {
     const task = new Task({
       session,
       command,
+      logger: log4js.getLogger("Task"),
       worker: async (context) => {
         const {uid} = context.command.payload;
 
@@ -181,6 +185,7 @@ export class MainApplication extends Application {
     const task = new Task({
       session,
       command,
+      logger: log4js.getLogger("Task"),
       worker: (context) => this._getApplicationsInfo(context.session.connection, context.session.userKey)
     });
     return session.taskManager.add(task);
