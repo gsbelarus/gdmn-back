@@ -24,13 +24,11 @@ export class Utils {
                                      uid?: string): Promise<Application> {
     if (uid) {
       // auth on main and get application
-      const session = await mainApplication.sessionManager.open(userKey, 1000);
+      const session = await mainApplication.sessionManager.open(userKey);
       try {
-        session.borrow();
         return await mainApplication.getApplication(session, uid);
       } finally {
-        session.release();
-        await session.close();
+        await session.forceClose();
       }
     } else {
       // use main as application

@@ -1,9 +1,17 @@
+import {EventEmitter} from "events";
 import {AConnectionPool, ICommonConnectionPoolOptions} from "gdmn-db";
+import StrictEventEmitter from "strict-event-emitter-types";
 import {v1 as uuidV1} from "uuid";
-import {Session} from "./Session";
+import {ISessionEvents, Session} from "./Session";
+
+export interface ISessionManagerEvents extends ISessionEvents {
+  open: (session: Session) => void;
+}
 
 // TODO sharing tasks between sessions on one user
 export class SessionManager {
+
+  public readonly emitter: StrictEventEmitter<EventEmitter, ISessionManagerEvents> = new EventEmitter();
 
   private readonly _connectionPool: AConnectionPool<ICommonConnectionPoolOptions>;
   private readonly _sessions: Session[] = [];
@@ -16,16 +24,23 @@ export class SessionManager {
     return this._sessions.includes(session);
   }
 
-  public async open(userKey: number, timeout?: number): Promise<Session> {
+  public async open(userKey: number): Promise<Session> {
     const uid = uuidV1().toUpperCase();
     const session = new Session({
       id: uid,
       userKey,
-      timeout,
       connection: await this._connectionPool.get()
     });
-    session.emitter.once("close", (s) => this._sessions.splice(this._sessions.indexOf(s), 1));
+    session.emitter.once("close", (s) => {
+      this.emitter.emit("close", session);
+      this._sessions.splice(this._sessions.indexOf(s), 1);
+    });
+    session.emitter.once("forceClose", (s) => {
+      this.emitter.emit("forceClose", session);
+      this._sessions.splice(this._sessions.indexOf(s), 1);
+    });
     this._sessions.push(session);
+    this.emitter.emit("open", session);
     return session;
   }
 
@@ -43,7 +58,7 @@ export class SessionManager {
   }
 
   public async closeAll(): Promise<void> {
-    const promise = this._sessions.map((session) => session.close());
+    const promise = this._sessions.map((session) => session.forceClose());
     await Promise.all(promise);
   }
 }

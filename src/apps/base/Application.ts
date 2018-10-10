@@ -99,7 +99,7 @@ export abstract class Application extends Database {
   }
 
   protected _checkSession(session: Session): void | never {
-    if (session.softClosed || !session.active) {
+    if (session.closed || !session.active) {
       throw new Error("Session is closed");
     }
     if (!this._sessionManager.includes(session)) {

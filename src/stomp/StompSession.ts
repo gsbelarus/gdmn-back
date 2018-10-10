@@ -141,7 +141,7 @@ export class StompSession implements StompClientCommandListener {
 
   public onProtocolError(error: StompError): void {
     console.log("Protocol Error", error);
-    this.session.softClose();
+    this.session.close();
   }
 
   public onEnd(): void {
@@ -155,7 +155,7 @@ export class StompSession implements StompClientCommandListener {
 
   public disconnect(headers: StompHeaders): void {
     this._try(() => {
-      this.session.softClose();
+      this.session.close();
       this._sendReceipt(headers);
     }, headers);
   }
@@ -376,7 +376,7 @@ export class StompSession implements StompClientCommandListener {
     } else {
       this._session = await this.application.sessionManager.open(result.userKey);
     }
-    this.session.borrow();
+    this.session.clearCloseTimeout();
 
     this._sendConnected(result.newTokens || {});
   }
@@ -412,7 +412,7 @@ export class StompSession implements StompClientCommandListener {
       this._subscriptions.splice(0, this._subscriptions.length);
       this.session.taskManager.emitter.removeListener("progress", this._onProgressTask);
       this.session.taskManager.emitter.removeListener("change", this._onChangeTask);
-      this._session.release();
+      this._session.setCloseTimeout();
       this._session = undefined;
     }
   }

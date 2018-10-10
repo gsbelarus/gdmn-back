@@ -151,6 +151,9 @@ export class Task<Command extends ICommand<any>, Result> {
       date: new Date(),
       status: this._status
     });
+    console.log(`Task (id#${this.id}) is changed; ` +
+      `Action: ${this._options.command.action}; ` +
+      `Status: ${TaskStatus[this._status]}`);
     this.emitter.emit("change", this);
   }
 

@@ -8,12 +8,12 @@ import {TaskManager} from "./task/TaskManager";
 export interface IOptions {
   readonly id: string;
   readonly userKey: number;
-  readonly timeout?: number;
   readonly connection: AConnection;
 }
 
 export interface ISessionEvents {
   close: (session: Session) => void;
+  forceClose: (session: Session) => void;
 }
 
 export class Session {
@@ -25,14 +25,13 @@ export class Session {
   private readonly _options: IOptions;
   private readonly _taskManager = new TaskManager();
 
-  private _softClosed: boolean = false;
   private _closed: boolean = false;
-  private _borrowed: boolean = false;
+  private _forceClosed: boolean = false;
   private _timer?: NodeJS.Timer;
 
   constructor(options: IOptions) {
     this._options = options;
-    this._updateTimer();
+    console.log(`Session (id#${this.id}) is opened`);
   }
 
   get id(): string {
@@ -43,59 +42,53 @@ export class Session {
     return this._options.userKey;
   }
 
-  get timeout(): number {
-    return this._options.timeout || Session.DEFAULT_TIMEOUT;
-  }
-
   get connection(): AConnection {
     return this._options.connection;
   }
 
-  get softClosed(): boolean {
-    return this._softClosed;
+  get closed(): boolean {
+    return this._closed;
   }
 
   get active(): boolean {
-    return this._options.connection.connected && !this._closed;
+    return this._options.connection.connected && !this._forceClosed;
   }
 
   get taskManager(): TaskManager {
     return this._taskManager;
   }
 
-  public borrow(): void {
-    if (this._borrowed) {
-      throw new Error("Session already borrowed");
-    }
-    this._borrowed = true;
-    this._clearTimer();
+  public setCloseTimeout(timeout: number = Session.DEFAULT_TIMEOUT): void {
+    this.clearCloseTimeout();
+    console.log(`Session (id#${this.id}) is lost and will be closed after ${timeout / (60 * 1000)} minutes`);
+    this._timer = setTimeout(() => this.close(), timeout);
   }
 
-  public release(): void {
-    if (!this._borrowed) {
-      throw new Error("Session already released");
+  public clearCloseTimeout(): void {
+    if (this._timer) {
+      clearTimeout(this._timer);
+      this._timer = undefined;
     }
-    this._borrowed = false;
-    this._updateTimer();
   }
 
-  public softClose(): void {
-    if (!this._softClosed) {
-      this._softClosed = true;
-      this._clearTimer();
-      this.emitter.emit("close", this);
-      this._internalSoftClose();
-    }
-    console.log("Session is closed softly");
-  }
-
-  public async close(): Promise<void> {
+  public close(): void {
     if (this._closed) {
-      throw new Error("Session already closed");
+      throw new Error(`Session (id#${this.id}) already closed`);
     }
+    this.clearCloseTimeout();
     this._closed = true;
-    this._clearTimer();
     this.emitter.emit("close", this);
+    this._internalClose();
+    console.log(`Session (id#${this.id}) is closed`);
+  }
+
+  public async forceClose(): Promise<void> {
+    if (this._forceClosed) {
+      throw new Error(`Session (id#${this.id}) already force closed`);
+    }
+    this.clearCloseTimeout();
+    this._forceClosed = true;
+    this.emitter.emit("forceClose", this);
     this._taskManager.getAll().forEach((task) => {
       if (task.options.session === this && !endStatuses.includes(task.status)) {
         task.interrupt();
@@ -103,30 +96,18 @@ export class Session {
     });
     this._taskManager.clear();
     await this._options.connection.disconnect();
-    console.log("Session is closed");
+    console.log(`Session (id#${this.id}) is force closed`);
   }
 
-  private _updateTimer(): void {
-    this._clearTimer();
-    this._timer = setTimeout(() => this.softClose(), Session.DEFAULT_TIMEOUT);
-  }
-
-  private _clearTimer(): void {
-    if (this._timer) {
-      clearTimeout(this._timer);
-      this._timer = undefined;
-    }
-  }
-
-  private _internalSoftClose(): void {
-    if (this._softClosed) {
+  private _internalClose(): void {
+    if (this._closed) {
       const runningTasks = this._taskManager
         .find(TaskStatus.RUNNING)
         .filter((task) => task.options.session === this);
       if (runningTasks.length) {
-        this._taskManager.emitter.once("change", () => this._internalSoftClose());
+        this._taskManager.emitter.once("change", () => this._internalClose());
       } else {
-        this.close().catch(console.error);
+        this.forceClose().catch(console.error);
       }
     }
   }
