@@ -103,7 +103,8 @@ export abstract class Database {
   public async connect(): Promise<void> {
     try {
       const {connectionOptions, poolOptions}: IDBDetail = this._dbDetail;
-      this._logger.info("Connecting '%s:%s/%s'", connectionOptions.host, connectionOptions.port, connectionOptions.path);
+      this._logger.info("Connecting '%s:%s/%s'", connectionOptions.host, connectionOptions.port,
+        connectionOptions.path);
 
       this._checkBusy();
       this._isBusy = true;

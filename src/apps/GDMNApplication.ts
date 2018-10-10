@@ -15,6 +15,8 @@ export class GDMNApplication extends Application {
       if (!this.sessionManager.size()) {
         if (this.connected) {
           this.disconnect().catch(this._logger.warn);
+        } else {
+          this._logger.error("Session lives without connection to application???");
         }
       }
     });

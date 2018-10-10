@@ -4,29 +4,9 @@ import WebSocket from "ws";
 import {MainApplication} from "../apps/MainApplication";
 import {StompSession} from "./StompSession";
 
-const logger = log4js.getLogger("STOMP");
-
-setLoggingListeners({
-  error: console.log,
-  info: console.log,
-  silly: (message, args) => {
-    const receiverDataTemplate = /^StompWebSocketStreamLayer: received data %.$/g;
-    if (receiverDataTemplate.test(message)) {
-      logger.info("\n>>> %s", args);
-    }
-    const sendingDataTemplate = /^StompFrameLayer: sending frame data %.$/g;
-    if (sendingDataTemplate.test(message)) {
-      args.startsWith("ERROR")
-        ? logger.warn("\n<<< %s", args)
-        : logger.info("\n<<< %s", args);
-    }
-  },
-  warn: console.log,
-  debug: () => ({})
-});
-
 export class StompManager {
 
+  private readonly _logger = log4js.getLogger("STOMP");
   private readonly _mainApplication = new MainApplication();
 
   private _sessions = new Map<WebSocket, StompSession>();
@@ -39,6 +19,7 @@ export class StompManager {
     const stomp = createStompServerSession(webSocket, StompSession);
     const session = stomp.listener as StompSession;
     session.mainApplication = this._mainApplication;
+    session.logger = this._logger;
     this._sessions.set(webSocket, session);
     return true;
   }
@@ -52,6 +33,25 @@ export class StompManager {
   }
 
   public async create(): Promise<void> {
+    setLoggingListeners({
+      error: console.log,
+      info: console.log,
+      silly: (message, args) => {
+        const receiverDataTemplate = /^StompWebSocketStreamLayer: received data %.$/g;
+        if (receiverDataTemplate.test(message)) {
+          this._logger.info("\n>>> %s", args);
+        }
+        const sendingDataTemplate = /^StompFrameLayer: sending frame data %.$/g;
+        if (sendingDataTemplate.test(message)) {
+          args.startsWith("ERROR")
+            ? this._logger.warn("\n<<< %s", args)
+            : this._logger.info("\n<<< %s", args);
+        }
+      },
+      warn: console.log,
+      debug: () => ({})
+    });
+
     await this._mainApplication.createOrConnect();
   }
 

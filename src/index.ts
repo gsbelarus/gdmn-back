@@ -1,5 +1,6 @@
 import config from "config";
 import http, {Server as HttpServer} from "http";
+import {Server as HttpsServer} from "https";
 import Koa from "koa";
 import koaBody from "koa-body";
 import errorHandler from "koa-error";
@@ -19,7 +20,7 @@ import {StompManager} from "./stomp/StompManager";
 interface IServer {
   stompManager: StompManager;
   httpServer?: HttpServer;
-  wsServer: WebSocket.Server;
+  wsHttpServer?: WebSocket.Server;
 }
 
 process.env.NODE_ENV = process.env.NODE_ENV || "development";
@@ -73,23 +74,30 @@ async function create(): Promise<IServer> {
     .use((ctx) => throwCtx(ctx, 404, "Not found", ErrorCodes.NOT_FOUND));
 
   const httpServer = startHttpServer(serverApp);
-
-  const wsServer = new WebSocket.Server({server: httpServer});
-  wsServer.on("connection", (webSocket) => {
-    defaultLogger.info("WebSocket event: 'connection'");
-    if (stompManager.add(webSocket)) {
-      webSocket.on("close", () => {
-        defaultLogger.info("WebSocket event: 'close'");
-        stompManager.delete(webSocket);
-      });
-    }
-  });
+  const wsHttpServer = startWebSocketServer(stompManager, httpServer);
 
   return {
     stompManager,
     httpServer,
-    wsServer
+    wsHttpServer
   };
+}
+
+function startWebSocketServer(stompManager: StompManager,
+                              server?: HttpServer | HttpsServer): WebSocket.Server | undefined {
+  if (server) {
+    const wsServer = new WebSocket.Server({server});
+    wsServer.on("connection", (webSocket) => {
+      defaultLogger.info("WebSocket event: 'connection'");
+      if (stompManager.add(webSocket)) {
+        webSocket.on("close", () => {
+          defaultLogger.info("WebSocket event: 'close'");
+          stompManager.delete(webSocket);
+        });
+      }
+    });
+    return wsServer;
+  }
 }
 
 function startHttpServer(serverApp: Koa): HttpServer | undefined {
@@ -118,17 +126,15 @@ process.on("SIGTERM", exit);
 
 async function exit(): Promise<void> {
   try {
-    const {stompManager, httpServer, wsServer} = await creating;
+    const {stompManager, httpServer, wsHttpServer} = await creating;
 
-    await new Promise((resolve) => wsServer.close(resolve));
-
+    if (wsHttpServer) {
+      await new Promise((resolve) => wsHttpServer.close(resolve));
+    }
     if (httpServer) {
-      httpServer.removeAllListeners();
       await new Promise((resolve) => httpServer.close(resolve));
     }
     await stompManager.destroy();
-
-    await new Promise((resolve, reject) => log4js.shutdown((error) => error ? reject(error) : resolve()));
   } catch (error) {
     switch (error.message) {
       case "connection shutdown":
@@ -139,6 +145,7 @@ async function exit(): Promise<void> {
     }
   } finally {
     defaultLogger.info("Server destroyed");
+    await new Promise((resolve, reject) => log4js.shutdown((error) => error ? reject(error) : resolve()));
     process.exit();
   }
 }
