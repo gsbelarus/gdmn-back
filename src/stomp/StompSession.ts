@@ -391,7 +391,7 @@ export class StompSession implements StompClientCommandListener {
   }
 
   protected _sendError(error: ServerError, requestHeaders?: StompHeaders): void {
-    const errorHeaders: StompHeaders = {code: `${error.code}`, message: error.message};
+    const errorHeaders: StompHeaders = {code: `${error.code || ErrorCode.INTERNAL}`, message: error.message};
     if (requestHeaders && requestHeaders.receipt) {
       errorHeaders["receipt-id"] = requestHeaders.receipt;
     }
