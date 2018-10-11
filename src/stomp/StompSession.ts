@@ -266,6 +266,9 @@ export class StompSession implements StompClientCommandListener {
           switch (action) {
             // ------------------------------For MainApplication
             case "DELETE_APP": {
+              if (this.mainApplication !== this.application) {
+                throw new ServerError(ErrorCode.UNSUPPORTED, "Unsupported action");
+              }
               if (!bodyObj.payload || !bodyObj.uid) {
                 throw new ServerError(ErrorCode.INVALID, "Payload must contains 'uid'");
               }
@@ -277,6 +280,9 @@ export class StompSession implements StompClientCommandListener {
               break;
             }
             case "CREATE_APP": {
+              if (this.mainApplication !== this.application) {
+                throw new ServerError(ErrorCode.UNSUPPORTED, "Unsupported action");
+              }
               if (!bodyObj.payload || !bodyObj.alias) {
                 throw new ServerError(ErrorCode.INVALID, "Payload must contains 'alias'");
               }
@@ -288,6 +294,9 @@ export class StompSession implements StompClientCommandListener {
               break;
             }
             case "GET_APPS": {
+              if (this.mainApplication !== this.application) {
+                throw new ServerError(ErrorCode.UNSUPPORTED, "Unsupported action");
+              }
               const command: GetAppsCommand = {action, payload: undefined};
               const task = this.mainApplication.pushGetAppsCommand(this.session, command);
               this._sendReceipt(headers, {"task-id": task.id});
