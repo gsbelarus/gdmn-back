@@ -267,16 +267,53 @@ content-length:...
 
 {"payload":{...}}
 ```
+
 * `action`: 
   * `PING`:
-    * `payload: {delay: number, steps: number}`
-    * `result: undefined`
+    ```typescript
+    type payload = {
+      delay: number; 
+      steps: number;
+    };
+    type result = undefined;
+    ```
   * `GET_SCHEMA`:
-    * `payload: undefined`
-    * `result: IERModel`
+    ```typescript
+    type payload = undefined;
+    type result = IERModel;
+    ```
   * `QUERY`:
-    * `payload: IEntityQueryInspector`
-    * `result: IQueryResponse`
+    ```typescript
+    type payload = IEntityQueryInspector;
+    type result = IQueryResponse;
+    ```
+    
+  * `CREATE_APP` (MainApplication):
+    ```typescript
+    type payload = {
+      alias: string;
+      connectionOptions?: {
+        host?: string;
+        port?: number;
+        username?: string;
+        password?: string;
+        path?: string;
+      };
+    };
+    type result = IApplicationInfoOutput;
+    ```
+  * `DELETE_APP` (MainApplication):
+      ```typescript
+      type payload = {
+        uid: string;
+      };
+      type result = undefined;
+      ```
+  * `GET_APPS` (MainApplication):
+      ```typescript
+      type payload = undefined;
+      type result = IApplicationInfoOutput[];
+      ```
 ```
 <<< RECEIPT
 receipt-id:receipt-id
@@ -289,7 +326,7 @@ task-id:task-id
 destination:/task/status
 action:...
 message-id:msg-0
-ack:client-individual (optional)
+ack:msg-0 (optional)
 subscription:sub-0
 task-id:task-id
 content-type:application/json;charset=utf-8
