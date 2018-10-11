@@ -145,25 +145,31 @@ async function exit(): Promise<void> {
     }
   } finally {
     defaultLogger.info("Server destroyed");
-    await new Promise((resolve, reject) => log4js.shutdown((error) => error ? reject(error) : resolve()));
+    await logShutdown();
     process.exit();
   }
 }
 
-function serverErrorHandler(error: NodeJS.ErrnoException): void {
+async function serverErrorHandler(error: NodeJS.ErrnoException): Promise<void> {
   if (error.syscall !== "listen") {
     throw error;
   }
   switch (error.code) {
     case "EACCES":
       defaultLogger.error("Port requires elevated privileges");
+      await logShutdown();
       process.exit();
       break;
     case "EADDRINUSE":
       defaultLogger.error("Port is already in use");
+      await logShutdown();
       process.exit();
       break;
     default:
       throw error;
   }
+}
+
+async function logShutdown(): Promise<void> {
+  await new Promise((resolve, reject) => log4js.shutdown((error) => error ? reject(error) : resolve()));
 }
