@@ -59,7 +59,6 @@ export interface ITaskEvents<Command extends ICommand<any>, Result> {
 
 export class Task<Command extends ICommand<any>, Result> {
 
-  public static readonly DEFAULT_PAUSE_CHECK_TIMEOUT = 5 * 1000;
   public static readonly STATUSES = [
     TaskStatus.IDLE, TaskStatus.RUNNING, TaskStatus.PAUSED, TaskStatus.INTERRUPTED, TaskStatus.ERROR, TaskStatus.DONE
   ];
@@ -178,11 +177,7 @@ export class Task<Command extends ICommand<any>, Result> {
   private async _checkStatus(): Promise<void | never> {
     switch (this._status) {
       case TaskStatus.PAUSED:
-        await new Promise((resolve) => {
-          const timeout = this._options.pauseCheckTimeout || Task.DEFAULT_PAUSE_CHECK_TIMEOUT;
-          this._logger.info("id#%s is paused, check after %s minutes", timeout / (60 * 1000));
-          setTimeout(resolve, timeout);
-        });
+        await new Promise((resolve) => this.emitter.once("change", resolve));
         await this._checkStatus();
         break;
       case TaskStatus.INTERRUPTED:
