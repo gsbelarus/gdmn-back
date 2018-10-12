@@ -16,7 +16,9 @@ export enum TaskStatus {
   DONE
 }
 
-export const endStatuses = [TaskStatus.INTERRUPTED, TaskStatus.ERROR, TaskStatus.DONE];
+export enum Level {
+  SESSION, USER, APPLICATION
+}
 
 export type StatusChecker = () => Promise<void | never>;
 
@@ -38,6 +40,7 @@ export interface ICommand<A, P = any> {
 export interface IOptions<Command extends ICommand<any>, Result> {
   readonly command: Command;
   readonly session: Session;
+  readonly level: Level;
   readonly logger?: Logger;
   readonly progress?: IProgressOptions;
   readonly pauseCheckTimeout?: number;
@@ -155,7 +158,7 @@ export class Task<Command extends ICommand<any>, Result> {
   }
 
   private _updateStatus(status: TaskStatus): void {
-    if (endStatuses.includes(this._status)) {
+    if ([TaskStatus.INTERRUPTED, TaskStatus.ERROR, TaskStatus.DONE].includes(this._status)) {
       this._logger.error("id#%s was finished", this._id);
       throw new Error("Task was finished");
     }

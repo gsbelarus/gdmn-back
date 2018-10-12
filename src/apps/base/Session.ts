@@ -3,7 +3,7 @@ import {EventEmitter} from "events";
 import {AConnection} from "gdmn-db";
 import {Logger} from "log4js";
 import StrictEventEmitter from "strict-event-emitter-types";
-import {endStatuses, TaskStatus} from "./task/Task";
+import {TaskStatus} from "./task/Task";
 import {TaskManager} from "./task/TaskManager";
 
 export interface IOptions {
@@ -51,7 +51,7 @@ export class Session {
   }
 
   get closed(): boolean {
-    return this._closed;
+    return this._closed || this._forceClosed;
   }
 
   get active(): boolean {
@@ -76,7 +76,7 @@ export class Session {
   }
 
   public close(): void {
-    if (this._closed) {
+    if (this._closed || this._forceClosed) {
       this._logger.error("id#%s already closed", this.id);
       throw new Error(`Session (id#${this.id}) already closed`);
     }
@@ -95,11 +95,10 @@ export class Session {
     this.clearCloseTimeout();
     this._forceClosed = true;
     this.emitter.emit("forceClose", this);
-    this._taskManager.getAll().forEach((task) => {
-      if (task.options.session === this && !endStatuses.includes(task.status)) {
-        task.interrupt();
-      }
-    });
+    this._taskManager
+      .find(TaskStatus.IDLE, TaskStatus.RUNNING, TaskStatus.PAUSED)
+      .filter((task) => task.options.session === this)
+      .forEach((task) => task.interrupt());
     this._taskManager.clear();
     await this._options.connection.disconnect();
     this._logger.info("id#%s is force closed", this.id);
@@ -108,7 +107,7 @@ export class Session {
   private _internalClose(): void {
     if (this._closed) {
       const runningTasks = this._taskManager
-        .find(TaskStatus.RUNNING)
+        .find(TaskStatus.IDLE, TaskStatus.RUNNING, TaskStatus.PAUSED)
         .filter((task) => task.options.session === this);
       if (runningTasks.length) {
         this._logger.info("id#%s is waiting for task completion", this.id);

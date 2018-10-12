@@ -20,7 +20,7 @@ import {IDBDetail} from "../db/Database";
 import databases from "../db/databases";
 import {Application} from "./base/Application";
 import {Session} from "./base/Session";
-import {ICommand, Task} from "./base/task/Task";
+import {ICommand, Level, Task} from "./base/task/Task";
 import {GDMNApplication} from "./GDMNApplication";
 
 export interface IUserInput {
@@ -136,7 +136,8 @@ export class MainApplication extends Application {
     const task = new Task({
       session,
       command,
-      logger: log4js.getLogger("Task"),
+      level: Level.USER,
+      logger: this._taskLogger,
       worker: async (context) => {
         const {alias, connectionOptions} = command.payload;
 
@@ -152,7 +153,9 @@ export class MainApplication extends Application {
         return await this._getApplicationInfo(context.session.connection, context.session.userKey, uid);
       }
     });
-    return session.taskManager.add(task);
+    session.taskManager.add(task);
+    this.sessionManager.syncTasks();
+    return task;
   }
 
   // TODO tmp
@@ -162,7 +165,8 @@ export class MainApplication extends Application {
     const task = new Task({
       session,
       command,
-      logger: log4js.getLogger("Task"),
+      level: Level.USER,
+      logger: this._taskLogger,
       worker: async (context) => {
         const {uid} = context.command.payload;
 
@@ -175,7 +179,9 @@ export class MainApplication extends Application {
         }
       }
     });
-    return session.taskManager.add(task);
+    session.taskManager.add(task);
+    this.sessionManager.syncTasks();
+    return task;
   }
 
   // TODO tmp
@@ -185,10 +191,13 @@ export class MainApplication extends Application {
     const task = new Task({
       session,
       command,
-      logger: log4js.getLogger("Task"),
+      level: Level.SESSION,
+      logger: this._taskLogger,
       worker: (context) => this._getApplicationsInfo(context.session.connection, context.session.userKey)
     });
-    return session.taskManager.add(task);
+    session.taskManager.add(task);
+    this.sessionManager.syncTasks();
+    return task;
   }
 
   public async getApplication(session: Session, uid: string): Promise<Application> {

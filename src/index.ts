@@ -129,12 +129,18 @@ async function exit(): Promise<void> {
     const {stompManager, httpServer, wsHttpServer} = await creating;
 
     if (wsHttpServer) {
+      wsHttpServer.clients.forEach((client) => client.removeAllListeners());
+      wsHttpServer.removeAllListeners();
       await new Promise((resolve) => wsHttpServer.close(resolve));
+      defaultLogger.info("WebSocket server is closed");
     }
     if (httpServer) {
+      httpServer.removeAllListeners();
       await new Promise((resolve) => httpServer.close(resolve));
+      defaultLogger.info("Http server is closed");
     }
     await stompManager.destroy();
+    defaultLogger.info("StompManager is destroyed");
   } catch (error) {
     switch (error.message) {
       case "connection shutdown":
@@ -144,7 +150,7 @@ async function exit(): Promise<void> {
         defaultLogger.error(error);
     }
   } finally {
-    defaultLogger.info("Server destroyed");
+    defaultLogger.info("Shutdown...");
     await logShutdown();
     process.exit();
   }

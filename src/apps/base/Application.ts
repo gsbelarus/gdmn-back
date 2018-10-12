@@ -5,7 +5,7 @@ import log4js, {Logger} from "log4js";
 import {Database, IDBDetail} from "../../db/Database";
 import {Session} from "./Session";
 import {SessionManager} from "./SessionManager";
-import {ICommand, Task} from "./task/Task";
+import {ICommand, Level, Task} from "./task/Task";
 
 export type AppAction = "PING" | "GET_SCHEMA" | "QUERY";
 
@@ -17,7 +17,10 @@ export type QueryCommand = AppCommand<"QUERY", IEntityQueryInspector>;
 
 export abstract class Application extends Database {
 
-  private readonly _sessionManager = new SessionManager(this.connectionPool, log4js.getLogger("Session"));
+  protected _sessionLogger = log4js.getLogger("Session");
+  protected _taskLogger = log4js.getLogger("Task");
+
+  private readonly _sessionManager = new SessionManager(this.connectionPool, this._sessionLogger);
 
   private _dbStructure: DBStructure = new DBStructure();
   private _erModel: ERModel = new ERModel();
@@ -45,7 +48,8 @@ export abstract class Application extends Database {
     const task = new Task({
       session,
       command,
-      logger: log4js.getLogger("Task"),
+      level: Level.USER,
+      logger: this._taskLogger,
       worker: async (context) => {
         const {steps, delay} = context.command.payload;
 
@@ -63,7 +67,9 @@ export abstract class Application extends Database {
         }
       }
     });
-    return session.taskManager.add(task);
+    session.taskManager.add(task);
+    this.sessionManager.syncTasks();
+    return task;
   }
 
   public pushGetSchemaCommand(session: Session, command: GetSchemaCommand): Task<GetSchemaCommand, IERModel> {
@@ -73,10 +79,13 @@ export abstract class Application extends Database {
     const task = new Task({
       session,
       command,
-      logger: log4js.getLogger("Task"),
+      level: Level.SESSION,
+      logger: this._taskLogger,
       worker: () => this.erModel.serialize()
     });
-    return session.taskManager.add(task);
+    session.taskManager.add(task);
+    this.sessionManager.syncTasks();
+    return task;
   }
 
   public pushQueryCommand(session: Session, command: QueryCommand): Task<QueryCommand, IQueryResponse> {
@@ -86,7 +95,8 @@ export abstract class Application extends Database {
     const task = new Task({
       session,
       command,
-      logger: log4js.getLogger("Task"),
+      level: Level.SESSION,
+      logger: this._taskLogger,
       worker: async (context) => {
         const result = await new ERBridge(context.session.connection)
           .query(this._erModel, this._dbStructure, context.command.payload);
@@ -94,7 +104,9 @@ export abstract class Application extends Database {
         return result;
       }
     });
-    return session.taskManager.add(task);
+    session.taskManager.add(task);
+    this.sessionManager.syncTasks();
+    return task;
   }
 
   public async reload(): Promise<void> {
@@ -149,5 +161,6 @@ export abstract class Application extends Database {
     await super._onDisconnect();
 
     await this._sessionManager.closeAll();
+    this._logger.info("All session are closed");
   }
 }

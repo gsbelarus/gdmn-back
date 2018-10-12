@@ -21,7 +21,14 @@ export class TaskManager {
     this._onProgressTask = (task: Task<any, any>) => this.emitter.emit("progress", task);
   }
 
+  public has(task: Task<any, any>): boolean {
+    return this._tasks.has(task);
+  }
+
   public add<Command extends ICommand<any>, Result>(task: Task<Command, Result>): Task<Command, Result> {
+    if (this._tasks.has(task)) {
+      this.remove(task);
+    }
     this._tasks.add(task);
     this.emitter.emit("add", task);
     task.emitter.addListener("change", this._onChangeTask);

@@ -3,7 +3,7 @@ import {StompClientCommandListener, StompError, StompHeaders, StompServerSession
 import {v1 as uuidV1} from "uuid";
 import {AppAction, Application, GetSchemaCommand, PingCommand, QueryCommand} from "../apps/base/Application";
 import {Session} from "../apps/base/Session";
-import {endStatuses, Task, TaskStatus} from "../apps/base/task/Task";
+import {Task, TaskStatus} from "../apps/base/task/Task";
 import {ITaskManagerEvents} from "../apps/base/task/TaskManager";
 import {CreateAppCommand, DeleteAppCommand, GetAppsCommand, MainAction, MainApplication} from "../apps/MainApplication";
 import {ErrorCode, ServerError} from "./ServerError";
@@ -51,7 +51,9 @@ export class StompSession implements StompClientCommandListener {
       const subscription = this._subscriptions
         .find((sub) => sub.destination === StompSession.DESTINATION_TASK_STATUS);
       if (subscription) {
-        const ack = endStatuses.includes(task.status) ? task.id : uuidV1().toUpperCase();
+        const ack = [TaskStatus.INTERRUPTED, TaskStatus.ERROR, TaskStatus.DONE].includes(task.status)
+          ? task.id
+          : uuidV1().toUpperCase();
 
         const headers: StompHeaders = {
           "content-type": "application/json;charset=utf-8",
@@ -200,7 +202,7 @@ export class StompSession implements StompClientCommandListener {
           this._sendReceipt(headers);
 
           // notify about taskManager
-          this.session.taskManager.getAll().forEach((task) => this._onChangeTask(task));
+          this.session.taskManager.find().forEach((task) => this._onChangeTask(task));
           break;
         }
         case StompSession.DESTINATION_TASK_PROGRESS: {
@@ -216,11 +218,7 @@ export class StompSession implements StompClientCommandListener {
           });
           this._sendReceipt(headers);
 
-          this.session.taskManager.getAll().forEach((task) => {
-            if (task.status === TaskStatus.RUNNING) {
-              this._onProgressTask(task);
-            }
-          });
+          this.session.taskManager.find(TaskStatus.RUNNING).forEach((task) => this._onProgressTask(task));
           break;
         }
         default:

@@ -4,12 +4,12 @@ import {Logger} from "log4js";
 import StrictEventEmitter from "strict-event-emitter-types";
 import {v1 as uuidV1} from "uuid";
 import {ISessionEvents, Session} from "./Session";
+import {Level, TaskStatus} from "./task/Task";
 
 export interface ISessionManagerEvents extends ISessionEvents {
   open: (session: Session) => void;
 }
 
-// TODO sharing tasks between sessions on one user
 export class SessionManager {
 
   public readonly emitter: StrictEventEmitter<EventEmitter, ISessionManagerEvents> = new EventEmitter();
@@ -49,6 +49,8 @@ export class SessionManager {
     });
     this._sessions.push(session);
     this.emitter.emit("open", session);
+
+    this.syncTasks();
     return session;
   }
 
@@ -63,6 +65,43 @@ export class SessionManager {
       default:
         throw new Error("Invalid arguments");
     }
+  }
+
+  public syncTasks(): void {
+    this._sessions.forEach((session) => {
+      session.taskManager
+        .find(TaskStatus.IDLE, TaskStatus.RUNNING, TaskStatus.PAUSED)
+        .forEach((task) => {
+          switch (task.options.level) {
+            case Level.APPLICATION: {
+              this._sessions.forEach((s) => {
+                if (!s.taskManager.has(task)) {
+                  s.taskManager.add(task);
+                  if (this._logger) {
+                    this._logger.info("id#%s was be sync (task id#%s)", s.id, task.id);
+                  }
+                }
+              });
+              break;
+            }
+            case Level.USER: {
+              const userSessions = this.find(task.options.session.userKey);
+              userSessions.forEach((s) => {
+                if (!s.taskManager.has(task)) {
+                  s.taskManager.add(task);
+                  if (this._logger) {
+                    this._logger.info("id#%s was be sync (task id#%s)", s.id, task.id);
+                  }
+                }
+              });
+              return task;
+            }
+            case Level.SESSION:
+            default:
+              break;
+          }
+        });
+    });
   }
 
   public async closeAll(): Promise<void> {
