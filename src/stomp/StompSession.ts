@@ -202,7 +202,7 @@ export class StompSession implements StompClientCommandListener {
           this._sendReceipt(headers);
 
           // notify about taskManager
-          this.session.taskManager.find().forEach((task) => this._onChangeTask(task));
+          this.session.taskManager.find(...Task.STATUSES).forEach((task) => this._onChangeTask(task));
           break;
         }
         case StompSession.DESTINATION_TASK_PROGRESS: {

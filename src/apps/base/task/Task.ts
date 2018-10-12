@@ -60,6 +60,9 @@ export interface ITaskEvents<Command extends ICommand<any>, Result> {
 export class Task<Command extends ICommand<any>, Result> {
 
   public static readonly DEFAULT_PAUSE_CHECK_TIMEOUT = 5 * 1000;
+  public static readonly STATUSES = [
+    TaskStatus.IDLE, TaskStatus.RUNNING, TaskStatus.PAUSED, TaskStatus.INTERRUPTED, TaskStatus.ERROR, TaskStatus.DONE
+  ];
 
   public readonly emitter: StrictEventEmitter<EventEmitter, ITaskEvents<Command, Result>> = new EventEmitter();
 
