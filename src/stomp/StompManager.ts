@@ -1,3 +1,4 @@
+import config from "config";
 import log4js from "log4js";
 import {createStompServerSession, setLoggingListeners} from "node-stomp-protocol";
 import WebSocket from "ws";
@@ -5,6 +6,9 @@ import {MainApplication} from "../apps/MainApplication";
 import {StompSession} from "./StompSession";
 
 export class StompManager {
+
+  public static readonly DEFAULT_HEARTBEAT_INCOMING: number = config.get("server.stomp.heartbeat.incoming");
+  public static readonly DEFAULT_HEARTBEAT_OUTGOING: number = config.get("server.stomp.heartbeat.outgoing");
 
   private readonly _logger = log4js.getLogger("STOMP");
   private readonly _mainApplication = new MainApplication();
@@ -16,7 +20,12 @@ export class StompManager {
   }
 
   public add(webSocket: WebSocket): boolean {
-    const stomp = createStompServerSession(webSocket, StompSession);
+    const stomp = createStompServerSession(webSocket, StompSession, {
+      heartbeat: {
+        incomingPeriod: StompManager.DEFAULT_HEARTBEAT_INCOMING,
+        outgoingPeriod: StompManager.DEFAULT_HEARTBEAT_OUTGOING
+      }
+    });
     const session = stomp.listener as StompSession;
     session.mainApplication = this._mainApplication;
     session.logger = this._logger;
@@ -38,7 +47,7 @@ export class StompManager {
       info: console.log,
       silly: (message, args) => {
         const receiverDataTemplate = /^StompWebSocketStreamLayer: received data %.$/g;
-        if (receiverDataTemplate.test(message)) {
+        if (receiverDataTemplate.test(message) && args !== "\n") {
           this._logger.info("\n>>> %s", args);
         }
         const sendingDataTemplate = /^StompFrameLayer: sending frame data %.$/g;

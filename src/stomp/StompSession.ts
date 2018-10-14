@@ -156,7 +156,7 @@ export class StompSession implements StompClientCommandListener {
 
   public onProtocolError(error: StompError): void {
     this.logger.warn("Protocol Error: %s", error);
-    this.session.close();
+    // this.session.close();
   }
 
   public onEnd(): void {

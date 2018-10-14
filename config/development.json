@@ -5,6 +5,12 @@
       "host": "192.168.0.56",
       "port": 4000
     },
+    "stomp": {
+      "heartbeat": {
+        "incoming": 1000,
+        "outgoing": 1000
+      }
+    },
     "publicDir": "./public"
   },
   "db": {
