@@ -154,7 +154,7 @@ export class Task<Command extends ICommand<any>, Result> {
       });
       this._updateStatus(TaskStatus.DONE);
     } catch (error) {
-      this._logger.warn("id#%s throw error; Error: %s", error);
+      this._logger.warn("id#%s throw error; Error: %s", this._id, error);
       this._error = error instanceof ServerError ? error : new ServerError(ErrorCode.INTERNAL, error.message);
       this._updateStatus(TaskStatus.ERROR);
     }
@@ -182,7 +182,6 @@ export class Task<Command extends ICommand<any>, Result> {
         await this._checkStatus();
         break;
       case TaskStatus.INTERRUPTED:
-        this._logger.error("Was interrupted");
         throw new Error("Task was interrupted");
       case TaskStatus.DONE:
         this._logger.error("Was finished");
