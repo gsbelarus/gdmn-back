@@ -37,6 +37,7 @@ export class StompSession implements StompClientCommandListener {
 
   private readonly _stomp: StompServerSessionLayer;
   private readonly _subscriptions: ISubscription[] = [];
+  private readonly _onEndTask: ITaskManagerEvents["change"];
   private readonly _onChangeTask: ITaskManagerEvents["change"];
   private readonly _onProgressTask: ITaskManagerEvents["progress"];
 
@@ -47,24 +48,21 @@ export class StompSession implements StompClientCommandListener {
 
   constructor(session: StompServerSessionLayer) {
     this._stomp = session;
-    this._onChangeTask = (task: Task<any, any>) => {
+    this._onEndTask = (task) => {
       const subscription = this._subscriptions
-        .find((sub) => sub.destination === StompSession.DESTINATION_TASK_STATUS);
-      if (subscription) {
-        const ack = [TaskStatus.INTERRUPTED, TaskStatus.ERROR, TaskStatus.DONE].includes(task.status)
-          ? task.id
-          : uuidV1().toUpperCase();
+        .find((sub) => sub.destination === StompSession.DESTINATION_TASK);
 
+      if (subscription && Task.END_STATUSES.includes(task.status)) {
         const headers: StompHeaders = {
           "content-type": "application/json;charset=utf-8",
-          "destination": StompSession.DESTINATION_TASK_STATUS,
+          "destination": StompSession.DESTINATION_TASK,
           "action": task.options.command.action,
           "subscription": subscription.id,
-          "message-id": ack,
+          "message-id": task.id,
           "task-id": task.id
         };
         if (subscription.ack !== "auto") {
-          headers.ack = ack;
+          headers.ack = task.id;
         }
 
         this._stomp.message(headers, JSON.stringify({
@@ -82,7 +80,26 @@ export class StompSession implements StompClientCommandListener {
         }
       }
     };
-    this._onProgressTask = (task: Task<any, any>) => {
+    this._onChangeTask = (task) => {
+      const subscription = this._subscriptions
+        .find((sub) => sub.destination === StompSession.DESTINATION_TASK_STATUS);
+      if (subscription) {
+        const headers: StompHeaders = {
+          "content-type": "application/json;charset=utf-8",
+          "destination": StompSession.DESTINATION_TASK_STATUS,
+          "action": task.options.command.action,
+          "subscription": subscription.id,
+          "message-id": uuidV1().toUpperCase(),
+          "task-id": task.id
+        };
+
+        this._stomp.message(headers, JSON.stringify({
+          status: task.status,
+          payload: task.options.command.payload
+        })).catch(this.logger.warn);
+      }
+    };
+    this._onProgressTask = (task) => {
       const subscription = this._subscriptions
         .find((sub) => sub.destination === StompSession.DESTINATION_TASK_PROGRESS);
       if (subscription) {
@@ -165,6 +182,7 @@ export class StompSession implements StompClientCommandListener {
       this._subscriptions.splice(0, this._subscriptions.length);
       this._session.taskManager.emitter.removeListener("progress", this._onProgressTask);
       this._session.taskManager.emitter.removeListener("change", this._onChangeTask);
+      this._session.taskManager.emitter.removeListener("change", this._onEndTask);
       if (!this._session.closed) {
         this._session.setCloseTimeout();
       }
@@ -192,6 +210,19 @@ export class StompSession implements StompClientCommandListener {
         throw new ServerError(ErrorCode.NOT_UNIQUE, "Subscriptions with same destination exists");
       }
       switch (headers.destination) {
+        case StompSession.DESTINATION_TASK: {
+          this.session.taskManager.emitter.addListener("change", this._onEndTask);
+          this._subscriptions.push({
+            id: headers.id,
+            destination: headers.destination,
+            ack: headers.ack as Ack || "auto"
+          });
+          this._sendReceipt(headers);
+
+          // notify about taskManager
+          this.session.taskManager.find(...Task.END_STATUSES).forEach((task) => this._onEndTask(task));
+          break;
+        }
         case StompSession.DESTINATION_TASK_STATUS: {
           this.session.taskManager.emitter.addListener("change", this._onChangeTask);
           this._subscriptions.push({
@@ -206,10 +237,6 @@ export class StompSession implements StompClientCommandListener {
           break;
         }
         case StompSession.DESTINATION_TASK_PROGRESS: {
-          if (headers.ack && headers.ack !== "auto") {
-            throw new ServerError(ErrorCode.UNSUPPORTED,
-              `Unsupported ack mode '${headers.ack}'; supported - 'auto'`);
-          }
           this.session.taskManager.emitter.addListener("progress", this._onProgressTask);
           this._subscriptions.push({
             id: headers.id,
@@ -233,17 +260,25 @@ export class StompSession implements StompClientCommandListener {
       if (!subscription) {
         throw new ServerError(ErrorCode.NOT_FOUND, "Subscription is not found");
       }
-      switch (headers.destination) {
-        case StompSession.DESTINATION_TASK_STATUS:
+      switch (subscription.destination) {
+        case StompSession.DESTINATION_TASK: {
+          this.session.taskManager.emitter.removeListener("change", this._onEndTask);
+          this._subscriptions.splice(this._subscriptions.indexOf(subscription), 1);
+          this._sendReceipt(headers);
+          break;
+        }
+        case StompSession.DESTINATION_TASK_STATUS: {
           this.session.taskManager.emitter.removeListener("change", this._onChangeTask);
           this._subscriptions.splice(this._subscriptions.indexOf(subscription), 1);
           this._sendReceipt(headers);
           break;
-        case StompSession.DESTINATION_TASK_PROGRESS:
+        }
+        case StompSession.DESTINATION_TASK_PROGRESS: {
           this.session.taskManager.emitter.removeListener("progress", this._onProgressTask);
           this._subscriptions.splice(this._subscriptions.indexOf(subscription), 1);
           this._sendReceipt(headers);
           break;
+        }
         default:
           throw new ServerError(ErrorCode.UNSUPPORTED, `Unsupported destination '${headers.destination}'`);
       }

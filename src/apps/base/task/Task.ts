@@ -62,6 +62,7 @@ export class Task<Command extends ICommand<any>, Result> {
   public static readonly STATUSES = [
     TaskStatus.IDLE, TaskStatus.RUNNING, TaskStatus.PAUSED, TaskStatus.INTERRUPTED, TaskStatus.ERROR, TaskStatus.DONE
   ];
+  public static readonly END_STATUSES = [TaskStatus.INTERRUPTED, TaskStatus.ERROR, TaskStatus.DONE];
 
   public readonly emitter: StrictEventEmitter<EventEmitter, ITaskEvents<Command, Result>> = new EventEmitter();
 
@@ -160,7 +161,7 @@ export class Task<Command extends ICommand<any>, Result> {
   }
 
   private _updateStatus(status: TaskStatus): void {
-    if ([TaskStatus.INTERRUPTED, TaskStatus.ERROR, TaskStatus.DONE].includes(this._status)) {
+    if (Task.END_STATUSES.includes(this._status)) {
       this._logger.error("id#%s was finished", this._id);
       throw new Error("Task was finished");
     }

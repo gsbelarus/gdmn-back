@@ -320,7 +320,7 @@ receipt-id:receipt-id
 task-id:task-id
 ```
 
-###### Subscription `/task/status` response:
+###### Subscription `/task` response:
 ```
 <<< MESSAGE
 destination:/task/status
@@ -337,9 +337,6 @@ content-length:...
 
 * `payload` - is request payload
 * `status`:
-  * 0 - `IDLE`
-  * 1 - `RUNNING`
-  * 2 - `PAUSED`
   * 3 - `INTERRUPTED`
   * 4 - `ERROR`
   * 5 - `DONE`
@@ -348,13 +345,35 @@ content-length:...
   * `message` - error message
 * `result` is sent only when the status is `DONE`
 
+###### Subscription `/task/status` response:
+```
+<<< MESSAGE
+destination:/task/status
+action:...
+message-id:msg-0
+subscription:sub-0
+task-id:task-id
+content-type:application/json;charset=utf-8
+content-length:...
+
+{"payload":{...},"status":1,...}
+```
+
+* `payload` - is request payload
+* `status`:
+  * 0 - `IDLE`
+  * 1 - `RUNNING`
+  * 2 - `PAUSED`
+  * 3 - `INTERRUPTED`
+  * 4 - `ERROR`
+  * 5 - `DONE`
+
 ###### Subscription `/task/progress` response:
 ```
 <<< MESSAGE
 destination:/task/progress
 action:...
 message-id:msg-0
-ack:auto (required)
 subscription:sub-0
 task-id:task-id
 content-type:application/json;charset=utf-8
