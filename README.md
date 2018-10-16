@@ -171,9 +171,9 @@ create-user:1
 <<< CONNECTED
 server:gdmn-back/1.0.0
 version:1.2
-session:session
-access-token:token
-refresh-token:token
+session:session-0
+access-token:token-0
+refresh-token:token-1
 
 ```
 
@@ -182,42 +182,42 @@ refresh-token:token
 >>> CONNECT
 login:login
 passcode:password
-session:session (optional)
+session:session-0 (optional)
 create-user:0 (optional)
 app-uid:uid (for user's apps)
 
 <<< CONNECTED
 server:gdmn-back/1.0.0
 version:1.2
-session:session
-access-token:access-token
-refresh-token:refresh-token
+session:session-0
+access-token:token-0
+refresh-token:token-1
 
 ```
 or
 ```
 >>> CONNECT
-authorization:access-token
-session:session (optional)
+authorization:token-0
+session:session-0 (optional)
 app-uid:uid (for user's apps)
 
 <<< CONNECTED
 server:gdmn-back/1.0.0
 version:1.2
-session:session
+session:session-0
 
 ```
 or
 ```
 >>> CONNECT
-authorization:refresh-token
-session:session (optional)
+authorization:token-1
+session:session-0 (optional)
 app-uid:uid (for user's apps)
 
 <<< CONNECTED
 server:gdmn-back/1.0.0
 version:1.2
-session:session
+session:session-0
 access-token:access-token
 refresh-token:refresh-token
 
@@ -226,16 +226,16 @@ refresh-token:refresh-token
 ##### Refresh token (auth base is used)
 ```
 >>> CONNECT
-authorization:refresh-token
-session:session (optional)
+authorization:token-1
+session:session-0 (optional)
 app-uid:uid (for user's apps)
 
 <<< CONNECTED
 server:gdmn-back/1.0.0
 version:1.2
-session:session
-access-token:access-token
-refresh-token:refresh-token
+session:session-0
+access-token:token-2
+refresh-token:token-3
 
 ```
 or
@@ -243,16 +243,16 @@ or
 >>> CONNECT
 login:login
 passcode:password
-session:session (optional)
+session:session-0 (optional)
 create-user:0 (optional)
 app-uid:uid (for user's apps)
 
 <<< CONNECTED
 server:gdmn-back/1.0.0
 version:1.2
-session:session
-access-token:access-token
-refresh-token:refresh-token
+session:session-0
+access-token:token-2
+refresh-token:token-3
 
 ```
 
@@ -260,7 +260,7 @@ refresh-token:refresh-token
 ```
 >>> SEND
 destination:/task
-receipt:receipt-id
+receipt:receipt-0
 action:...
 content-type:application/json;charset=utf-8
 content-length:...
@@ -316,19 +316,19 @@ content-length:...
       ```
 ```
 <<< RECEIPT
-receipt-id:receipt-id
-task-id:task-id
+receipt-id:receipt-0
+task-id:task-0
 ```
 
 ###### Subscription `/task` response:
 ```
 <<< MESSAGE
-destination:/task/status
+destination:/task
 action:...
 message-id:msg-0
-ack:msg-0 (optional)
+ack:client-individual (optional)
 subscription:sub-0
-task-id:task-id
+task-id:task-0
 content-type:application/json;charset=utf-8
 content-length:...
 
@@ -352,7 +352,7 @@ destination:/task/status
 action:...
 message-id:msg-0
 subscription:sub-0
-task-id:task-id
+task-id:task-0
 content-type:application/json;charset=utf-8
 content-length:...
 
@@ -361,7 +361,6 @@ content-length:...
 
 * `payload` - is request payload
 * `status`:
-  * 0 - `IDLE`
   * 1 - `RUNNING`
   * 2 - `PAUSED`
   * 3 - `INTERRUPTED`
@@ -375,7 +374,7 @@ destination:/task/progress
 action:...
 message-id:msg-0
 subscription:sub-0
-task-id:task-id
+task-id:task-0
 content-type:application/json;charset=utf-8
 content-length:...
 
@@ -392,7 +391,7 @@ content-length:...
 <<< ERROR
 code:0
 message:message
-receipt-id:id (optional)
+receipt-id:receipt-0 (optional)
 
 ```
 * `code`:
