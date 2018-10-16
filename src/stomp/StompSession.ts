@@ -53,17 +53,7 @@ export class StompSession implements StompClientCommandListener {
         .find((sub) => sub.destination === StompSession.DESTINATION_TASK);
 
       if (subscription && Task.END_STATUSES.includes(task.status)) {
-        const headers: StompHeaders = {
-          "content-type": "application/json;charset=utf-8",
-          "destination": StompSession.DESTINATION_TASK,
-          "action": task.options.command.action,
-          "subscription": subscription.id,
-          "message-id": task.id,
-          "task-id": task.id
-        };
-        if (subscription.ack !== "auto") {
-          headers.ack = task.id;
-        }
+        const headers = this._getMessageHeaders(subscription, task, task.id);
 
         this._stomp.message(headers, JSON.stringify({
           status: task.status,
@@ -84,14 +74,7 @@ export class StompSession implements StompClientCommandListener {
       const subscription = this._subscriptions
         .find((sub) => sub.destination === StompSession.DESTINATION_TASK_STATUS);
       if (subscription) {
-        const headers: StompHeaders = {
-          "content-type": "application/json;charset=utf-8",
-          "destination": StompSession.DESTINATION_TASK_STATUS,
-          "action": task.options.command.action,
-          "subscription": subscription.id,
-          "message-id": uuidV1().toUpperCase(),
-          "task-id": task.id
-        };
+        const headers = this._getMessageHeaders(subscription, task, uuidV1().toUpperCase());
 
         this._stomp.message(headers, JSON.stringify({
           status: task.status,
@@ -103,14 +86,7 @@ export class StompSession implements StompClientCommandListener {
       const subscription = this._subscriptions
         .find((sub) => sub.destination === StompSession.DESTINATION_TASK_PROGRESS);
       if (subscription) {
-        const headers: StompHeaders = {
-          "content-type": "application/json;charset=utf-8",
-          "destination": StompSession.DESTINATION_TASK_PROGRESS,
-          "action": task.options.command.action,
-          "subscription": subscription.id,
-          "message-id": uuidV1().toUpperCase(),
-          "task-id": task.id
-        };
+        const headers = this._getMessageHeaders(subscription, task, uuidV1().toUpperCase());
 
         this._stomp.message(headers, JSON.stringify({
           payload: task.options.command.payload,
@@ -442,6 +418,21 @@ export class StompSession implements StompClientCommandListener {
     this.session.clearCloseTimeout();
 
     this._sendConnected(result.newTokens || {});
+  }
+
+  protected _getMessageHeaders(subscription: ISubscription, task: Task<any, any>, messageKey: string): StompHeaders {
+    const headers: StompHeaders = {
+      "content-type": "application/json;charset=utf-8",
+      "destination": subscription.destination,
+      "action": task.options.command.action,
+      "subscription": subscription.id,
+      "message-id": messageKey,
+      "task-id": task.id
+    };
+    if (subscription.ack !== "auto") {
+      headers.ack = messageKey;
+    }
+    return headers;
   }
 
   protected _sendConnected(headers: StompHeaders): void {
