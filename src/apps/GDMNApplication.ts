@@ -9,17 +9,6 @@ export class GDMNApplication extends Application {
 
   constructor(dbDetail: IDBDetail) {
     super(dbDetail, log4js.getLogger("GDMNApp"));
-
-    // TODO verify
-    this.sessionManager.emitter.on("forceClose", () => {
-      if (!this.sessionManager.size()) {
-        if (this.connected) {
-          this.disconnect().catch(this._logger.warn);
-        } else {
-          this._logger.error("Session lives without connection to application???");
-        }
-      }
-    });
   }
 
   protected async _onCreate(connection: AConnection): Promise<void> {

@@ -204,14 +204,31 @@ export class MainApplication extends Application {
     if (!this.connected) {
       throw new Error("MainApplication is not created");
     }
-    const application = this._applications.get(uid);
+    let application = this._applications.get(uid);
     const appInfo = await this._getApplicationInfo(session.connection, session.userKey, uid);
     if (!application) {
       const alias = appInfo ? appInfo.alias : "Unknown";
       const dbDetail = MainApplication._createDBDetail(alias, MainApplication.getAppPath(uid), appInfo);
-      this._applications.set(uid, new GDMNApplication(dbDetail));
+      application = new GDMNApplication(dbDetail);
+      this._applications.set(uid, application);
 
-      return this.getApplication(session, uid);
+      // TODO remake
+      const callback = async () => {
+        if (application && application.sessionManager.size() === 1) {
+          if (application.connected) {
+            try {
+              await application.disconnect();
+              this._applications.delete(uid);
+              application.sessionManager.emitter.removeListener("forceClose", callback);
+            } catch (error) {
+              this._logger.warn(error);
+            }
+          } else {
+            this._logger.error("Session lives without connection to application???");
+          }
+        }
+      };
+      application.sessionManager.emitter.on("forceClose", callback);
     }
     return application;
   }
