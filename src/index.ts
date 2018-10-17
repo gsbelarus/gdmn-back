@@ -121,8 +121,13 @@ function startHttpServer(serverApp: Koa): HttpServer | undefined {
     httpServer.listen(config.get("server.http.port"), config.get("server.http.host"));
     httpServer.on("error", serverErrorHandler);
     httpServer.on("listening", () => {
-      console.log(`Listening on http://${httpServer!.address().address}:${httpServer!.address().port};` +
-        ` env: ${process.env.NODE_ENV}`);
+      const address = httpServer!.address();
+      if (typeof address === "string") {
+        console.log(`Listening on ${httpServer!.address()}; env: ${process.env.NODE_ENV}`);
+      } else {
+        console.log(`Listening on http://${httpServer!.address().address}:${httpServer!.address().port};` +
+          ` env: ${process.env.NODE_ENV}`);
+      }
     });
   }
   return httpServer;
