@@ -167,7 +167,38 @@ export class StompSession implements StompClientCommandListener {
   }
 
   public connect(headers: StompHeaders): void {
-    this._internalConnect(headers).catch((error) => this._sendError(error, headers));
+    this._try(async () => {
+      const {session, login, passcode, access_token, authorization, "app-uid": appUid, "create-user": isCreateUser}
+        = headers as IConnectHeaders;
+
+      // authorization
+      let result: { userKey: number, newTokens?: ITokens };
+      if (login && passcode && isCreateUser) {
+        result = await Utils.createUser(this.mainApplication, login, passcode);
+      } else if (login && passcode) {
+        result = await Utils.login(this.mainApplication, login, passcode);
+      } else if (authorization || access_token) { // TODO remove access_token
+        result = await Utils.authorize(this.mainApplication, authorization || access_token!);
+      } else {
+        throw new ServerError(ErrorCode.UNAUTHORIZED, "Incorrect headers");
+      }
+
+      // get application from main
+      this._application = await Utils.getApplication(this.mainApplication, result.userKey, appUid);
+      if (!this._application.connected) {
+        await this._application.connect();
+      }
+
+      // create session for application
+      if (session) {
+        this._session = await this.application.sessionManager.find(session, result.userKey);
+      } else {
+        this._session = await this.application.sessionManager.open(result.userKey);
+      }
+      this.session.clearCloseTimeout();
+
+      this._sendConnected(result.newTokens || {});
+    }, headers);
   }
 
   public disconnect(headers: StompHeaders): void {
@@ -263,7 +294,8 @@ export class StompSession implements StompClientCommandListener {
 
   public send(headers: StompHeaders, body: string = ""): void {
     this._try(() => {
-      const destination = headers.destination;
+      const {destination} = headers;
+      const transaction = this.session.getTransaction(headers.transaction);
 
       switch (destination) {
         case StompSession.DESTINATION_TASK:
@@ -282,7 +314,7 @@ export class StompSession implements StompClientCommandListener {
                 throw new ServerError(ErrorCode.INVALID, "Payload must contains 'uid'");
               }
               const command: DeleteAppCommand = {action, ...bodyObj};
-              const task = this.mainApplication.pushDeleteAppCommand(this.session, command);
+              const task = this.mainApplication.pushDeleteAppCommand(this.session, command, transaction);
               this._sendReceipt(headers, {"task-id": task.id});
 
               task.execute().catch(this.logger.error);
@@ -296,7 +328,7 @@ export class StompSession implements StompClientCommandListener {
                 throw new ServerError(ErrorCode.INVALID, "Payload must contains 'alias'");
               }
               const command: CreateAppCommand = {action, ...bodyObj};
-              const task = this.mainApplication.pushCreateAppCommand(this.session, command);
+              const task = this.mainApplication.pushCreateAppCommand(this.session, command, transaction);
               this._sendReceipt(headers, {"task-id": task.id});
 
               task.execute().catch(this.logger.error);
@@ -307,7 +339,7 @@ export class StompSession implements StompClientCommandListener {
                 throw new ServerError(ErrorCode.UNSUPPORTED, "Unsupported action");
               }
               const command: GetAppsCommand = {action, payload: undefined};
-              const task = this.mainApplication.pushGetAppsCommand(this.session, command);
+              const task = this.mainApplication.pushGetAppsCommand(this.session, command, transaction);
               this._sendReceipt(headers, {"task-id": task.id});
 
               task.execute().catch(this.logger.error);
@@ -322,7 +354,7 @@ export class StompSession implements StompClientCommandListener {
                   delay: bodyObj.payload && bodyObj.payload.delay || 0
                 }
               };
-              const task = this.application.pushPingCommand(this.session, command);
+              const task = this.application.pushPingCommand(this.session, command, transaction);
               this._sendReceipt(headers, {"task-id": task.id});
 
               task.execute().catch(this.logger.error);
@@ -330,7 +362,7 @@ export class StompSession implements StompClientCommandListener {
             }
             case "GET_SCHEMA": {
               const command: GetSchemaCommand = {action, payload: undefined};
-              const task = this.application.pushGetSchemaCommand(this.session, command);
+              const task = this.application.pushGetSchemaCommand(this.session, command, transaction);
               this._sendReceipt(headers, {"task-id": task.id});
 
               task.execute().catch(this.logger.error);
@@ -338,7 +370,7 @@ export class StompSession implements StompClientCommandListener {
             }
             case "QUERY": {
               const command: QueryCommand = {action, ...bodyObj};
-              const task = this.application.pushQueryCommand(this.session, command);
+              const task = this.application.pushQueryCommand(this.session, command, transaction);
               this._sendReceipt(headers, {"task-id": task.id});
 
               task.execute().catch(this.logger.error);
@@ -370,54 +402,39 @@ export class StompSession implements StompClientCommandListener {
   }
 
   public begin(headers: StompHeaders): void {
-    this._try(() => {
-      throw new ServerError(ErrorCode.UNSUPPORTED, "Unsupported yet");
+    this._try(async () => {
+      const transaction = await this.application.erModel.startTransaction();
+      this.session.addTransaction(headers.transaction, transaction);
+      this._sendReceipt(headers);
     }, headers);
   }
 
   public commit(headers: StompHeaders): void {
-    this._try(() => {
-      throw new ServerError(ErrorCode.UNSUPPORTED, "Unsupported yet");
+    this._try(async () => {
+      const transaction = this.session.getTransaction(headers.transaction);
+      if (!transaction) {
+        throw new ServerError(ErrorCode.NOT_FOUND, "Transaction is not found");
+      }
+      await transaction.commit();
+      if (!this.session.removeTransaction(headers.transaction)) {
+        throw new ServerError(ErrorCode.INTERNAL, "Can't delete transaction");
+      }
+      this._sendReceipt(headers);
     }, headers);
   }
 
   public abort(headers: StompHeaders): void {
-    this._try(() => {
-      throw new ServerError(ErrorCode.UNSUPPORTED, "Unsupported yet");
+    this._try(async () => {
+      const transaction = this.session.getTransaction(headers.transaction);
+      if (!transaction) {
+        throw new ServerError(ErrorCode.NOT_FOUND, "Transaction is not found");
+      }
+      await transaction.rollback();
+      if (!this.session.removeTransaction(headers.transaction)) {
+        throw new ServerError(ErrorCode.INTERNAL, "Can't delete transaction");
+      }
+      this._sendReceipt(headers);
     }, headers);
-  }
-
-  protected async _internalConnect(headers: StompHeaders): Promise<void> {
-    const {session, login, passcode, access_token, authorization, "app-uid": appUid, "create-user": isCreateUser}
-      = headers as IConnectHeaders;
-
-    // authorization
-    let result: { userKey: number, newTokens?: ITokens };
-    if (login && passcode && isCreateUser) {
-      result = await Utils.createUser(this.mainApplication, login, passcode);
-    } else if (login && passcode) {
-      result = await Utils.login(this.mainApplication, login, passcode);
-    } else if (authorization || access_token) { // TODO remove access_token
-      result = await Utils.authorize(this.mainApplication, authorization || access_token!);
-    } else {
-      throw new ServerError(ErrorCode.UNAUTHORIZED, "Incorrect headers");
-    }
-
-    // get application from main
-    this._application = await Utils.getApplication(this.mainApplication, result.userKey, appUid);
-    if (!this._application.connected) {
-      await this._application.connect();
-    }
-
-    // create session for application
-    if (session) {
-      this._session = await this.application.sessionManager.find(session, result.userKey);
-    } else {
-      this._session = await this.application.sessionManager.open(result.userKey);
-    }
-    this.session.clearCloseTimeout();
-
-    this._sendConnected(result.newTokens || {});
   }
 
   protected _getMessageHeaders(subscription: ISubscription, task: Task<any, any>, messageKey: string): StompHeaders {
@@ -460,15 +477,13 @@ export class StompSession implements StompClientCommandListener {
     }
   }
 
-  protected _try(callback: () => void, requestHeaders: StompHeaders): void | never {
-    try {
-      callback();
-    } catch (error) {
+  protected _try(callback: () => Promise<void> | void, requestHeaders: StompHeaders): void {
+    Promise.resolve(callback()).catch((error) => {
       if (error instanceof ServerError) {
         this._sendError(error, requestHeaders);
       } else {
         this._sendError(new ServerError(ErrorCode.INTERNAL, error.message), requestHeaders);
       }
-    }
+    });
   }
 }

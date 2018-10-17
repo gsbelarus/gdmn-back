@@ -1,6 +1,7 @@
 import config from "config";
 import {EventEmitter} from "events";
 import {AConnection} from "gdmn-db";
+import {ITransaction} from "gdmn-orm";
 import {Logger} from "log4js";
 import StrictEventEmitter from "strict-event-emitter-types";
 import {TaskStatus} from "./task/Task";
@@ -26,6 +27,7 @@ export class Session {
   protected readonly _logger: Logger | Console;
 
   private readonly _options: IOptions;
+  private readonly _transactions = new Map<string, ITransaction>();
   private readonly _taskManager = new TaskManager();
 
   private _closed: boolean = false;
@@ -75,6 +77,18 @@ export class Session {
     }
   }
 
+  public addTransaction(key: string, transaction: ITransaction): void {
+    this._transactions.set(key, transaction);
+  }
+
+  public getTransaction(key?: string): ITransaction | undefined {
+    return key !== undefined ? this._transactions.get(key) : undefined;
+  }
+
+  public removeTransaction(key: string): boolean {
+    return this._transactions.delete(key);
+  }
+
   public close(): void {
     if (this._closed || this._forceClosed) {
       this._logger.error("id#%s already closed", this.id);
@@ -83,6 +97,7 @@ export class Session {
     this.clearCloseTimeout();
     this._closed = true;
     this.emitter.emit("close", this);
+
     this._internalClose();
     this._logger.info("id#%s is closed", this.id);
   }
@@ -95,11 +110,18 @@ export class Session {
     this.clearCloseTimeout();
     this._forceClosed = true;
     this.emitter.emit("forceClose", this);
+
     this._taskManager
       .find(TaskStatus.IDLE, TaskStatus.RUNNING, TaskStatus.PAUSED)
       .filter((task) => task.options.session === this)
       .forEach((task) => task.interrupt());
     this._taskManager.clear();
+    for (const [key, transaction] of this._transactions) {
+      if (!transaction.finished) {
+        await transaction.rollback();
+      }
+      this._transactions.delete(key);
+    }
     await this._options.connection.disconnect();
     this._logger.info("id#%s is force closed", this.id);
   }

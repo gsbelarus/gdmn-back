@@ -9,6 +9,7 @@ import {
   Entity,
   EntityAttribute,
   IntegerAttribute,
+  ITransaction,
   SetAttribute,
   StringAttribute,
   TimeStampAttribute
@@ -130,16 +131,18 @@ export class MainApplication extends Application {
 
   // TODO tmp
   public pushCreateAppCommand(session: Session,
-                              command: CreateAppCommand): Task<CreateAppCommand, IApplicationInfoOutput> {
+                              command: CreateAppCommand,
+                              transaction?: ITransaction): Task<CreateAppCommand, IApplicationInfoOutput> {
     this._checkSession(session);
 
     const task = new Task({
       session,
+      transaction,
       command,
       level: Level.USER,
       logger: this._taskLogger,
-      worker: async (context) => {
-        const {alias, connectionOptions} = command.payload;
+      worker: async (context) => {  // TODO transaction
+        const {alias, connectionOptions} = context.command.payload;
 
         const uid = uuidV1().toUpperCase();
         await this._addApplicationInfo(context.session.connection, context.session.userKey, {
@@ -159,15 +162,18 @@ export class MainApplication extends Application {
   }
 
   // TODO tmp
-  public pushDeleteAppCommand(session: Session, command: DeleteAppCommand): Task<DeleteAppCommand, void> {
+  public pushDeleteAppCommand(session: Session,
+                              command: DeleteAppCommand,
+                              transaction?: ITransaction): Task<DeleteAppCommand, void> {
     this._checkSession(session);
 
     const task = new Task({
       session,
+      transaction,
       command,
       level: Level.USER,
       logger: this._taskLogger,
-      worker: async (context) => {
+      worker: async (context) => {  // TODO transaction
         const {uid} = context.command.payload;
 
         const appInfo = await this._getApplicationInfo(context.session.connection, context.session.userKey, uid);
@@ -185,11 +191,14 @@ export class MainApplication extends Application {
   }
 
   // TODO tmp
-  public pushGetAppsCommand(session: Session, command: GetAppsCommand): Task<GetAppsCommand, IApplicationInfoOutput[]> {
+  public pushGetAppsCommand(session: Session,
+                            command: GetAppsCommand,
+                            transaction?: ITransaction): Task<GetAppsCommand, IApplicationInfoOutput[]> {
     this._checkSession(session);
 
     const task = new Task({
       session,
+      transaction,
       command,
       level: Level.SESSION,
       logger: this._taskLogger,

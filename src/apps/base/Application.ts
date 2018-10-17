@@ -1,6 +1,6 @@
 import {AccessMode, AConnection, DBStructure} from "gdmn-db";
 import {DataSource, ERBridge, IQueryResponse} from "gdmn-er-bridge";
-import {ERModel, IEntityQueryInspector, IERModel} from "gdmn-orm";
+import {ERModel, IEntityQueryInspector, IERModel, ITransaction} from "gdmn-orm";
 import log4js, {Logger} from "log4js";
 import {Database, IDBDetail} from "../../db/Database";
 import {Session} from "./Session";
@@ -41,12 +41,15 @@ export abstract class Application extends Database {
     return this._sessionManager;
   }
 
-  public pushPingCommand(session: Session, command: PingCommand): Task<PingCommand, void> {
+  public pushPingCommand(session: Session,
+                         command: PingCommand,
+                         transaction?: ITransaction): Task<PingCommand, void> {
     this._checkSession(session);
     this._checkBusy();
 
     const task = new Task({
       session,
+      transaction,
       command,
       level: Level.USER,
       logger: this._taskLogger,
@@ -72,12 +75,15 @@ export abstract class Application extends Database {
     return task;
   }
 
-  public pushGetSchemaCommand(session: Session, command: GetSchemaCommand): Task<GetSchemaCommand, IERModel> {
+  public pushGetSchemaCommand(session: Session,
+                              command: GetSchemaCommand,
+                              transaction?: ITransaction): Task<GetSchemaCommand, IERModel> {
     this._checkSession(session);
     this._checkBusy();
 
     const task = new Task({
       session,
+      transaction,
       command,
       level: Level.SESSION,
       logger: this._taskLogger,
@@ -88,16 +94,19 @@ export abstract class Application extends Database {
     return task;
   }
 
-  public pushQueryCommand(session: Session, command: QueryCommand): Task<QueryCommand, IQueryResponse> {
+  public pushQueryCommand(session: Session,
+                          command: QueryCommand,
+                          transaction?: ITransaction): Task<QueryCommand, IQueryResponse> {
     this._checkSession(session);
     this._checkBusy();
 
     const task = new Task({
       session,
+      transaction,
       command,
       level: Level.SESSION,
       logger: this._taskLogger,
-      worker: async (context) => {
+      worker: async (context) => {  // TODO transaction
         const result = await new ERBridge(context.session.connection)
           .query(this._erModel, this._dbStructure, context.command.payload);
         await context.checkStatus();
