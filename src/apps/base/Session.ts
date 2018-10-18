@@ -17,6 +17,7 @@ export interface IOptions {
 export interface ISessionEvents {
   close: (session: Session) => void;
   forceClose: (session: Session) => void;
+  forceClosed: (session: Session) => void;
 }
 
 export class Session {
@@ -123,6 +124,7 @@ export class Session {
       this._transactions.delete(key);
     }
     await this._options.connection.disconnect();
+    this.emitter.emit("forceClosed", this);
     this._logger.info("id#%s is force closed", this.id);
   }
 

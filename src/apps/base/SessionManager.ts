@@ -40,13 +40,14 @@ export class SessionManager {
       logger: this._logger
     });
     session.emitter.once("close", (s) => {
-      this.emitter.emit("close", session);
+      this.emitter.emit("close", s);
       this._sessions.splice(this._sessions.indexOf(s), 1);
     });
     session.emitter.once("forceClose", (s) => {
-      this.emitter.emit("forceClose", session);
+      this.emitter.emit("forceClose", s);
       this._sessions.splice(this._sessions.indexOf(s), 1);
     });
+    session.emitter.once("forceClosed", (s) => this.emitter.emit("forceClosed", s));
     this._sessions.push(session);
     this.emitter.emit("open", session);
 

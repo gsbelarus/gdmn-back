@@ -223,24 +223,26 @@ export class MainApplication extends Application {
 
       // TODO remake
       const callback = async () => {
-        if (application) {
-          if (application.sessionManager.size() <= 1) {
-            if (application.connected) {
-              try {
-                await application.disconnect();
-                this._applications.delete(uid);
-              } catch (error) {
-                this._logger.warn(error);
-              }
-            } else {
-              this._logger.error("Session lives without connection to application???");
+        if (!application) {
+          return;
+        }
+        if (!application.sessionManager.size()) {
+          if (application.connected) {
+            try {
+              await application.disconnect();
+              this._applications.delete(uid);
+            } catch (error) {
+              this._logger.warn(error);
             }
           } else {
-            application.sessionManager.emitter.once("forceClose", callback);
+            this._applications.delete(uid);
+            this._logger.error("Session lives without connection to application???");
           }
+        } else {
+          application.sessionManager.emitter.once("forceClosed", callback);
         }
       };
-      application.sessionManager.emitter.once("forceClose", callback);
+      application.sessionManager.emitter.once("forceClosed", callback);
     }
     return application;
   }
