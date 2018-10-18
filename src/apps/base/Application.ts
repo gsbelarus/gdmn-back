@@ -1,6 +1,6 @@
 import {AccessMode, AConnection, DBStructure} from "gdmn-db";
-import {DataSource, ERBridge, IQueryResponse} from "gdmn-er-bridge";
-import {ERModel, IEntityQueryInspector, IERModel, ITransaction} from "gdmn-orm";
+import {DataSource, ERBridge} from "gdmn-er-bridge";
+import {ERModel, IEntityQueryInspector, IERModel, IQueryResponse, ITransaction} from "gdmn-orm";
 import log4js, {Logger} from "log4js";
 import {Database, IDBDetail} from "../../db/Database";
 import {Session} from "./Session";
@@ -106,11 +106,23 @@ export abstract class Application extends Database {
       command,
       level: Level.SESSION,
       logger: this._taskLogger,
-      worker: async (context) => {  // TODO transaction
-        const result = await new ERBridge(context.session.connection)
-          .query(this._erModel, this._dbStructure, context.command.payload);
-        await context.checkStatus();
-        return result;
+      worker: async (context) => {
+        if (context.transaction) {
+          const result = await this._erModel.query(context.transaction, context.command.payload);
+          await context.checkStatus();
+          return result;
+        } else {
+          const trans = await this._erModel.startTransaction();
+          try {
+            const result = await this._erModel.query(trans, context.command.payload);
+            await trans.commit();
+            await context.checkStatus();
+            return result;
+          } catch (error) {
+            await trans.rollback();
+            throw error;
+          }
+        }
       }
     });
     session.taskManager.add(task);
