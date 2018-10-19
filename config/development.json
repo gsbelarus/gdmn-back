@@ -11,7 +11,14 @@
         "outgoing": 60000
       }
     },
-    "publicDir": "./public"
+    "publicDir": "./public",
+    "session": {
+      "timeout": 8.64E7
+    },
+    "task": {
+      "timeout": 8.64E7
+    },
+    "jwtSecret": "DefaultJWTSecret"
   },
   "db": {
     "host": "localhost",
@@ -19,11 +26,5 @@
     "user": "SYSDBA",
     "password": "masterkey",
     "dir": "./databases"
-  },
-  "auth": {
-    "session": {
-      "timeout": 8.64E7
-    },
-    "jwtSecret": "DefaultJWTSecret"
   }
 }

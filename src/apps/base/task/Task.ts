@@ -1,3 +1,4 @@
+import config from "config";
 import {EventEmitter} from "events";
 import {ITransaction} from "gdmn-orm";
 import {Logger} from "log4js";
@@ -67,6 +68,8 @@ export class Task<Command extends ICommand<any>, Result> {
   ];
   public static readonly END_STATUSES = [TaskStatus.INTERRUPTED, TaskStatus.ERROR, TaskStatus.DONE];
 
+  private static DEFAULT_TIMEOUT: number = config.get("server.task.timeout");
+
   public readonly emitter: StrictEventEmitter<EventEmitter, ITaskEvents<Command, Result>> = new EventEmitter();
 
   protected readonly _logger: Logger | Console;
@@ -79,6 +82,7 @@ export class Task<Command extends ICommand<any>, Result> {
   private _status: TaskStatus = TaskStatus.IDLE;
   private _result?: Result;
   private _error?: ServerError;
+  private _timer?: NodeJS.Timer;
 
   constructor(options: IOptions<Command, Result>) {
     this._id = uuidV1().toUpperCase();
@@ -176,6 +180,13 @@ export class Task<Command extends ICommand<any>, Result> {
       date: new Date(),
       status: this._status
     });
+    if (this._timer) {
+      clearTimeout(this._timer);
+      this._timer = undefined;
+    }
+    if (this._status === TaskStatus.RUNNING) {
+      this._timer = setTimeout(() => this.interrupt(), Task.DEFAULT_TIMEOUT);
+    }
     this._logger.info("id#%s is changed; Action: %s; Status: %s", this._id, this._options.command.action,
       TaskStatus[this._status]);
     this.emitter.emit("change", this);

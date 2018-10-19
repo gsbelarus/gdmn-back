@@ -7,6 +7,7 @@ import {Strategy as LocalStrategy} from "passport-local";
 import {IUserOutput, MainApplication} from "./apps/MainApplication";
 import {ErrorCodes, throwCtx} from "./ErrorCodes";
 
+const JWT_SECRET: string = config.get("server.jwtSecret");
 const USERNAME_FIELD = "login";
 const PASSWORD_FIELD = "password";
 
@@ -19,7 +20,7 @@ const jwtFromRequest = ExtractJwt.fromExtractors([
 export function createAccessJwtToken(user: IUserOutput): string {
   return jwt.sign({
     id: user.id
-  }, config.get("auth.jwtSecret"), {
+  }, JWT_SECRET, {
     expiresIn: "3h"
   });
 }
@@ -28,13 +29,13 @@ export function createRefreshJwtToken(user: IUserOutput): string {
   return jwt.sign({
     id: user.id,
     isRefresh: true
-  }, config.get("auth.jwtSecret"), {
+  }, JWT_SECRET, {
     expiresIn: "7d"
   });
 }
 
 export function getPayloadFromJwtToken(token: string): any {
-  const verified = jwt.verify(token, config.get("auth.jwtSecret"));
+  const verified = jwt.verify(token, JWT_SECRET);
 
   if (verified) {
     const payload = jwt.decode(token);
@@ -72,7 +73,7 @@ passport.use(new LocalStrategy({
 
 passport.use("jwt", new JWTStrategy({
     jwtFromRequest,
-    secretOrKey: config.get("auth.jwtSecret"),
+    secretOrKey: JWT_SECRET,
     passReqToCallback: true
   },
   async (req: any, payload: any, done: any) => {
@@ -96,7 +97,7 @@ passport.use("jwt", new JWTStrategy({
 
 passport.use("refresh_jwt", new JWTStrategy({
     jwtFromRequest,
-    secretOrKey: config.get("auth.jwtSecret"),
+    secretOrKey: JWT_SECRET,
     passReqToCallback: true
   },
   async (req: any, payload: any, done: any) => {

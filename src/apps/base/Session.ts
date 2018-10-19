@@ -22,7 +22,7 @@ export interface ISessionEvents {
 
 export class Session {
 
-  private static DEFAULT_TIMEOUT: number = config.get("auth.session.timeout");
+  private static DEFAULT_TIMEOUT: number = config.get("server.session.timeout");
 
   public readonly emitter: StrictEventEmitter<EventEmitter, ISessionEvents> = new EventEmitter();
   protected readonly _logger: Logger | Console;
@@ -112,8 +112,7 @@ export class Session {
     this._forceClosed = true;
     this.emitter.emit("forceClose", this);
 
-    this._taskManager
-      .find(TaskStatus.IDLE, TaskStatus.RUNNING, TaskStatus.PAUSED)
+    this._taskManager.find(TaskStatus.IDLE, TaskStatus.RUNNING, TaskStatus.PAUSED)
       .filter((task) => task.options.session === this)
       .forEach((task) => task.interrupt());
     this._taskManager.clear();
@@ -130,14 +129,13 @@ export class Session {
 
   private _internalClose(): void {
     if (this._closed) {
-      const runningTasks = this._taskManager
-        .find(TaskStatus.IDLE, TaskStatus.RUNNING, TaskStatus.PAUSED)
+      const runningTasks = this._taskManager.find(TaskStatus.RUNNING)
         .filter((task) => task.options.session === this);
       if (runningTasks.length) {
         this._logger.info("id#%s is waiting for task completion", this.id);
         this._taskManager.emitter.once("change", () => this._internalClose());
       } else {
-        this.forceClose().catch(console.error);
+        this.forceClose().catch(this._logger.error);
       }
     }
   }
