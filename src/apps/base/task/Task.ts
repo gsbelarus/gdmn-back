@@ -88,7 +88,9 @@ export class Task<Command extends ICommand<any>, Result> {
     this._progress.emitter.on("change", () => {
       this._logger.info("id#%s in progress; Value: %s; Description: %s", this._id, this._progress.value,
         this._progress.description);
-      this.emitter.emit("progress", this);
+      if (this.status === TaskStatus.RUNNING) {
+        this.emitter.emit("progress", this);
+      }
     });
     this._updateStatus(TaskStatus.IDLE);
   }
