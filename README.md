@@ -338,12 +338,12 @@ content-length:...
 * `payload` - is request payload
 * `status`:
   * 3 - `INTERRUPTED`
-  * 4 - `ERROR`
-  * 5 - `DONE`
-* `error` is sent only when the status is `ERROR`
+  * 4 - `FAILED`
+  * 5 - `SUCCESS`
+* `error` is sent only when the status is `FAILED`
   * `code` - error code
   * `message` - error message
-* `result` is sent only when the status is `DONE`
+* `result` is sent only when the status is `SUCCESS`
 
 ###### Subscription `/task/status` response:
 ```
@@ -364,8 +364,8 @@ content-length:...
   * 1 - `RUNNING`
   * 2 - `PAUSED`
   * 3 - `INTERRUPTED`
-  * 4 - `ERROR`
-  * 5 - `DONE`
+  * 4 - `FAILED`
+  * 5 - `SUCCESS`
 
 ###### Subscription `/task/progress` response:
 ```

@@ -52,7 +52,7 @@ export class StompSession implements StompClientCommandListener {
       const subscription = this._subscriptions
         .find((sub) => sub.destination === StompSession.DESTINATION_TASK);
 
-      if (subscription && Task.END_STATUSES.includes(task.status)) {
+      if (subscription && Task.DONE_STATUSES.includes(task.status)) {
         const headers = this._getMessageHeaders(subscription, task, task.id);
 
         this._stomp.message(headers, JSON.stringify({
@@ -227,7 +227,7 @@ export class StompSession implements StompClientCommandListener {
           this._sendReceipt(headers);
 
           // notify about taskManager
-          this.session.taskManager.find(...Task.END_STATUSES).forEach((task) => this._onEndTask(task));
+          this.session.taskManager.find(...Task.DONE_STATUSES).forEach((task) => this._onEndTask(task));
           break;
         }
         case StompSession.DESTINATION_TASK_STATUS: {

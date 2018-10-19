@@ -14,8 +14,8 @@ export enum TaskStatus {
   PAUSED,
 
   INTERRUPTED,
-  ERROR,
-  DONE
+  FAILED,
+  SUCCESS
 }
 
 export enum Level {
@@ -47,7 +47,6 @@ export interface IOptions<Command extends ICommand<any>, Result> {
   readonly level: Level;
   readonly logger?: Logger;
   readonly progress?: IProgressOptions;
-  readonly pauseCheckTimeout?: number;
   readonly worker: TaskWorker<Command, Result>;
 }
 
@@ -64,9 +63,18 @@ export interface ITaskEvents<Command extends ICommand<any>, Result> {
 export class Task<Command extends ICommand<any>, Result> {
 
   public static readonly STATUSES = [
-    TaskStatus.IDLE, TaskStatus.RUNNING, TaskStatus.PAUSED, TaskStatus.INTERRUPTED, TaskStatus.ERROR, TaskStatus.DONE
+    TaskStatus.IDLE,
+    TaskStatus.RUNNING,
+    TaskStatus.PAUSED,
+    TaskStatus.INTERRUPTED,
+    TaskStatus.FAILED,
+    TaskStatus.SUCCESS
   ];
-  public static readonly END_STATUSES = [TaskStatus.INTERRUPTED, TaskStatus.ERROR, TaskStatus.DONE];
+  public static readonly DONE_STATUSES = [
+    TaskStatus.INTERRUPTED,
+    TaskStatus.FAILED,
+    TaskStatus.SUCCESS
+  ];
 
   private static DEFAULT_TIMEOUT: number = config.get("server.task.timeout");
 
@@ -162,16 +170,16 @@ export class Task<Command extends ICommand<any>, Result> {
         checkStatus: this._checkStatus.bind(this),
         progress: this._progress
       });
-      this._updateStatus(TaskStatus.DONE);
+      this._updateStatus(TaskStatus.SUCCESS);
     } catch (error) {
       this._logger.warn("id#%s throw error; Error: %s", this._id, error);
       this._error = error instanceof ServerError ? error : new ServerError(ErrorCode.INTERNAL, error.message);
-      this._updateStatus(TaskStatus.ERROR);
+      this._updateStatus(TaskStatus.FAILED);
     }
   }
 
   private _updateStatus(status: TaskStatus): void {
-    if (Task.END_STATUSES.includes(this._status)) {
+    if (Task.DONE_STATUSES.includes(this._status)) {
       this._logger.error("id#%s was finished", this._id);
       throw new Error("Task was finished");
     }
@@ -200,7 +208,7 @@ export class Task<Command extends ICommand<any>, Result> {
         break;
       case TaskStatus.INTERRUPTED:
         throw new Error("Task was interrupted");
-      case TaskStatus.DONE:
+      case TaskStatus.SUCCESS:
         this._logger.error("Was finished");
         throw new Error("Task was finished");
       case TaskStatus.IDLE:
