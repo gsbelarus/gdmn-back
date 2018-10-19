@@ -267,35 +267,35 @@ export class MainApplication extends Application {
     try {
 
       // APP_USER
-      const userEntity = await this.erModel.create(transaction, new Entity({
+      const userEntity = await this.erModel.create(new Entity({
         name: "APP_USER", lName: {ru: {name: "Пользователь"}}
-      }));
-      await userEntity.create(transaction, new StringAttribute({
+      }), transaction);
+      await userEntity.create(new StringAttribute({
         name: "LOGIN", lName: {ru: {name: "Логин"}}, required: true, minLength: 1, maxLength: 32
-      }));
-      await userEntity.create(transaction, new BlobAttribute({
+      }), transaction);
+      await userEntity.create(new BlobAttribute({
         name: "PASSWORD_HASH", lName: {ru: {name: "Хешированный пароль"}}, required: true
-      }));
-      await userEntity.create(transaction, new BlobAttribute({
+      }), transaction);
+      await userEntity.create(new BlobAttribute({
         name: "SALT", lName: {ru: {name: "Примесь"}}, required: true
-      }));
-      await userEntity.create(transaction, new BooleanAttribute({
+      }), transaction);
+      await userEntity.create(new BooleanAttribute({
         name: "IS_ADMIN", lName: {ru: {name: "Флаг администратора"}}
-      }));
+      }), transaction);
 
       // APPLICATION
-      const appEntity = await this.erModel.create(transaction, new Entity({
+      const appEntity = await this.erModel.create(new Entity({
         name: "APPLICATION", lName: {ru: {name: "Приложение"}}
-      }));
+      }), transaction);
       const appUid = new StringAttribute({
         name: "UID", lName: {ru: {name: "Идентификатор приложения"}}, required: true, minLength: 1, maxLength: 36
       });
-      await appEntity.create(transaction, appUid);
-      await appEntity.addAttrUnique(transaction, [appUid]);
-      await appEntity.create(transaction, new TimeStampAttribute({
+      await appEntity.create(appUid, transaction);
+      await appEntity.addAttrUnique([appUid], transaction);
+      await appEntity.create(new TimeStampAttribute({
         name: "CREATIONDATE", lName: {ru: {name: "Дата создания"}}, required: true,
         defaultValue: "CURRENT_TIMESTAMP"
-      }));
+      }), transaction);
       const appSet = new SetAttribute({
         name: "APPLICATIONS", lName: {ru: {name: "Приложения"}}, entities: [appEntity],
         adapter: {crossRelation: "APP_USER_APPLICATIONS"}
@@ -304,28 +304,28 @@ export class MainApplication extends Application {
         name: "ALIAS", lName: {ru: {name: "Название приложения"}}, required: true, minLength: 1, maxLength: 120
       }));
 
-      await userEntity.create(transaction, appSet);
+      await userEntity.create(appSet, transaction);
 
       // APPLICATION_BACKUPS
-      const backupEntity = await this.erModel.create(transaction, new Entity({
+      const backupEntity = await this.erModel.create(new Entity({
         name: "APPLICATION_BACKUPS", lName: {ru: {name: "Резервная копия"}}
-      }));
+      }), transaction);
       const backupUid = new StringAttribute({
         name: "UID", lName: {ru: {name: "Идентификатор бэкапа"}}, required: true, minLength: 1, maxLength: 36
       });
-      await backupEntity.create(transaction, backupUid);
-      await backupEntity.addAttrUnique(transaction, [backupUid]);
+      await backupEntity.create(backupUid, transaction);
+      await backupEntity.addAttrUnique([backupUid], transaction);
 
-      await backupEntity.create(transaction, new EntityAttribute({
+      await backupEntity.create(new EntityAttribute({
         name: "APP", lName: {ru: {name: "Приложение"}}, required: true, entities: [appEntity]
-      }));
-      await backupEntity.create(transaction, new TimeStampAttribute({
+      }), transaction);
+      await backupEntity.create(new TimeStampAttribute({
         name: "CREATIONDATE", lName: {ru: {name: "Дата создания"}}, required: true,
         defaultValue: "CURRENT_TIMESTAMP"
-      }));
-      await backupEntity.create(transaction, new StringAttribute({
+      }), transaction);
+      await backupEntity.create(new StringAttribute({
         name: "ALIAS", lName: {ru: {name: "Название бэкапа"}}, required: true, minLength: 1, maxLength: 120
-      }));
+      }), transaction);
 
       await transaction.commit();
     } catch (error) {
