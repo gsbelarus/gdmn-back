@@ -9,7 +9,6 @@ import {
   Entity,
   EntityAttribute,
   IntegerAttribute,
-  ITransaction,
   SetAttribute,
   StringAttribute,
   TimeStampAttribute
@@ -19,7 +18,7 @@ import path from "path";
 import {v1 as uuidV1} from "uuid";
 import {IDBDetail} from "../db/Database";
 import databases from "../db/databases";
-import {Application} from "./base/Application";
+import {Application, ITPayload} from "./base/Application";
 import {Session} from "./base/Session";
 import {ICommand, Level, Task} from "./base/task/Task";
 import {GDMNApplication} from "./GDMNApplication";
@@ -67,11 +66,12 @@ export interface IAppBackupInfoOutput {
 
 export type MainAction = "DELETE_APP" | "CREATE_APP" | "GET_APPS";
 
-export type MainCommand<A extends MainAction, P> = ICommand<A, P>;
+export type MainCommand<A extends MainAction, P = undefined> = ICommand<A, P>;
 
-export type CreateAppCommand = MainCommand<"CREATE_APP", { alias: string, connectionOptions?: IOptConnectionOptions }>;
-export type DeleteAppCommand = MainCommand<"DELETE_APP", { uid: string }>;
-export type GetAppsCommand = MainCommand<"GET_APPS", undefined>;
+export type CreateAppCommand = MainCommand<"CREATE_APP",
+  { alias: string; connectionOptions?: IOptConnectionOptions; } & ITPayload>;
+export type DeleteAppCommand = MainCommand<"DELETE_APP", { uid: string; } & ITPayload>;
+export type GetAppsCommand = MainCommand<"GET_APPS">;
 
 export class MainApplication extends Application {
 
@@ -131,13 +131,11 @@ export class MainApplication extends Application {
 
   // TODO tmp
   public pushCreateAppCommand(session: Session,
-                              command: CreateAppCommand,
-                              transaction?: ITransaction): Task<CreateAppCommand, IApplicationInfoOutput> {
+                              command: CreateAppCommand): Task<CreateAppCommand, IApplicationInfoOutput> {
     this._checkSession(session);
 
     const task = new Task({
       session,
-      transaction,
       command,
       level: Level.USER,
       logger: this._taskLogger,
@@ -162,14 +160,11 @@ export class MainApplication extends Application {
   }
 
   // TODO tmp
-  public pushDeleteAppCommand(session: Session,
-                              command: DeleteAppCommand,
-                              transaction?: ITransaction): Task<DeleteAppCommand, void> {
+  public pushDeleteAppCommand(session: Session, command: DeleteAppCommand): Task<DeleteAppCommand, void> {
     this._checkSession(session);
 
     const task = new Task({
       session,
-      transaction,
       command,
       level: Level.USER,
       logger: this._taskLogger,
@@ -191,14 +186,11 @@ export class MainApplication extends Application {
   }
 
   // TODO tmp
-  public pushGetAppsCommand(session: Session,
-                            command: GetAppsCommand,
-                            transaction?: ITransaction): Task<GetAppsCommand, IApplicationInfoOutput[]> {
+  public pushGetAppsCommand(session: Session, command: GetAppsCommand): Task<GetAppsCommand, IApplicationInfoOutput[]> {
     this._checkSession(session);
 
     const task = new Task({
       session,
-      transaction,
       command,
       level: Level.SESSION,
       logger: this._taskLogger,

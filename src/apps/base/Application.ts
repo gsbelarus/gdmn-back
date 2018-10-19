@@ -1,19 +1,28 @@
 import {AccessMode, AConnection, DBStructure} from "gdmn-db";
 import {DataSource, ERBridge} from "gdmn-er-bridge";
-import {ERModel, IEntityQueryInspector, IERModel, IQueryResponse, ITransaction} from "gdmn-orm";
+import {ERModel, IEntityQueryInspector, IERModel, IQueryResponse} from "gdmn-orm";
 import log4js, {Logger} from "log4js";
 import {Database, IDBDetail} from "../../db/Database";
 import {Session} from "./Session";
 import {SessionManager} from "./SessionManager";
 import {ICommand, Level, Task} from "./task/Task";
 
-export type AppAction = "PING" | "GET_SCHEMA" | "QUERY";
+export type AppAction = "BEGIN_TRANSACTION" | "COMMIT_TRANSACTION" | "ROLLBACK_TRANSACTION" |
+  "PING" | "GET_SCHEMA" | "QUERY";
 
-export type AppCommand<A extends AppAction, P = any> = ICommand<A, P>;
+export type AppCommand<A extends AppAction, P = undefined> = ICommand<A, P>;
 
-export type PingCommand = AppCommand<"PING", { steps: number, delay: number }>;
-export type GetSchemaCommand = AppCommand<"GET_SCHEMA", undefined>;
-export type QueryCommand = AppCommand<"QUERY", IEntityQueryInspector>;
+export interface ITPayload {
+  transactionKey?: string;
+}
+
+export type BeginTransCommand = AppCommand<"BEGIN_TRANSACTION">;
+export type CommitTransCommand = AppCommand<"COMMIT_TRANSACTION", { transactionKey: string; }>;
+export type RollbackTransCommand = AppCommand<"ROLLBACK_TRANSACTION", { transactionKey: string; }>;
+
+export type PingCommand = AppCommand<"PING", { steps: number; delay: number; } & ITPayload>;
+export type GetSchemaCommand = AppCommand<"GET_SCHEMA">;
+export type QueryCommand = AppCommand<"QUERY", IEntityQueryInspector & ITPayload>;
 
 export abstract class Application extends Database {
 
@@ -41,15 +50,81 @@ export abstract class Application extends Database {
     return this._sessionManager;
   }
 
-  public pushPingCommand(session: Session,
-                         command: PingCommand,
-                         transaction?: ITransaction): Task<PingCommand, void> {
+  public pushBeginTransCommand(session: Session, command: BeginTransCommand): Task<BeginTransCommand, string> {
     this._checkSession(session);
     this._checkBusy();
 
     const task = new Task({
       session,
-      transaction,
+      command,
+      level: Level.SESSION,
+      logger: this._taskLogger,
+      worker: async (context) => {
+        const transaction = await this._erModel.startTransaction();
+        return context.session.addTransaction(transaction);
+      }
+    });
+    session.taskManager.add(task);
+    this.sessionManager.syncTasks();
+    return task;
+  }
+
+  public pushCommitTransCommand(session: Session, command: CommitTransCommand): Task<CommitTransCommand, void> {
+    this._checkSession(session);
+    this._checkBusy();
+
+    const task = new Task({
+      session,
+      command,
+      level: Level.SESSION,
+      logger: this._taskLogger,
+      worker: async (context) => {
+        const {transactionKey} = context.command.payload;
+
+        const transaction = context.session.getTransaction(transactionKey);
+        if (!transaction) {
+          throw new Error("Transaction is not found");
+        }
+        await transaction.commit();
+        context.session.removeTransaction(transactionKey);
+      }
+    });
+    session.taskManager.add(task);
+    this.sessionManager.syncTasks();
+    return task;
+  }
+
+  public pushRollbackTransCommand(session: Session, command: RollbackTransCommand): Task<RollbackTransCommand, void> {
+    this._checkSession(session);
+    this._checkBusy();
+
+    const task = new Task({
+      session,
+      command,
+      level: Level.SESSION,
+      logger: this._taskLogger,
+      worker: async (context) => {
+        const {transactionKey} = context.command.payload;
+
+        const transaction = context.session.getTransaction(transactionKey);
+        if (!transaction) {
+          throw new Error("Transaction is not found");
+        }
+        await transaction.rollback();
+        context.session.removeTransaction(transactionKey);
+      }
+    });
+    session.taskManager.add(task);
+    this.sessionManager.syncTasks();
+    return task;
+  }
+
+  public pushPingCommand(session: Session, command: PingCommand): Task<PingCommand, void> {
+    this._checkSession(session);
+    this._checkBusy();
+
+    const task = new Task({
+      session,
       command,
       level: Level.USER,
       logger: this._taskLogger,
@@ -75,15 +150,12 @@ export abstract class Application extends Database {
     return task;
   }
 
-  public pushGetSchemaCommand(session: Session,
-                              command: GetSchemaCommand,
-                              transaction?: ITransaction): Task<GetSchemaCommand, IERModel> {
+  public pushGetSchemaCommand(session: Session, command: GetSchemaCommand): Task<GetSchemaCommand, IERModel> {
     this._checkSession(session);
     this._checkBusy();
 
     const task = new Task({
       session,
-      transaction,
       command,
       level: Level.SESSION,
       logger: this._taskLogger,
@@ -94,20 +166,20 @@ export abstract class Application extends Database {
     return task;
   }
 
-  public pushQueryCommand(session: Session,
-                          command: QueryCommand,
-                          transaction?: ITransaction): Task<QueryCommand, IQueryResponse> {
+  public pushQueryCommand(session: Session, command: QueryCommand): Task<QueryCommand, IQueryResponse> {
     this._checkSession(session);
     this._checkBusy();
 
     const task = new Task({
       session,
-      transaction,
       command,
       level: Level.SESSION,
       logger: this._taskLogger,
       worker: async (context) => {
-        const result = await this._erModel.query(context.command.payload, context.transaction);
+        const {transactionKey} = context.command.payload;
+
+        const transaction = context.session.getTransaction(transactionKey || "");
+        const result = await this._erModel.query(context.command.payload, transaction);
         await context.checkStatus();
         return result;
       }

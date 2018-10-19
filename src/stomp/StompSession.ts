@@ -1,7 +1,16 @@
 import {Logger} from "log4js";
 import {StompClientCommandListener, StompError, StompHeaders, StompServerSessionLayer} from "node-stomp-protocol";
 import {v1 as uuidV1} from "uuid";
-import {AppAction, Application, GetSchemaCommand, PingCommand, QueryCommand} from "../apps/base/Application";
+import {
+  AppAction,
+  Application,
+  BeginTransCommand,
+  CommitTransCommand,
+  GetSchemaCommand,
+  PingCommand,
+  QueryCommand,
+  RollbackTransCommand
+} from "../apps/base/Application";
 import {Session} from "../apps/base/Session";
 import {Task, TaskStatus} from "../apps/base/task/Task";
 import {ITaskManagerEvents} from "../apps/base/task/TaskManager";
@@ -295,7 +304,6 @@ export class StompSession implements StompClientCommandListener {
   public send(headers: StompHeaders, body: string = ""): void {
     this._try(() => {
       const {destination} = headers;
-      const transaction = this.session.getTransaction(headers.transaction);
 
       switch (destination) {
         case StompSession.DESTINATION_TASK:
@@ -314,7 +322,7 @@ export class StompSession implements StompClientCommandListener {
                 throw new ServerError(ErrorCode.INVALID, "Payload must contains 'uid'");
               }
               const command: DeleteAppCommand = {action, ...bodyObj};
-              const task = this.mainApplication.pushDeleteAppCommand(this.session, command, transaction);
+              const task = this.mainApplication.pushDeleteAppCommand(this.session, command);
               this._sendReceipt(headers, {"task-id": task.id});
 
               task.execute().catch(this.logger.error);
@@ -328,7 +336,7 @@ export class StompSession implements StompClientCommandListener {
                 throw new ServerError(ErrorCode.INVALID, "Payload must contains 'alias'");
               }
               const command: CreateAppCommand = {action, ...bodyObj};
-              const task = this.mainApplication.pushCreateAppCommand(this.session, command, transaction);
+              const task = this.mainApplication.pushCreateAppCommand(this.session, command);
               this._sendReceipt(headers, {"task-id": task.id});
 
               task.execute().catch(this.logger.error);
@@ -339,22 +347,47 @@ export class StompSession implements StompClientCommandListener {
                 throw new ServerError(ErrorCode.UNSUPPORTED, "Unsupported action");
               }
               const command: GetAppsCommand = {action, payload: undefined};
-              const task = this.mainApplication.pushGetAppsCommand(this.session, command, transaction);
+              const task = this.mainApplication.pushGetAppsCommand(this.session, command);
               this._sendReceipt(headers, {"task-id": task.id});
 
               task.execute().catch(this.logger.error);
               break;
             }
             // ------------------------------For all applications
+            case "BEGIN_TRANSACTION": {
+              const command: BeginTransCommand = {action, ...bodyObj};
+              const task = this.application.pushBeginTransCommand(this.session, command);
+              this._sendReceipt(headers, {"task-id": task.id});
+
+              task.execute().catch(this.logger.error);
+              break;
+            }
+            case "COMMIT_TRANSACTION": {
+              const command: CommitTransCommand = {action, ...bodyObj};
+              const task = this.application.pushCommitTransCommand(this.session, command);
+              this._sendReceipt(headers, {"task-id": task.id});
+
+              task.execute().catch(this.logger.error);
+              break;
+            }
+            case "ROLLBACK_TRANSACTION": {
+              const command: RollbackTransCommand = {action, ...bodyObj};
+              const task = this.application.pushRollbackTransCommand(this.session, command);
+              this._sendReceipt(headers, {"task-id": task.id});
+
+              task.execute().catch(this.logger.error);
+              break;
+            }
             case "PING": {
               const command: PingCommand = {
                 action,
                 payload: {
+                  ...bodyObj.payload,
                   steps: bodyObj.payload && bodyObj.payload.steps || 1,
                   delay: bodyObj.payload && bodyObj.payload.delay || 0
                 }
               };
-              const task = this.application.pushPingCommand(this.session, command, transaction);
+              const task = this.application.pushPingCommand(this.session, command);
               this._sendReceipt(headers, {"task-id": task.id});
 
               task.execute().catch(this.logger.error);
@@ -362,7 +395,7 @@ export class StompSession implements StompClientCommandListener {
             }
             case "GET_SCHEMA": {
               const command: GetSchemaCommand = {action, payload: undefined};
-              const task = this.application.pushGetSchemaCommand(this.session, command, transaction);
+              const task = this.application.pushGetSchemaCommand(this.session, command);
               this._sendReceipt(headers, {"task-id": task.id});
 
               task.execute().catch(this.logger.error);
@@ -370,7 +403,7 @@ export class StompSession implements StompClientCommandListener {
             }
             case "QUERY": {
               const command: QueryCommand = {action, ...bodyObj};
-              const task = this.application.pushQueryCommand(this.session, command, transaction);
+              const task = this.application.pushQueryCommand(this.session, command);
               this._sendReceipt(headers, {"task-id": task.id});
 
               task.execute().catch(this.logger.error);
@@ -402,38 +435,20 @@ export class StompSession implements StompClientCommandListener {
   }
 
   public begin(headers: StompHeaders): void {
-    this._try(async () => {
-      const transaction = await this.application.erModel.startTransaction();
-      this.session.addTransaction(headers.transaction, transaction);
-      this._sendReceipt(headers);
+    this._try(() => {
+      throw new ServerError(ErrorCode.UNSUPPORTED, "Unsupported yet");
     }, headers);
   }
 
   public commit(headers: StompHeaders): void {
-    this._try(async () => {
-      const transaction = this.session.getTransaction(headers.transaction);
-      if (!transaction) {
-        throw new ServerError(ErrorCode.NOT_FOUND, "Transaction is not found");
-      }
-      await transaction.commit();
-      if (!this.session.removeTransaction(headers.transaction)) {
-        throw new ServerError(ErrorCode.INTERNAL, "Can't delete transaction");
-      }
-      this._sendReceipt(headers);
+    this._try(() => {
+      throw new ServerError(ErrorCode.UNSUPPORTED, "Unsupported yet");
     }, headers);
   }
 
   public abort(headers: StompHeaders): void {
-    this._try(async () => {
-      const transaction = this.session.getTransaction(headers.transaction);
-      if (!transaction) {
-        throw new ServerError(ErrorCode.NOT_FOUND, "Transaction is not found");
-      }
-      await transaction.rollback();
-      if (!this.session.removeTransaction(headers.transaction)) {
-        throw new ServerError(ErrorCode.INTERNAL, "Can't delete transaction");
-      }
-      this._sendReceipt(headers);
+    this._try(() => {
+      throw new ServerError(ErrorCode.UNSUPPORTED, "Unsupported yet");
     }, headers);
   }
 

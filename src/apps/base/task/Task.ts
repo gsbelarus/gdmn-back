@@ -1,6 +1,5 @@
 import config from "config";
 import {EventEmitter} from "events";
-import {ITransaction} from "gdmn-orm";
 import {Logger} from "log4js";
 import StrictEventEmitter from "strict-event-emitter-types";
 import {v1 as uuidV1} from "uuid";
@@ -27,7 +26,6 @@ export type StatusChecker = () => Promise<void | never>;
 export interface IContext<Command extends ICommand<any>> {
   command: Command;
   session: Session;
-  transaction?: ITransaction;
   checkStatus: StatusChecker;
   progress: Progress;
 }
@@ -43,7 +41,6 @@ export interface ICommand<A, P = any> {
 export interface IOptions<Command extends ICommand<any>, Result> {
   readonly command: Command;
   readonly session: Session;
-  readonly transaction?: ITransaction;
   readonly level: Level;
   readonly logger?: Logger;
   readonly progress?: IProgressOptions;
@@ -166,7 +163,6 @@ export class Task<Command extends ICommand<any>, Result> {
       this._result = await this._options.worker({
         command: this.options.command,
         session: this._options.session,
-        transaction: this._options.transaction,
         checkStatus: this._checkStatus.bind(this),
         progress: this._progress
       });

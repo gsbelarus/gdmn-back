@@ -4,6 +4,7 @@ import {AConnection} from "gdmn-db";
 import {ITransaction} from "gdmn-orm";
 import {Logger} from "log4js";
 import StrictEventEmitter from "strict-event-emitter-types";
+import {v1 as uuidV1} from "uuid";
 import {TaskStatus} from "./task/Task";
 import {TaskManager} from "./task/TaskManager";
 
@@ -78,16 +79,18 @@ export class Session {
     }
   }
 
-  public addTransaction(key: string, transaction: ITransaction): void {
-    this._transactions.set(key, transaction);
+  public addTransaction(transaction: ITransaction): string {
+    const uid = uuidV1().toUpperCase();
+    this._transactions.set(uid, transaction);
+    return uid;
   }
 
-  public getTransaction(key?: string): ITransaction | undefined {
-    return key !== undefined ? this._transactions.get(key) : undefined;
+  public getTransaction(uid: string): ITransaction | undefined {
+    return uid !== undefined ? this._transactions.get(uid) : undefined;
   }
 
-  public removeTransaction(key: string): boolean {
-    return this._transactions.delete(key);
+  public removeTransaction(uid: string): boolean {
+    return this._transactions.delete(uid);
   }
 
   public close(): void {
@@ -111,6 +114,7 @@ export class Session {
     this.clearCloseTimeout();
     this._forceClosed = true;
     this.emitter.emit("forceClose", this);
+    this._logger.info("id#%s force close", this.id);
 
     this._taskManager.find(TaskStatus.IDLE, TaskStatus.RUNNING, TaskStatus.PAUSED)
       .filter((task) => task.options.session === this)
@@ -119,6 +123,7 @@ export class Session {
     for (const [key, transaction] of this._transactions) {
       if (!transaction.finished) {
         await transaction.rollback();
+        this._logger.info("id#%s transaction (id#%s) was rolled back", this.id, key);
       }
       this._transactions.delete(key);
     }
