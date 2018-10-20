@@ -268,53 +268,8 @@ content-length:...
 {"payload":{...}}
 ```
 
-* `action`: 
-  * `PING`:
-    ```typescript
-    type payload = {
-      delay: number; 
-      steps: number;
-    };
-    type result = undefined;
-    ```
-  * `GET_SCHEMA`:
-    ```typescript
-    type payload = undefined;
-    type result = IERModel;
-    ```
-  * `QUERY`:
-    ```typescript
-    type payload = IEntityQueryInspector;
-    type result = IQueryResponse;
-    ```
-    
-  * `CREATE_APP` (MainApplication):
-    ```typescript
-    type payload = {
-      alias: string;
-      external: boolean;
-      connectionOptions?: {
-        host?: string;
-        port?: number;
-        username?: string;
-        password?: string;
-        path?: string;
-      };
-    };
-    type result = IUserApplicationInfo;
-    ```
-  * `DELETE_APP` (MainApplication):
-      ```typescript
-      type payload = {
-        uid: string;
-      };
-      type result = undefined;
-      ```
-  * `GET_APPS` (MainApplication):
-      ```typescript
-      type payload = undefined;
-      type result = IUserApplicationInfo[];
-      ```
+* {`action`, `payload`}: [wiki](https://github.com/gsbelarus/gdmn-back/wiki/%D0%9A%D0%BE%D0%BC%D0%B0%D0%BD%D0%B4%D1%8B)
+  
 ```
 <<< RECEIPT
 receipt-id:receipt-0
