@@ -292,6 +292,7 @@ content-length:...
     ```typescript
     type payload = {
       alias: string;
+      external: boolean;
       connectionOptions?: {
         host?: string;
         port?: number;
@@ -300,7 +301,7 @@ content-length:...
         path?: string;
       };
     };
-    type result = IApplicationInfoOutput;
+    type result = IUserApplicationInfo;
     ```
   * `DELETE_APP` (MainApplication):
       ```typescript
@@ -312,7 +313,7 @@ content-length:...
   * `GET_APPS` (MainApplication):
       ```typescript
       type payload = undefined;
-      type result = IApplicationInfoOutput[];
+      type result = IUserApplicationInfo[];
       ```
 ```
 <<< RECEIPT

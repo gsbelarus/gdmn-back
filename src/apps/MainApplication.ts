@@ -1,7 +1,7 @@
 import config from "config";
 import crypto from "crypto";
 import {existsSync, mkdirSync} from "fs";
-import {AccessMode, AConnection, Factory} from "gdmn-db";
+import {AccessMode, AConnection, ATransaction, Factory} from "gdmn-db";
 import {DataSource} from "gdmn-er-bridge";
 import {
   BlobAttribute,
@@ -18,18 +18,18 @@ import path from "path";
 import {v1 as uuidV1} from "uuid";
 import {IDBDetail} from "../db/Database";
 import databases from "../db/databases";
-import {Application, ITPayload} from "./base/Application";
+import {Application} from "./base/Application";
 import {Session} from "./base/Session";
 import {ICommand, Level, Task} from "./base/task/Task";
 import {GDMNApplication} from "./GDMNApplication";
 
-export interface IUserInput {
+export interface ICreateUser {
   login: string;
   password: string;
   admin: boolean;
 }
 
-export interface IUserOutput {
+export interface IUser {
   id: number;
   login: string;
   passwordHash: string;
@@ -37,7 +37,7 @@ export interface IUserOutput {
   admin: boolean;
 }
 
-export interface IOptConnectionOptions {
+export interface IOptConOptions {
   host?: string;
   port?: number;
   username?: string;
@@ -45,32 +45,39 @@ export interface IOptConnectionOptions {
   path?: string;
 }
 
-export interface IApplicationInfoInput extends IOptConnectionOptions {
-  uid: string;
-  alias: string;
-  ownerKey?: number;
+export interface ICreateApplicationInfo extends IOptConOptions {
+  ownerKey: number;
+  external: boolean;
 }
 
-export interface IApplicationInfoOutput extends IOptConnectionOptions {
+export interface IApplicationInfo extends IOptConOptions {
+  id: number;
   uid: string;
-  alias: string;
+  ownerKey: number;
+  external: boolean;
   creationDate: Date;
-  ownerKey?: number;
 }
 
-export interface IAppBackupInfoOutput {
-  uid: string;
+export interface ICreateUserApplicationInfo {
+  userKey: number;
   alias: string;
-  creationDate: Date;
+  appKey: number;
+}
+
+export interface IUserApplicationInfo extends IApplicationInfo {
+  alias: string;
 }
 
 export type MainAction = "DELETE_APP" | "CREATE_APP" | "GET_APPS";
 
 export type MainCommand<A extends MainAction, P = undefined> = ICommand<A, P>;
 
-export type CreateAppCommand = MainCommand<"CREATE_APP",
-  { alias: string; connectionOptions?: IOptConnectionOptions; } & ITPayload>;
-export type DeleteAppCommand = MainCommand<"DELETE_APP", { uid: string; } & ITPayload>;
+export type CreateAppCommand = MainCommand<"CREATE_APP", {
+  alias: string;
+  external: boolean;
+  connectionOptions?: IOptConOptions;
+}>;
+export type DeleteAppCommand = MainCommand<"DELETE_APP", { uid: string; }>;
 export type GetAppsCommand = MainCommand<"GET_APPS">;
 
 export class MainApplication extends Application {
@@ -103,7 +110,7 @@ export class MainApplication extends Application {
     return path.resolve(MainApplication.WORK_DIR, MainApplication._getAppName(uid));
   }
 
-  private static _createDBDetail(alias: string, dbPath: string, appInfo?: IApplicationInfoOutput): IDBDetail {
+  private static _createDBDetail(alias: string, dbPath: string, appInfo?: IUserApplicationInfo): IDBDetail {
     return {
       alias,
       driver: Factory.FBDriver,
@@ -131,7 +138,7 @@ export class MainApplication extends Application {
 
   // TODO tmp
   public pushCreateAppCommand(session: Session,
-                              command: CreateAppCommand): Task<CreateAppCommand, IApplicationInfoOutput> {
+                              command: CreateAppCommand): Task<CreateAppCommand, IUserApplicationInfo> {
     this._checkSession(session);
 
     const task = new Task({
@@ -139,19 +146,32 @@ export class MainApplication extends Application {
       command,
       level: Level.USER,
       logger: this._taskLogger,
-      worker: async (context) => {  // TODO transaction
-        const {alias, connectionOptions} = context.command.payload;
+      worker: async (context) => {
+        const {alias, external, connectionOptions} = context.command.payload;
+        const {connection, userKey} = context.session;
 
-        const uid = uuidV1().toUpperCase();
-        await this._addApplicationInfo(context.session.connection, context.session.userKey, {
-          ...connectionOptions,
-          ownerKey: connectionOptions ? context.session.userKey : undefined,
-          alias,
-          uid
+        const userAppInfo = await AConnection.executeTransaction({
+          connection,
+          callback: async (transaction) => {
+            const {id, uid} = await this._addApplicationInfo(connection, transaction, {
+              ...connectionOptions,
+              ownerKey: userKey,
+              external
+            });
+
+            await this._addUserApplicationInfo(connection, transaction, {
+              alias,
+              userKey,
+              appKey: id
+            });
+
+            return await this._getUserApplicationInfo(connection, transaction, userKey, uid);
+          }
         });
-        const application = await this.getApplication(context.session, uid);
+
+        const application = await this.getApplication(context.session, userAppInfo.uid);
         await application.create();
-        return await this._getApplicationInfo(context.session.connection, context.session.userKey, uid);
+        return userAppInfo;
       }
     });
     session.taskManager.add(task);
@@ -168,16 +188,26 @@ export class MainApplication extends Application {
       command,
       level: Level.USER,
       logger: this._taskLogger,
-      worker: async (context) => {  // TODO transaction
+      worker: async (context) => {
         const {uid} = context.command.payload;
+        const {connection, userKey} = context.session;
 
-        const appInfo = await this._getApplicationInfo(context.session.connection, context.session.userKey, uid);
-        const application = await this.getApplication(context.session, uid);
-        await this._deleteApplicationInfo(context.session.connection, context.session.userKey, uid);
-        if (appInfo.ownerKey !== undefined && appInfo.ownerKey === context.session.userKey) {
-          await application.delete();
-          this._applications.delete(uid);
-        }
+        await AConnection.executeTransaction({
+          connection,
+          callback: async (transaction) => {
+            const {ownerKey, external} = await this._getUserApplicationInfo(connection, transaction, userKey, uid);
+            await this._deleteUserApplicationInfo(connection, transaction, userKey, uid);
+
+            if (ownerKey === userKey) {
+              await this._deleteApplicationInfo(connection, transaction, userKey, uid);
+              if (!external) {
+                const application = await this.getApplication(context.session, uid);
+                await application.delete();
+                this._applications.delete(uid);
+              }
+            }
+          }
+        });
       }
     });
     session.taskManager.add(task);
@@ -186,7 +216,8 @@ export class MainApplication extends Application {
   }
 
   // TODO tmp
-  public pushGetAppsCommand(session: Session, command: GetAppsCommand): Task<GetAppsCommand, IApplicationInfoOutput[]> {
+  public pushGetAppsCommand(session: Session,
+                            command: GetAppsCommand): Task<GetAppsCommand, IUserApplicationInfo[]> {
     this._checkSession(session);
 
     const task = new Task({
@@ -194,7 +225,14 @@ export class MainApplication extends Application {
       command,
       level: Level.SESSION,
       logger: this._taskLogger,
-      worker: (context) => this._getApplicationsInfo(context.session.connection, context.session.userKey)
+      worker: async (context) => {
+        const {connection, userKey} = context.session;
+
+        return await AConnection.executeTransaction({
+          connection,
+          callback: (transaction) => this._getUserApplicationsInfo(connection, transaction, userKey)
+        });
+      }
     });
     session.taskManager.add(task);
     this.sessionManager.syncTasks();
@@ -206,10 +244,13 @@ export class MainApplication extends Application {
       throw new Error("MainApplication is not created");
     }
     let application = this._applications.get(uid);
-    const appInfo = await this._getApplicationInfo(session.connection, session.userKey, uid);
+    const userAppInfo = await AConnection.executeTransaction({
+      connection: session.connection,
+      callback: (transaction) => this._getUserApplicationInfo(session.connection, transaction, session.userKey, uid)
+    });
     if (!application) {
-      const alias = appInfo ? appInfo.alias : "Unknown";
-      const dbDetail = MainApplication._createDBDetail(alias, MainApplication.getAppPath(uid), appInfo);
+      const alias = userAppInfo ? userAppInfo.alias : "Unknown";
+      const dbDetail = MainApplication._createDBDetail(alias, MainApplication.getAppPath(uid), userAppInfo);
       application = new GDMNApplication(dbDetail);
       this._applications.set(uid, application);
 
@@ -239,11 +280,11 @@ export class MainApplication extends Application {
     return application;
   }
 
-  public async addUser(user: IUserInput): Promise<IUserOutput> {
+  public async addUser(user: ICreateUser): Promise<IUser> {
     return await this.executeConnection((connection) => this._addUser(connection, user));
   }
 
-  public async checkUserPassword(login: string, password: string): Promise<IUserOutput | undefined> {
+  public async checkUserPassword(login: string, password: string): Promise<IUser | undefined> {
     const user = await this.findUser({login});
     if (user) {
       const passwordHash = MainApplication._createPasswordHash(password, user.salt);
@@ -253,7 +294,7 @@ export class MainApplication extends Application {
     }
   }
 
-  public async findUser(user: { id?: number, login?: string }): Promise<IUserOutput | undefined> {
+  public async findUser(user: { id?: number, login?: string }): Promise<IUser | undefined> {
     return await this.executeConnection((connection) => this._findUser(connection, user));
   }
 
@@ -328,29 +369,32 @@ export class MainApplication extends Application {
   //   }));
   // }
 
-  protected async _getApplicationInfo(connection: AConnection,
-                                      userKey: number,
-                                      uid: string): Promise<IApplicationInfoOutput> {
-    const appsInfo = await this._getApplicationsInfo(connection, userKey);
-    const appInfo = appsInfo.find((info) => info.uid === uid);
+  protected async _getUserApplicationInfo(connection: AConnection,
+                                          transaction: ATransaction,
+                                          userKey: number,
+                                          uid: string): Promise<IUserApplicationInfo> {
+    const userAppsInfo = await this._getUserApplicationsInfo(connection, transaction, userKey);
+    const appInfo = userAppsInfo.find((info) => info.uid === uid);
     if (!appInfo) {
       throw new Error("Application is not found");
     }
     return appInfo;
   }
 
-  protected async _getApplicationsInfo(connection: AConnection, userKey?: number): Promise<IApplicationInfoOutput[]> {
-    return await AConnection.executeTransaction({
+  protected async _getUserApplicationsInfo(connection: AConnection,
+                                           transaction: ATransaction,
+                                           userKey?: number): Promise<IUserApplicationInfo[]> {
+    return await AConnection.executeQueryResultSet({
       connection,
-      callback: (transaction) => AConnection.executeQueryResultSet({
-        connection,
-        transaction,
-        sql: `
+      transaction,
+      sql: `
           SELECT
             apps.ALIAS,
+            app.ID,
             app.UID,
             app.CREATIONDATE,
             app.OWNER,
+            app.IS_EXTERNAL,
             app.HOST,
             app.PORT,
             app.USERNAME,
@@ -360,25 +404,26 @@ export class MainApplication extends Application {
             LEFT JOIN APPLICATION app ON app.ID = apps.KEY2
           ${userKey !== undefined ? `WHERE apps.KEY1 = :userKey` : ""}
         `,
-        params: {userKey},
-        callback: async (resultSet) => {
-          const result: IApplicationInfoOutput[] = [];
-          while (await resultSet.next()) {
-            result.push({
-              alias: resultSet.getString("ALIAS"),
-              uid: resultSet.getString("UID"),
-              creationDate: resultSet.getDate("CREATIONDATE")!,
-              ownerKey: !resultSet.isNull("OWNER") ? resultSet.getNumber("OWNER") : undefined,
-              host: !resultSet.isNull("HOST") ? resultSet.getString("HOST") : undefined,
-              port: !resultSet.isNull("PORT") ? resultSet.getNumber("PORT") : undefined,
-              username: !resultSet.isNull("USERNAME") ? resultSet.getString("USERNAME") : undefined,
-              password: !resultSet.isNull("PASSWORD") ? resultSet.getString("PASSWORD") : undefined,
-              path: !resultSet.isNull("PATH") ? resultSet.getString("PATH") : undefined
-            });
-          }
-          return result;
+      params: {userKey},
+      callback: async (resultSet) => {
+        const result: IUserApplicationInfo[] = [];
+        while (await resultSet.next()) {
+          result.push({
+            alias: resultSet.getString("ALIAS"),
+            id: resultSet.getNumber("ID"),
+            uid: resultSet.getString("UID"),
+            creationDate: resultSet.getDate("CREATIONDATE")!,
+            ownerKey: resultSet.getNumber("OWNER"),
+            external: resultSet.getBoolean("IS_EXTERNAL"),
+            host: !resultSet.isNull("HOST") ? resultSet.getString("HOST") : undefined,
+            port: !resultSet.isNull("PORT") ? resultSet.getNumber("PORT") : undefined,
+            username: !resultSet.isNull("USERNAME") ? resultSet.getString("USERNAME") : undefined,
+            password: !resultSet.isNull("PASSWORD") ? resultSet.getString("PASSWORD") : undefined,
+            path: !resultSet.isNull("PATH") ? resultSet.getString("PATH") : undefined
+          });
         }
-      })
+        return result;
+      }
     });
   }
 
@@ -412,7 +457,10 @@ export class MainApplication extends Application {
         name: "APPLICATION", lName: {ru: {name: "Приложение"}}
       }), transaction);
       await appEntity.create(new EntityAttribute({
-        name: "OWNER", lName: {ru: {name: "Создатель"}}, required: false, entities: [userEntity]
+        name: "OWNER", lName: {ru: {name: "Создатель"}}, required: true, entities: [userEntity]
+      }), transaction);
+      await appEntity.create(new BooleanAttribute({
+        name: "IS_EXTERNAL", lName: {ru: {name: "Является внешним"}}, required: true
       }), transaction);
       await appEntity.create(new StringAttribute({
         name: "HOST", lName: {ru: {name: "Хост"}}, maxLength: 260
@@ -476,61 +524,83 @@ export class MainApplication extends Application {
 
     const admin = await this._addUser(connection, {login: "Administrator", password: "Administrator", admin: true});
     // TODO tmp
-    if (databases.test) {
-      await this._addApplicationInfo(connection, admin.id, {
-        uid: uuidV1().toUpperCase(),
-        alias: databases.test.alias,
-        ...databases.test.connectionOptions
+    for (const dbDetail of Object.values(databases)) {
+      await AConnection.executeTransaction({
+        connection,
+        callback: async (trans) => {
+          const appInfo = await this._addApplicationInfo(connection, trans, {
+            ...dbDetail.connectionOptions,
+            ownerKey: admin.id,
+            external: true
+          });
+          await this._addUserApplicationInfo(connection, trans, {
+            alias: dbDetail.alias,
+            appKey: appInfo.id,
+            userKey: admin.id
+          });
+        }
       });
     }
   }
 
   private async _addApplicationInfo(connection: AConnection,
-                                    userKey: number,
-                                    application: IApplicationInfoInput): Promise<IApplicationInfoOutput> {
-    // TODO sharing applications
-    return await AConnection.executeTransaction({
-      connection,
-      callback: async (transaction) => {
-        const result = await connection.executeReturning(transaction, `
-          INSERT INTO APPLICATION (UID, OWNER, HOST, PORT, USERNAME, PASSWORD, PATH)
-          VALUES (:uid, :owner, :host, :port, :username, :password, :path)
-          RETURNING ID, CREATIONDATE, OWNER, HOST, PORT, USERNAME, PASSWORD, PATH
+                                    transaction: ATransaction,
+                                    application: ICreateApplicationInfo): Promise<IApplicationInfo> {
+    const uid = uuidV1().toUpperCase();
+    const result = await connection.executeReturning(transaction, `
+          INSERT INTO APPLICATION (UID, OWNER, IS_EXTERNAL, HOST, PORT, USERNAME, PASSWORD, PATH)
+          VALUES (:uid, :owner, :external, :host, :port, :username, :password, :path)
+          RETURNING ID, CREATIONDATE
         `, {
-          uid: application.uid,
-          owner: application.ownerKey,
-          host: application.host,
-          port: application.port,
-          username: application.username,
-          password: application.password,
-          path: application.path
-        });
+      uid,
+      owner: application.ownerKey,
+      external: application.external ? 1 : 0,
+      host: application.host,
+      port: application.port,
+      username: application.username,
+      password: application.password,
+      path: application.path
+    });
+    return {
+      id: result.getNumber("ID"),
+      uid,
+      creationDate: result.getDate("CREATIONDATE")!,
+      ...application
+    };
+  }
 
-        await connection.execute(transaction, `
+  private async _addUserApplicationInfo(connection: AConnection,
+                                        transaction: ATransaction,
+                                        userApplication: ICreateUserApplicationInfo): Promise<void> {
+    await connection.execute(transaction, `
           INSERT INTO APP_USER_APPLICATIONS (KEY1, KEY2, ALIAS)
           VALUES (:userKey, :appKey, :alias)
         `, {
-          userKey,
-          appKey: result.getNumber("ID"),
-          alias: application.alias
-        });
-        return {
-          alias: application.alias,
-          uid: application.uid,
-          creationDate: result.getDate("CREATIONDATE")!
-        };
-      }
+      userKey: userApplication.userKey,
+      appKey: userApplication.appKey,
+      alias: userApplication.alias
     });
   }
 
   private async _deleteApplicationInfo(connection: AConnection,
-                                       userKey: number,
+                                       transaction: ATransaction,
+                                       ownerKey: number,
                                        uid: string): Promise<void> {
-    // TODO sharing applications
-    await AConnection.executeTransaction({
-      connection,
-      callback: async (transaction) => {
-        await connection.execute(transaction, `
+    await connection.execute(transaction, `
+          DELETE FROM APPLICATION
+          WHERE UID = :uid
+            AND OWNER = :ownerKey
+        `, {
+      ownerKey,
+      uid
+    });
+  }
+
+  private async _deleteUserApplicationInfo(connection: AConnection,
+                                           transaction: ATransaction,
+                                           userKey: number,
+                                           uid: string): Promise<void> {
+    await connection.execute(transaction, `
           DELETE FROM APP_USER_APPLICATIONS
           WHERE KEY1 = :userKey
             AND EXISTS (
@@ -540,23 +610,12 @@ export class MainApplication extends Application {
                 AND app.UID = :uid
             )
         `, {
-          userKey,
-          uid
-        });
-
-        await connection.execute(transaction, `
-          DELETE FROM APPLICATION
-          WHERE UID = :uid
-            AND OWNER = :userKey
-        `, {
-          userKey,
-          uid
-        });
-      }
+      userKey,
+      uid
     });
   }
 
-  private async _addUser(connection: AConnection, user: IUserInput): Promise<IUserOutput> {
+  private async _addUser(connection: AConnection, user: ICreateUser): Promise<IUser> {
     const salt = crypto.randomBytes(128).toString("base64");
     const passwordHash = MainApplication._createPasswordHash(user.password, salt);
 
@@ -585,7 +644,7 @@ export class MainApplication extends Application {
   }
 
   private async _findUser(connection: AConnection,
-                          {id, login}: { id?: number, login?: string }): Promise<IUserOutput | undefined> {
+                          {id, login}: { id?: number, login?: string }): Promise<IUser | undefined> {
     if ((id === undefined || id === null) && !login) {
       throw new Error("Incorrect arguments");
     }

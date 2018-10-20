@@ -4,7 +4,7 @@ import {Middleware} from "koa";
 import passport from "koa-passport";
 import {ExtractJwt, Strategy as JWTStrategy} from "passport-jwt";
 import {Strategy as LocalStrategy} from "passport-local";
-import {IUserOutput, MainApplication} from "./apps/MainApplication";
+import {IUser, MainApplication} from "./apps/MainApplication";
 import {ErrorCodes, throwCtx} from "./ErrorCodes";
 
 const JWT_SECRET: string = config.get("server.jwtSecret");
@@ -17,7 +17,7 @@ const jwtFromRequest = ExtractJwt.fromExtractors([
   ExtractJwt.fromUrlQueryParameter("access_token")
 ]);
 
-export function createAccessJwtToken(user: IUserOutput): string {
+export function createAccessJwtToken(user: IUser): string {
   return jwt.sign({
     id: user.id
   }, JWT_SECRET, {
@@ -25,7 +25,7 @@ export function createAccessJwtToken(user: IUserOutput): string {
   });
 }
 
-export function createRefreshJwtToken(user: IUserOutput): string {
+export function createRefreshJwtToken(user: IUser): string {
   return jwt.sign({
     id: user.id,
     isRefresh: true

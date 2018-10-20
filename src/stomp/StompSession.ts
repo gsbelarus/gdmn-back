@@ -318,7 +318,7 @@ export class StompSession implements StompClientCommandListener {
               if (this.mainApplication !== this.application) {
                 throw new ServerError(ErrorCode.UNSUPPORTED, "Unsupported action");
               }
-              if (!bodyObj.payload || !bodyObj.uid) {
+              if (!bodyObj.payload || !bodyObj.payload.uid) {
                 throw new ServerError(ErrorCode.INVALID, "Payload must contains 'uid'");
               }
               const command: DeleteAppCommand = {action, ...bodyObj};
@@ -332,7 +332,7 @@ export class StompSession implements StompClientCommandListener {
               if (this.mainApplication !== this.application) {
                 throw new ServerError(ErrorCode.UNSUPPORTED, "Unsupported action");
               }
-              if (!bodyObj.payload || !bodyObj.alias) {
+              if (!bodyObj.payload || !bodyObj.payload.alias) {
                 throw new ServerError(ErrorCode.INVALID, "Payload must contains 'alias'");
               }
               const command: CreateAppCommand = {action, ...bodyObj};
