@@ -332,8 +332,8 @@ export class StompSession implements StompClientCommandListener {
               if (this.mainApplication !== this.application) {
                 throw new ServerError(ErrorCode.UNSUPPORTED, "Unsupported action");
               }
-              if (!bodyObj.payload || !bodyObj.payload.alias) {
-                throw new ServerError(ErrorCode.INVALID, "Payload must contains 'alias'");
+              if (!bodyObj.payload || !bodyObj.payload.alias || !bodyObj.payload.external) {
+                throw new ServerError(ErrorCode.INVALID, "Payload must contains 'alias' and 'external'");
               }
               const command: CreateAppCommand = {action, ...bodyObj};
               const task = this.mainApplication.pushCreateAppCommand(this.session, command);

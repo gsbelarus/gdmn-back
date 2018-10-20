@@ -1,7 +1,7 @@
 import config from "config";
 import crypto from "crypto";
 import {existsSync, mkdirSync} from "fs";
-import {AccessMode, AConnection, ATransaction, Factory} from "gdmn-db";
+import {AConnection, ATransaction, Factory} from "gdmn-db";
 import {DataSource} from "gdmn-er-bridge";
 import {
   BlobAttribute,
@@ -153,6 +153,10 @@ export class MainApplication extends Application {
         const userAppInfo = await AConnection.executeTransaction({
           connection,
           callback: async (transaction) => {
+            const user = await this._findUser(connection, transaction, {id: userKey});
+            if (external && (!user || !user.admin)) {
+              throw new Error("Permission denied");
+            }
             const {id, uid} = await this._addApplicationInfo(connection, transaction, {
               ...connectionOptions,
               ownerKey: userKey,
@@ -295,7 +299,10 @@ export class MainApplication extends Application {
   }
 
   public async findUser(user: { id?: number, login?: string }): Promise<IUser | undefined> {
-    return await this.executeConnection((connection) => this._findUser(connection, user));
+    return await this.executeConnection((connection) => AConnection.executeTransaction({
+      connection,
+      callback: (transaction) => this._findUser(connection, transaction, user)
+    }));
   }
 
   // public async getAppKey(appUid: string): Promise<number> {
@@ -388,22 +395,22 @@ export class MainApplication extends Application {
       connection,
       transaction,
       sql: `
-          SELECT
-            apps.ALIAS,
-            app.ID,
-            app.UID,
-            app.CREATIONDATE,
-            app.OWNER,
-            app.IS_EXTERNAL,
-            app.HOST,
-            app.PORT,
-            app.USERNAME,
-            app.PASSWORD,
-            app.PATH
-          FROM APP_USER_APPLICATIONS apps
-            LEFT JOIN APPLICATION app ON app.ID = apps.KEY2
-          ${userKey !== undefined ? `WHERE apps.KEY1 = :userKey` : ""}
-        `,
+        SELECT
+          apps.ALIAS,
+          app.ID,
+          app.UID,
+          app.CREATIONDATE,
+          app.OWNER,
+          app.IS_EXTERNAL,
+          app.HOST,
+          app.PORT,
+          app.USERNAME,
+          app.PASSWORD,
+          app.PATH
+        FROM APP_USER_APPLICATIONS apps
+          LEFT JOIN APPLICATION app ON app.ID = apps.KEY2
+        ${userKey !== undefined ? `WHERE apps.KEY1 = :userKey` : ""}
+      `,
       params: {userKey},
       callback: async (resultSet) => {
         const result: IUserApplicationInfo[] = [];
@@ -548,13 +555,13 @@ export class MainApplication extends Application {
                                     application: ICreateApplicationInfo): Promise<IApplicationInfo> {
     const uid = uuidV1().toUpperCase();
     const result = await connection.executeReturning(transaction, `
-          INSERT INTO APPLICATION (UID, OWNER, IS_EXTERNAL, HOST, PORT, USERNAME, PASSWORD, PATH)
-          VALUES (:uid, :owner, :external, :host, :port, :username, :password, :path)
-          RETURNING ID, CREATIONDATE
-        `, {
+        INSERT INTO APPLICATION (UID, OWNER, IS_EXTERNAL, HOST, PORT, USERNAME, PASSWORD, PATH)
+        VALUES (:uid, :owner, :external, :host, :port, :username, :password, :path)
+        RETURNING ID, CREATIONDATE
+      `, {
       uid,
       owner: application.ownerKey,
-      external: application.external ? 1 : 0,
+      external: application.external,
       host: application.host,
       port: application.port,
       username: application.username,
@@ -573,9 +580,9 @@ export class MainApplication extends Application {
                                         transaction: ATransaction,
                                         userApplication: ICreateUserApplicationInfo): Promise<void> {
     await connection.execute(transaction, `
-          INSERT INTO APP_USER_APPLICATIONS (KEY1, KEY2, ALIAS)
-          VALUES (:userKey, :appKey, :alias)
-        `, {
+        INSERT INTO APP_USER_APPLICATIONS (KEY1, KEY2, ALIAS)
+        VALUES (:userKey, :appKey, :alias)
+      `, {
       userKey: userApplication.userKey,
       appKey: userApplication.appKey,
       alias: userApplication.alias
@@ -587,10 +594,10 @@ export class MainApplication extends Application {
                                        ownerKey: number,
                                        uid: string): Promise<void> {
     await connection.execute(transaction, `
-          DELETE FROM APPLICATION
-          WHERE UID = :uid
-            AND OWNER = :ownerKey
-        `, {
+        DELETE FROM APPLICATION
+        WHERE UID = :uid
+          AND OWNER = :ownerKey
+      `, {
       ownerKey,
       uid
     });
@@ -601,15 +608,15 @@ export class MainApplication extends Application {
                                            userKey: number,
                                            uid: string): Promise<void> {
     await connection.execute(transaction, `
-          DELETE FROM APP_USER_APPLICATIONS
-          WHERE KEY1 = :userKey
-            AND EXISTS (
-              SELECT ID
-              FROM APPLICATION app
-              WHERE app.ID = KEY2
-                AND app.UID = :uid
-            )
-        `, {
+        DELETE FROM APP_USER_APPLICATIONS
+        WHERE KEY1 = :userKey
+          AND EXISTS (
+            SELECT ID
+            FROM APPLICATION app
+            WHERE app.ID = KEY2
+              AND app.UID = :uid
+          )
+      `, {
       userKey,
       uid
     });
@@ -644,6 +651,7 @@ export class MainApplication extends Application {
   }
 
   private async _findUser(connection: AConnection,
+                          transaction: ATransaction,
                           {id, login}: { id?: number, login?: string }): Promise<IUser | undefined> {
     if ((id === undefined || id === null) && !login) {
       throw new Error("Incorrect arguments");
@@ -656,30 +664,26 @@ export class MainApplication extends Application {
     } else {
       condition = "usr.ID = :id";
     }
-    return await AConnection.executeTransaction({
+    return await AConnection.executeQueryResultSet({
       connection,
-      options: {accessMode: AccessMode.READ_ONLY},
-      callback: (transaction) => AConnection.executeQueryResultSet({
-        connection,
-        transaction,
-        sql: `
-          SELECT FIRST 1 *
-          FROM APP_USER usr
-          WHERE ${condition}
-        `,
-        params: {id, login},
-        callback: async (resultSet) => {
-          if (await resultSet.next()) {
-            return {
-              id: resultSet.getNumber("ID"),
-              login: resultSet.getString("LOGIN"),
-              passwordHash: await resultSet.getBlob("PASSWORD_HASH").asString(),
-              salt: await resultSet.getBlob("SALT").asString(),
-              admin: resultSet.getBoolean("IS_ADMIN")
-            };
-          }
+      transaction,
+      sql: `
+        SELECT FIRST 1 *
+        FROM APP_USER usr
+        WHERE ${condition}
+      `,
+      params: {id, login},
+      callback: async (resultSet) => {
+        if (await resultSet.next()) {
+          return {
+            id: resultSet.getNumber("ID"),
+            login: resultSet.getString("LOGIN"),
+            passwordHash: await resultSet.getBlob("PASSWORD_HASH").asString(),
+            salt: await resultSet.getBlob("SALT").asString(),
+            admin: resultSet.getBoolean("IS_ADMIN")
+          };
         }
-      })
+      }
     });
   }
 }
