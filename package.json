@@ -27,7 +27,7 @@
     "koa-static": "^5.0.0",
     "koa2-cors": "^2.0.6",
     "log4js": "^3.0.6",
-    "node-stomp-protocol": "^0.4.4",
+    "stomp-protocol": "^0.4.5",
     "passport-jwt": "^4.0.0",
     "passport-local": "^1.0.0",
     "strict-event-emitter-types": "^2.0.0",

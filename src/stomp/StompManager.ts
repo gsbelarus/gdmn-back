@@ -1,6 +1,6 @@
 import config from "config";
 import log4js from "log4js";
-import {createStompServerSession, setLoggingListeners} from "node-stomp-protocol";
+import {createStompServerSession, setLoggingListeners} from "stomp-protocol";
 import WebSocket from "ws";
 import {MainApplication} from "../apps/MainApplication";
 import {StompSession} from "./StompSession";

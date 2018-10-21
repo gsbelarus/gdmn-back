@@ -6,7 +6,7 @@
 
 ### Install
 
-Pre-requirements: Xcode Command Line Tools (macOS), Node.js, npm, git.
+Pre-requirements: Xcode Command Line Tools (macOS), Node.js, yarn, git.
 
 #### - macOS
 
@@ -43,8 +43,7 @@ Pre-requirements: Xcode Command Line Tools (macOS), Node.js, npm, git.
     ```bash
     $ git clone https://github.com/gsbelarus/gdmn-back.git
     $ cd gdmn-back
-    $ npm i
-    $ npm i
+    $ yarn
     ```
        
 4. Troubleshooting
@@ -69,8 +68,8 @@ Pre-requirements: Xcode Command Line Tools (macOS), Node.js, npm, git.
   
 1. Install build tools:
     ```bash
-    $ npm i --global --production windows-build-tools
-    $ npm i --global node-gyp
+    $ yarn global add windows-build-tools
+    $ yarn global add node-gyp
     ```
    
 2. Install [firebird](https://www.firebirdsql.org/en/firebird-3-0/) (version >= 3.0):
@@ -132,8 +131,7 @@ Pre-requirements: Xcode Command Line Tools (macOS), Node.js, npm, git.
     ```bash
     $ git clone https://github.com/gsbelarus/gdmn-back.git
     $ cd gdmn-back
-    $ npm i
-    $ npm i
+    $ yarn
     ```
     
 </details>
@@ -143,7 +141,7 @@ Pre-requirements: Xcode Command Line Tools (macOS), Node.js, npm, git.
 1. Verify the configuration is correct (`./config/development.json`).
 2. Run command.
     ```bash 
-    $ npm start
+    $ yarn start
     ```
 3. Wait for initialization and startup
 
