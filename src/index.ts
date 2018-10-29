@@ -123,7 +123,7 @@ function startHttpServer(serverApp: Koa): HttpServer | undefined {
     httpServer.on("listening", () => {
       const address = httpServer!.address();
       if (typeof address === "string") {
-        console.log(`Listening on ${httpServer!.address()}; env: ${process.env.NODE_ENV}`);
+        console.log(`Listening on ${address}; env: ${process.env.NODE_ENV}`);
       } else {
         console.log(`Listening on http://${address.address}:${address.port};` +
           ` env: ${process.env.NODE_ENV}`);
